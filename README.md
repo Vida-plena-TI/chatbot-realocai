@@ -7,8 +7,9 @@ Aplicação web da clínica multidisciplinar Vida Plena: um agente de IA com cha
 
 ## Status
 
-🚧 Backend (Django + DRF) com autenticação, conversas e envio de mensagens ao agente
-RealocAI. Memória de longo prazo e frontend virão nas próximas etapas.
+🚧 Backend (Django + DRF) com autenticação, conversas, envio de mensagens ao agente
+RealocAI e extração de memórias de longo prazo (OpenAI). O frontend virá nas próximas
+etapas.
 
 ## Estrutura
 
@@ -80,6 +81,23 @@ REALOCAI_TIMEOUT_SECONDS=60
 
 Peça a chave ao responsável pelo RealocAI (ou use a que você configurou na sua instância
 local dele). Sem essas variáveis o resto da API funciona, mas enviar mensagem responde 502.
+
+Deixe `REALOCAI_INJECT_MEMORIES=false`: é experimental e só deve ser ligada após validação
+manual (ver `CLAUDE.md`).
+
+#### OpenAI (extração de memórias)
+
+Após cada resposta do agente, o Django chama a OpenAI diretamente para extrair
+preferências do profissional e um resumo da conversa (nunca dados de pacientes). No
+`.env`:
+
+```bash
+OPENAI_API_KEY=<chave da OpenAI>
+OPENAI_EXTRACTION_MODEL=gpt-4o-mini
+```
+
+`OPENAI_API_KEY` é um segredo: nunca commite. Se ficar vazia, a extração fica desligada
+e o chat funciona normalmente.
 
 ### 4. Instalar dependências e migrar
 
@@ -194,7 +212,7 @@ Produção (exemplo):
 ```bash
 cd backend
 uv run python manage.py collectstatic --noinput --settings=config.settings.prod
-# --timeout maior que REALOCAI_TIMEOUT_SECONDS: o envio de mensagem espera o agente
+# --timeout maior que REALOCAI_TIMEOUT_SECONDS + 20 s da extração de memórias
 uv run gunicorn config.wsgi:application --bind 0.0.0.0:8000 --timeout 90
 ```
 
