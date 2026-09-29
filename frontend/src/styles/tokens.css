@@ -1,0 +1,45 @@
+:root {
+  --bg: #f6f4f1;
+  --surface: #ffffff;
+  --border: #ece7e3;
+  --border-strong: #e3d6d1;
+  --divider-soft: #f0ece8;
+
+  --text: #26322f;
+  --text-2: #3b4845;
+  --muted: #5f6a67;
+  --muted-2: #6f7a77;
+  --faint: #737976;
+
+  --brand: #287564;
+  --brand-hover: #1f6556;
+  --brand-press: #18503f;
+  --brand-ink: #1f4e43;
+  --teal: #3e9c88;
+  --mint: #e6f3ef;
+  --mint-2: #d5ede6;
+  --mint-line: #b9ded4;
+  --mint-hover: #f1f7f5;
+  --focus: #7dc3b3;
+
+  --rose: #fbeeea;
+  --rose-ink: #8e4a39;
+  --stone: #ede9e6;
+  --danger: #b3402a;
+  --danger-hover: #9a3522;
+  --danger-bg: #fcebe6;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  --pill: 999px;
+
+  --shadow-sm: 0 2px 8px rgba(38, 50, 47, 0.04);
+  --shadow-md: 0 10px 28px rgba(38, 50, 47, 0.08);
+  --shadow-lg: 0 24px 60px rgba(38, 50, 47, 0.18);
+  --shadow-brand: 0 6px 16px rgba(40, 117, 100, 0.22);
+
+  --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sidebar-w: 296px;
+}

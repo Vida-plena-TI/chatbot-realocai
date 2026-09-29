@@ -1,0 +1,215 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--pill);
+  padding: 11px 18px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.btn:disabled {
+  opacity: 0.5;
+}
+.sm {
+  padding: 8px 14px;
+  font-size: 13.5px;
+  gap: 6px;
+}
+.block {
+  width: 100%;
+  justify-content: center;
+}
+.primary {
+  background: var(--brand);
+  color: #fff;
+}
+.primary:hover:not(:disabled) {
+  background: var(--brand-hover);
+}
+.primary:active:not(:disabled) {
+  background: var(--brand-press);
+}
+.secondary {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--rose-ink);
+}
+.secondary:hover:not(:disabled) {
+  background: var(--rose);
+}
+.ghost {
+  background: transparent;
+  color: var(--brand);
+}
+.ghost:hover:not(:disabled) {
+  background: var(--mint);
+}
+.danger {
+  background: var(--danger);
+  color: #fff;
+}
+.danger:hover:not(:disabled) {
+  background: var(--danger-hover);
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  transition: background 0.15s, color 0.15s;
+}
+.iconBtn:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2.5px solid var(--mint-2);
+  border-top-color: var(--brand);
+  animation: spin 0.8s linear infinite;
+}
+.spinnerLight {
+  width: 18px;
+  height: 18px;
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.fullscreen {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(38, 50, 47, 0.36);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.dialog {
+  width: 100%;
+  max-width: 440px;
+  background: var(--surface);
+  border-radius: 24px;
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+}
+.dialogTitle {
+  margin: 0 0 8px;
+  font-size: 19px;
+  font-weight: 900;
+}
+.dialogBody {
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.dialogBody p {
+  margin: 0;
+}
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.label {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+}
+.input {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 12px 14px;
+  font-size: 15px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 4px var(--mint);
+}
+.fieldError {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.menuWrap {
+  display: inline-flex;
+}
+.menu {
+  position: fixed;
+  z-index: 90;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+}
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--text);
+}
+.menuItem:hover,
+.menuItem:focus-visible {
+  background: var(--bg);
+}
+.menuDanger {
+  color: var(--danger);
+}
+.menuDanger:hover,
+.menuDanger:focus-visible {
+  background: var(--danger-bg);
+}
