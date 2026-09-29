@@ -68,6 +68,8 @@ uv run python manage.py migrate
 uv run python manage.py createsuperuser   # pede e-mail e senha
 ```
 
+> Não há cadastro público: veja [Contas da equipe](#contas-da-equipe).
+
 ### 5. Rodar
 
 ```bash
@@ -77,7 +79,55 @@ uv run python manage.py runserver
 - Health check: http://localhost:8000/api/health/
 - Documentação da API (Swagger): http://localhost:8000/api/docs/
 - Schema OpenAPI: http://localhost:8000/api/schema/
+  (públicos só com `DEBUG=true`; em produção exigem login de usuário `is_staff`, ex.: via `/admin/`)
 - Admin: http://localhost:8000/admin/
+
+## Contas da equipe
+
+Só a equipe da clínica usa o sistema e **não existe endpoint de cadastro**. A primeira
+conta é criada pela linha de comando (em qualquer ambiente, com o `.env` apontando para o
+banco certo):
+
+```bash
+cd backend
+uv run python manage.py createsuperuser        # interativo: pede e-mail e senha
+```
+
+Em produção (ou num script), sem prompt, passando os dados por variáveis de ambiente
+(não deixe a senha no histórico do shell):
+
+```bash
+DJANGO_SUPERUSER_EMAIL=admin@exemplo.com.br DJANGO_SUPERUSER_PASSWORD='...' uv run python manage.py createsuperuser --noinput --settings=config.settings.prod
+```
+
+As demais contas são criadas por essa pessoa no admin (`/admin/` → Usuários). Marque
+**membro da equipe** (`is_staff`) só para quem precisa do admin e da documentação da API;
+os demais profissionais só precisam de uma conta ativa para usar a API.
+
+### Testar o login manualmente (curl)
+
+```bash
+# 1. Obtém o cookie csrftoken
+curl -s -c cookies.txt http://localhost:8000/api/auth/csrf/
+CSRF=$(awk '$6=="csrftoken"{print $7}' cookies.txt)
+
+# 2. Login (o CSRF também é exigido aqui)
+curl -s -b cookies.txt -c cookies.txt -H "X-CSRFToken: $CSRF"   -H "Content-Type: application/json"   -d '{"email":"admin@exemplo.com.br","password":"..."}'   http://localhost:8000/api/auth/login/
+
+# 3. Usuário atual
+curl -s -b cookies.txt http://localhost:8000/api/auth/me/
+
+# 4. Logout (o login rotaciona o token: releia o cookie)
+CSRF=$(awk '$6=="csrftoken"{print $7}' cookies.txt)
+curl -s -o /dev/null -w "%{http_code}
+" -b cookies.txt -c cookies.txt   -H "X-CSRFToken: $CSRF" -X POST http://localhost:8000/api/auth/logout/
+
+rm cookies.txt
+```
+
+> Com `DEBUG=true` o Django não exige HTTPS para os cookies, então isso funciona em
+> `http://localhost`. O CSRF também confere a origem: o curl não envia `Origin`, e o
+> navegador envia; por isso `CSRF_TRUSTED_ORIGINS` precisa conter a origem do frontend.
 
 ## Testes e qualidade
 
