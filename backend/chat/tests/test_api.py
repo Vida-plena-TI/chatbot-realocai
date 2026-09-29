@@ -6,6 +6,7 @@ import httpx
 import pytest
 from django.conf import settings
 from django.urls import reverse
+from drf_spectacular.generators import SchemaGenerator
 from rest_framework.test import APIClient
 from rest_framework.throttling import ScopedRateThrottle
 
@@ -101,6 +102,82 @@ def test_list_only_own_active_conversations(api, user, conversation, others_conv
     assert body["count"] == 2
     assert [c["id"] for c in body["results"]] == [str(newer.id), str(conversation.id)]
     assert set(body["results"][0]) == CONVERSATION_FIELDS
+
+
+@pytest.fixture
+def active_and_archived(user, other_user, conversation):
+    archived = Conversation.objects.create(
+        user=user, title="Arquivada", status=Conversation.Status.ARCHIVED
+    )
+    deleted = Conversation.objects.create(
+        user=user, title="Arquivada e apagada", status=Conversation.Status.ARCHIVED
+    )
+    soft_delete_conversation(deleted)
+    # Another user's conversations, in both statuses: must never leak.
+    Conversation.objects.create(user=other_user, title="Ativa de outra pessoa")
+    Conversation.objects.create(
+        user=other_user, title="Arquivada de outra pessoa", status=Conversation.Status.ARCHIVED
+    )
+    return conversation, archived
+
+
+def listed_ids(response):
+    assert response.status_code == 200
+    return [c["id"] for c in response.json()["results"]]
+
+
+def test_list_filters_active(api, active_and_archived):
+    active, _ = active_and_archived
+
+    assert listed_ids(api.get(list_url(), {"status": "active"})) == [str(active.id)]
+
+
+def test_list_filters_archived(api, active_and_archived):
+    _, archived = active_and_archived
+
+    assert listed_ids(api.get(list_url(), {"status": "archived"})) == [str(archived.id)]
+
+
+def test_list_without_status_returns_both(api, active_and_archived):
+    active, archived = active_and_archived
+
+    assert listed_ids(api.get(list_url())) == [str(archived.id), str(active.id)]
+
+
+@pytest.mark.parametrize("value", ["", "ACTIVE", "deleted", "ativa"])
+def test_list_with_invalid_status_is_400(api, active_and_archived, value):
+    response = api.get(list_url(), {"status": value})
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "status inválido"}
+
+
+def test_status_filter_only_applies_to_listing(api, active_and_archived):
+    _, archived = active_and_archived
+
+    assert api.get(detail_url(archived), {"status": "active"}).status_code == 200
+    assert api.get(detail_url(archived), {"status": "xyz"}).status_code == 200
+
+
+def test_status_filter_never_returns_other_users_conversations(other_user, active_and_archived):
+    # The other user has one conversation per status, the user's ones must not appear.
+    client = APIClient()
+    client.force_login(other_user)
+
+    for value in ("active", "archived"):
+        response = client.get(list_url(), {"status": value})
+        titles = [c["title"] for c in response.json()["results"]]
+        assert response.status_code == 200
+        assert len(titles) == 1
+        assert titles[0].endswith("de outra pessoa")
+
+
+def test_status_parameter_is_in_openapi_schema():
+    schema = SchemaGenerator().get_schema(request=None, public=True)
+    parameters = schema["paths"]["/api/conversations/"]["get"]["parameters"]
+    (param,) = [p for p in parameters if p["name"] == "status"]
+    assert param["in"] == "query"
+    assert param["schema"]["enum"] == ["active", "archived"]
 
 
 def test_create_conversation(api, user):

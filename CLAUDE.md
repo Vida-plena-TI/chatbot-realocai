@@ -136,7 +136,10 @@ pelo usuário logado e exclui conversas soft-deleted: conversa de outro usuário
 responde **404** (nunca 403).
 
 - `GET /api/conversations/` — lista paginada (`?page=`, `?page_size=` até 100; padrão 50),
-  por `updated_at` desc. `POST` com `{title?}` cria (sempre `active`).
+  por `updated_at` desc. `?status=active` ou `?status=archived` filtra pelo status (usado
+  pelas abas da sidebar); sem o parâmetro, lista ambos; qualquer outro valor (inclusive
+  vazio) → 400 `{"detail": "status inválido"}`. O filtro só vale para a listagem e se
+  soma às regras de dono e soft delete. `POST` com `{title?}` cria (sempre `active`).
 - `GET/PATCH/DELETE /api/conversations/{id}/` — PATCH altera só `title`/`status` (sem PUT);
   DELETE é soft delete (204).
 - `GET /api/conversations/{id}/messages/` — paginada, por `seq`. Campos: `id`, `seq`,

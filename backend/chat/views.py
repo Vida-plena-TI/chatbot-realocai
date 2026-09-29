@@ -1,6 +1,12 @@
-from drf_spectacular.utils import OpenApiResponse, extend_schema, inline_serializer
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    inline_serializer,
+)
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ParseError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -20,6 +26,7 @@ from .services.conversations import create_conversation, soft_delete_conversatio
 DetailSerializer = inline_serializer("ChatDetail", fields={"detail": serializers.CharField()})
 
 ARCHIVED_CONVERSATION = "Conversas arquivadas não aceitam novas mensagens."
+INVALID_STATUS = "status inválido"
 
 
 class ChatPagination(PageNumberPagination):
@@ -53,7 +60,35 @@ class ConversationViewSet(
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):  # OpenAPI schema generation
             return Conversation.objects.none()
-        return Conversation.objects.filter(user=self.request.user, deleted_at__isnull=True)
+        queryset = Conversation.objects.filter(user=self.request.user, deleted_at__isnull=True)
+        if self.action == "list":
+            queryset = self._filter_by_status(queryset)
+        return queryset
+
+    def _filter_by_status(self, queryset):
+        value = self.request.query_params.get("status")
+        if value is None:
+            return queryset
+        if value not in Conversation.Status.values:
+            raise ParseError(INVALID_STATUS)
+        return queryset.filter(status=value)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "status",
+                str,
+                enum=Conversation.Status.values,
+                description="Filtra pelo status. Ausente: todas as conversas.",
+            )
+        ],
+        responses={
+            200: ConversationSerializer(many=True),
+            400: OpenApiResponse(DetailSerializer, description="status inválido."),
+        },
+    )
+    def list(self, request: Request, *args, **kwargs) -> Response:
+        return super().list(request, *args, **kwargs)
 
     def get_throttles(self):
         if self.action == "messages" and self.request.method == "POST":
