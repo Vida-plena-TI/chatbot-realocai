@@ -8,11 +8,11 @@ from django.conf import settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from chat.models import Conversation, Message
+from chat.models import Conversation, Memory, Message
 from chat.services.agent import AGENT_UNAVAILABLE_MESSAGE
 from chat.services.conversations import append_message, soft_delete_conversation
 
-from .conftest import REALOCAI_API_KEY, REALOCAI_CHAT_URL
+from .conftest import OPENAI_API_KEY, REALOCAI_API_KEY, REALOCAI_CHAT_URL
 
 pytestmark = pytest.mark.django_db
 
@@ -338,6 +338,46 @@ def test_upstream_failure_returns_502_and_logs_error(
     assert len(errors) == 1
     assert str(conversation.id) in errors[0].getMessage()
     assert QUESTION not in caplog.text
+
+
+def test_message_triggers_memory_extraction(api, user, conversation, respx_mock, fake_openai):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+    fake_openai.output = {
+        "memories": [{"kind": "preference", "content": "Prefere listas curtas.", "importance": 4}],
+        "summary": "Consulta de horários.",
+    }
+
+    response = post_message(api, conversation)
+
+    assert response.status_code == 201
+    assert len(fake_openai.calls) == 1
+    memory = Memory.objects.get(user=user)
+    assert str(memory.source_message_id) == response.json()["assistant_message"]["id"]
+    conversation.refresh_from_db()
+    assert conversation.summary == "Consulta de horários."
+    assert conversation.memory_extracted_seq == 2
+    # Internal fields never reach the frontend.
+    assert "Consulta de horários." not in response.content.decode()
+
+
+def test_openai_failure_does_not_break_the_chat_response(
+    api, conversation, respx_mock, fake_openai, caplog
+):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+    fake_openai.error = RuntimeError(f"OpenAI down {QUESTION} {OPENAI_API_KEY}")
+
+    with caplog.at_level(logging.DEBUG):
+        response = post_message(api, conversation)
+
+    assert response.status_code == 201
+    assert response.json()["assistant_message"]["content"] == ANSWER
+    assert Memory.objects.count() == 0
+    conversation.refresh_from_db()
+    assert conversation.memory_extracted_seq == 0
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert [r.name for r in errors] == ["chat.services.memory_extraction"]
+    for secret in (QUESTION, ANSWER, OPENAI_API_KEY, REALOCAI_API_KEY):
+        assert secret not in caplog.text
 
 
 def test_archived_conversation_rejects_message_before_calling_agent(api, conversation, respx_mock):

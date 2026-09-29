@@ -14,6 +14,7 @@ from django.db import transaction
 
 from chat.models import Conversation, Message
 from chat.services.conversations import append_message
+from chat.services.memory_extraction import extract_memories
 from chat.services.realocai_client import (
     ChatErrorKind,
     ChatFailure,
@@ -50,6 +51,7 @@ def exchange_messages(conversation, content) -> Exchange:
     The user message is saved first, so it is kept even when the agent fails. On
     failure no assistant message is created and AgentUnavailableError is raised.
     A 404 (expired RealocAI conversation) is retried once as a new conversation.
+    After a successful turn, long-term memories are extracted (failures are ignored).
     """
     if not isinstance(content, str) or not content.strip():
         raise ValueError("Message content must not be blank.")
@@ -74,6 +76,8 @@ def exchange_messages(conversation, content) -> Exchange:
         raise AgentUnavailableError()
 
     assistant_message = append_message(conversation, Message.Role.ASSISTANT, result.resposta)
+    # Synchronous, but never raises: a failed extraction must not turn into a 502.
+    extract_memories(conversation)
     return Exchange(user_message, assistant_message)
 
 

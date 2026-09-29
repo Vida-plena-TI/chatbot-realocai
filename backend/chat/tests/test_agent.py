@@ -209,3 +209,30 @@ def test_concurrent_first_messages_open_a_single_realocai_conversation(monkeypat
     conversation.refresh_from_db()
     assert conversation.external_conversation_id == "ext-new"
     assert conversation.messages.count() == threads_count * 2
+
+
+def test_extraction_runs_after_a_successful_turn(respx_mock, conversation, fake_openai):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    send_user_message(conversation, QUESTION)
+
+    (call,) = fake_openai.calls
+    assert call["messages"][1]["content"] == f"Profissional: {QUESTION}\n\nAssistente: {ANSWER}"
+
+
+def test_extraction_is_skipped_when_the_agent_fails(respx_mock, conversation, fake_openai):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=httpx.Response(500))
+
+    with pytest.raises(AgentUnavailableError):
+        send_user_message(conversation, QUESTION)
+
+    assert fake_openai.calls == []
+
+
+def test_extraction_failure_still_returns_the_answer(respx_mock, conversation, fake_openai):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+    fake_openai.error = RuntimeError("boom")
+
+    exchange = exchange_messages(conversation, QUESTION)
+
+    assert exchange.assistant_message.content == ANSWER
