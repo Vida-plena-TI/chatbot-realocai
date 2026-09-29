@@ -156,10 +156,22 @@ SPECTACULAR_SETTINGS = {
     "SERVE_PERMISSIONS": ["core.permissions.IsStaffOrDebug"],
 }
 
+# RealocAI: external AI agent service (FastAPI), called server-to-server only.
+# The API key must never reach the browser nor be logged.
+REALOCAI_BASE_URL = env("REALOCAI_BASE_URL", default="")
+REALOCAI_API_KEY = env("REALOCAI_API_KEY", default="")
+# The agent makes several model calls per message: allow a generous timeout.
+REALOCAI_TIMEOUT_SECONDS = env.float("REALOCAI_TIMEOUT_SECONDS", default=60)
+
 # Logging: never log request bodies (they may contain patient data).
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", default="INFO")},
+    "loggers": {
+        # Keep HTTP client internals (URLs, connection details) out of the logs.
+        "httpx": {"level": "WARNING"},
+        "httpcore": {"level": "WARNING"},
+    },
 }
