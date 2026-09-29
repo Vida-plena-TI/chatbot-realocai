@@ -29,6 +29,10 @@ class Conversation(models.Model):
     external_conversation_id = models.CharField(
         "ID da conversa no RealocAI", max_length=64, blank=True, default="", db_index=True
     )
+    # Highest Message.seq already processed by memory extraction.
+    memory_extracted_seq = models.PositiveIntegerField(
+        "última sequência processada para memória", default=0
+    )
     created_at = models.DateTimeField("criada em", auto_now_add=True)
     updated_at = models.DateTimeField("atualizada em", auto_now=True)
     # Soft delete: set instead of removing the row.
