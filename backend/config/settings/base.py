@@ -140,7 +140,9 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     # Rates only apply to views that opt in with `throttle_scope`.
     # login: 5 attempts per minute per client IP, to slow down password guessing.
-    "DEFAULT_THROTTLE_RATES": {"login": "5/min"},
+    # chat_messages: sending a chat message, per user. Each message triggers two paid
+    # AI calls (RealocAI and memory extraction), so this caps the cost per account.
+    "DEFAULT_THROTTLE_RATES": {"login": "5/min", "chat_messages": "30/min"},
     # Number of trusted reverse proxies in front of the app. Throttling keys on the
     # client IP; behind a proxy, set this so it is taken from X-Forwarded-For instead
     # of REMOTE_ADDR (otherwise every client shares the proxy's IP).

@@ -7,6 +7,7 @@ import pytest
 from django.conf import settings
 from django.urls import reverse
 from rest_framework.test import APIClient
+from rest_framework.throttling import ScopedRateThrottle
 
 from chat.models import Conversation, Memory, Message
 from chat.services.agent import AGENT_UNAVAILABLE_MESSAGE
@@ -479,3 +480,38 @@ def test_message_serializer_exposes_no_internal_fields(api, conversation):
     result = api.get(messages_url(conversation)).json()["results"][0]
 
     assert set(result) == MESSAGE_FIELDS
+
+
+# --- Throttling -----------------------------------------------------------------------
+
+
+@pytest.fixture
+def two_messages_per_minute(monkeypatch):
+    # The real rate (30/min) would need 30 requests; the mechanism is the same.
+    monkeypatch.setitem(ScopedRateThrottle.THROTTLE_RATES, "chat_messages", "2/min")
+
+
+def test_chat_messages_rate_is_configured():
+    assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["chat_messages"] == "30/min"
+
+
+def test_sending_messages_is_throttled_per_user(
+    api, user, other_user, conversation, respx_mock, two_messages_per_minute
+):
+    route = respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    assert post_message(api, conversation).status_code == 201
+    assert post_message(api, conversation).status_code == 201
+    response = post_message(api, conversation)
+
+    assert response.status_code == 429
+    assert route.call_count == 2
+    assert conversation.messages.count() == 4
+    # Other endpoints are not throttled.
+    assert api.get(messages_url(conversation)).status_code == 200
+    assert api.get(list_url()).status_code == 200
+    # Other users have their own budget.
+    other = APIClient()
+    other.force_login(other_user)
+    other_conversation = Conversation.objects.create(user=other_user)
+    assert post_message(other, other_conversation).status_code == 201

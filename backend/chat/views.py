@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 
 from .models import Conversation
 from .serializers import (
@@ -43,6 +44,9 @@ class ConversationViewSet(
     """
 
     pagination_class = ChatPagination
+    # Only applied to sending messages (see get_throttles): ScopedRateThrottle keys on
+    # the user id for authenticated requests.
+    throttle_scope = "chat_messages"
     # PATCH only: PUT would require resending every writable field.
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
@@ -50,6 +54,11 @@ class ConversationViewSet(
         if getattr(self, "swagger_fake_view", False):  # OpenAPI schema generation
             return Conversation.objects.none()
         return Conversation.objects.filter(user=self.request.user, deleted_at__isnull=True)
+
+    def get_throttles(self):
+        if self.action == "messages" and self.request.method == "POST":
+            return [ScopedRateThrottle()]
+        return super().get_throttles()
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -71,6 +80,7 @@ class ConversationViewSet(
         responses={
             201: ExchangeSerializer,
             400: OpenApiResponse(description="Conteúdo inválido ou conversa arquivada."),
+            429: OpenApiResponse(DetailSerializer, description="Muitas mensagens."),
             502: OpenApiResponse(DetailSerializer, description="Agente indisponível."),
         },
     )
