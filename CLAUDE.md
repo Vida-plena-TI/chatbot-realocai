@@ -15,7 +15,8 @@ segurança e privacidade têm prioridade sobre conveniência.
 │   │   └── settings/   base.py, dev.py, prod.py
 │   ├── accounts/       Custom User (login por e-mail) + endpoints /api/auth/
 │   ├── core/           Utilitários compartilhados + health check
-│   └── chat/           Conversas, mensagens e memórias do agente (models + services)
+│   └── chat/           Conversas, mensagens e memórias; endpoints /api/conversations/;
+│                       integração com o RealocAI (services/)
 ├── frontend/           React + Vite (será adicionado depois; não modificar sem pedido)
 ├── .env.example        Todas as variáveis de ambiente documentadas
 └── CLAUDE.md
@@ -37,6 +38,8 @@ uv run python manage.py check --deploy --settings=config.settings.prod
 - API: `/api/health/`, `/api/auth/...`, schema OpenAPI em `/api/schema/`, Swagger em
   `/api/docs/` (públicos só com `DEBUG=True`; fora disso, apenas usuários `is_staff`).
 - Configuração vem de variáveis de ambiente / `.env` na **raiz** do repositório.
+- O serviço de IA **RealocAI** (FastAPI, outro repositório) roda à parte; em dev use a
+  porta **8001** (a 8000 é do `runserver`). Ver [Integração com o RealocAI](#integração-com-o-realocai).
 - Banco: PostgreSQL gerenciado no **Supabase**, via *Session pooler* (porta 5432) com
   `sslmode=require`. Não usar o Transaction pooler (6543). Não há Docker no projeto.
 
@@ -110,6 +113,10 @@ Views e a integração com o LLM devem usar estas funções, não escrever nos m
 - `get_active_memories(user, limit=20)` — ativas e não expiradas, por `importance` desc e
   `created_at` desc.
 
+`Conversation.external_conversation_id` guarda o `conversa_id` do RealocAI (vazio até a
+primeira troca). É interno: nunca aparece em serializers expostos ao frontend e é somente
+leitura no admin.
+
 No admin, mensagens são somente leitura (registro de auditoria) e não podem ser criadas
 por lá.
 
@@ -119,3 +126,79 @@ por lá.
 - **Nunca commitar dados de pacientes** — nem em fixtures, testes, logs, dumps ou exemplos.
   Use apenas dados fictícios.
 - Não logar corpo de requisições nem conteúdo de conversas com dados pessoais.
+
+## Endpoints do chat (`/api/conversations/`)
+
+Todos exigem sessão (401 se anônimo) e CSRF nos métodos não seguros. O queryset é filtrado
+pelo usuário logado e exclui conversas soft-deleted: conversa de outro usuário ou apagada
+responde **404** (nunca 403).
+
+- `GET /api/conversations/` — lista paginada (`?page=`, `?page_size=` até 100; padrão 50),
+  por `updated_at` desc. `POST` com `{title?}` cria (sempre `active`).
+- `GET/PATCH/DELETE /api/conversations/{id}/` — PATCH altera só `title`/`status` (sem PUT);
+  DELETE é soft delete (204).
+- `GET /api/conversations/{id}/messages/` — paginada, por `seq`. Campos: `id`, `seq`,
+  `role`, `content`, `created_at`.
+- `POST /api/conversations/{id}/messages/` com `{content}` (1–5000 caracteres, sem ser só
+  espaço):
+  - conversa arquivada → 400 `{"detail": ...}` (o agente não é chamado); conteúdo inválido → 400;
+  - sucesso → **201** `{"user_message": {...}, "assistant_message": {...}}`;
+  - agente indisponível → **502** `{"detail": "Não foi possível processar sua mensagem.
+    Tente novamente."}`. A mensagem do usuário **já está salva**; o frontend pode
+    confirmar via GET e oferecer "tentar de novo" (reenviar cria uma nova mensagem).
+  - A chamada é síncrona e pode levar vários segundos (sem streaming).
+
+## Integração com o RealocAI
+
+O RealocAI é um serviço FastAPI separado que implementa o agente (LangChain + OpenAI) e
+mantém a memória de curto prazo de cada conversa. **O Django nunca chama a OpenAI** e a
+chave do RealocAI **nunca vai para o navegador**: toda chamada é servidor-a-servidor.
+
+Variáveis (ver `.env.example`):
+
+- `REALOCAI_BASE_URL` — ex.: `http://localhost:8001` em dev.
+- `REALOCAI_API_KEY` — enviada no header `X-API-Key`. Segredo: nunca logar nem commitar.
+- `REALOCAI_TIMEOUT_SECONDS` — padrão 60. Em produção, o `--timeout` do gunicorn tem de
+  ser maior (ex.: 90), senão o worker é morto antes da resposta.
+
+Sem `REALOCAI_BASE_URL`/`REALOCAI_API_KEY`, o envio de mensagens responde 502 (erro
+`config_error` no log).
+
+Fluxo de uma mensagem:
+
+```
+navegador ──POST /api/conversations/{id}/messages/──▶ Django (view)
+  1. valida (404 / arquivada 400 / conteúdo 400)
+  2. chat.services.agent.exchange_messages:
+     a. append_message(role="user")                 ← salva ANTES de chamar o agente
+     b. realocai_client.send_chat_message(external_conversation_id or None, content)
+          └──POST {REALOCAI_BASE_URL}/agenda/chat  (X-API-Key)──▶ RealocAI ──▶ OpenAI
+     c. 404 (conversa expirou no RealocAI) e havia id → limpa o id e tenta UMA vez com
+        conversa_id=null (o RealocAI começa sem o histórico anterior)
+     d. sucesso → salva o novo conversa_id (se mudou) e append_message(role="assistant")
+     e. qualquer outra falha → log ERROR (conversation.id + tipo) e AgentUnavailableError
+  3. 201 {user_message, assistant_message}  ou  502 {detail genérico}
+```
+
+Módulos:
+
+- `chat/services/realocai_client.py` — `send_chat_message(conversa_id, mensagem)` devolve
+  `ChatSuccess(conversa_id, resposta)` ou `ChatFailure(kind, status_code)`, com `kind` em
+  `ChatErrorKind`: `expired` (404), `invalid` (422), `upstream_error` (5xx, status
+  inesperado ou resposta malformada), `network_error` (timeout/conexão), `config_error`
+  (401 ou settings ausentes). Não levanta exceção para erros HTTP e não loga.
+- `chat/services/agent.py` — `send_user_message(conversation, content) -> Message` (a do
+  assistant) e `exchange_messages(conversation, content) -> Exchange(user_message,
+  assistant_message)` (usada pela view). Conteúdo vazio → `ValueError`; falha do agente →
+  `AgentUnavailableError` (mensagem genérica em português, segura para o usuário).
+
+Regras de log: registrar só `conversation.id`, tipo de erro e status HTTP. **Nunca** o
+conteúdo da mensagem, a resposta do agente ou a API key. Os loggers `httpx`/`httpcore`
+ficam em WARNING.
+
+Testes: `chat/tests/conftest.py` aponta as settings para `http://realocai.test` com uma
+chave falsa, e as chamadas HTTP são mockadas com o fixture `respx_mock` (requisição não
+mockada falha o teste). Nunca apontar testes para um RealocAI real.
+
+Ainda não implementado: extração/uso de `Memory`, endpoints auxiliares do RealocAI
+(`/agenda/disponibilidade`, `/agenda/ocupacao`, `/relatorio/enviar`) e streaming.

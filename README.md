@@ -7,8 +7,8 @@ Aplicação web da clínica multidisciplinar Vida Plena: um agente de IA com cha
 
 ## Status
 
-🚧 Fundação do backend pronta (Django + DRF). Chat, integração com LLM e frontend virão
-nas próximas etapas.
+🚧 Backend (Django + DRF) com autenticação, conversas e envio de mensagens ao agente
+RealocAI. Memória de longo prazo e frontend virão nas próximas etapas.
 
 ## Estrutura
 
@@ -21,6 +21,8 @@ frontend/   React + Vite (em breve)
 
 - [uv](https://docs.astral.sh/uv/) (gerencia o Python e as dependências)
 - Um projeto no [Supabase](https://supabase.com/) (PostgreSQL gerenciado)
+- Acesso ao serviço **RealocAI** (agente de IA, outro repositório) e à sua chave de API,
+  para o chat responder
 - Git
 
 > Não há Docker no projeto; o banco é o PostgreSQL do Supabase.
@@ -58,6 +60,26 @@ Edite o `.env` na raiz: cole a URL do passo 2 em `DATABASE_URL` e gere a `SECRET
 cd backend
 uv run python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
 ```
+
+#### RealocAI (agente de IA)
+
+O chat encaminha as mensagens ao serviço RealocAI (FastAPI), sempre de servidor para
+servidor: o navegador nunca vê a chave dele.
+
+> ⚠️ **Conflito de porta em dev:** o `runserver` do Django usa a porta **8000**. Suba o
+> RealocAI em outra porta, por exemplo `uvicorn ... --port 8001`, e aponte o
+> `REALOCAI_BASE_URL` para ela.
+
+No `.env` (nunca no `.env.example` nem em outro arquivo versionado):
+
+```bash
+REALOCAI_BASE_URL=http://localhost:8001
+REALOCAI_API_KEY=<a mesma chave configurada no RealocAI>
+REALOCAI_TIMEOUT_SECONDS=60
+```
+
+Peça a chave ao responsável pelo RealocAI (ou use a que você configurou na sua instância
+local dele). Sem essas variáveis o resto da API funciona, mas enviar mensagem responde 502.
 
 ### 4. Instalar dependências e migrar
 
@@ -125,6 +147,27 @@ curl -s -o /dev/null -w "%{http_code}
 rm cookies.txt
 ```
 
+### Testar o chat manualmente (curl)
+
+Com o RealocAI rodando na porta 8001 e após o login acima (mantendo `cookies.txt`):
+
+```bash
+CSRF=$(awk '$6=="csrftoken"{print $7}' cookies.txt)
+
+# 1. Cria uma conversa e guarda o id
+ID=$(curl -s -b cookies.txt -H "X-CSRFToken: $CSRF" -H "Content-Type: application/json"   -d '{"title":"Teste"}' http://localhost:8000/api/conversations/   | python -c "import sys,json;print(json.load(sys.stdin)['id'])")
+
+# 2. Envia uma mensagem: 201 com user_message e assistant_message (pode levar segundos)
+curl -s -b cookies.txt -H "X-CSRFToken: $CSRF" -H "Content-Type: application/json"   -d '{"content":"Quais horarios livres amanha?"}'   http://localhost:8000/api/conversations/$ID/messages/
+
+# 3. Lista as mensagens salvas
+curl -s -b cookies.txt http://localhost:8000/api/conversations/$ID/messages/
+```
+
+> No Git Bash do Windows, texto acentuado passado em `-d` pode sair fora de UTF-8 (o
+> Django responde 400 "JSON parse error"). Grave o JSON num arquivo UTF-8 e use
+> `--data-binary @arquivo.json`.
+
 > Com `DEBUG=true` o Django não exige HTTPS para os cookies, então isso funciona em
 > `http://localhost`. O CSRF também confere a origem: o curl não envia `Origin`, e o
 > navegador envia; por isso `CSRF_TRUSTED_ORIGINS` precisa conter a origem do frontend.
@@ -151,7 +194,8 @@ Produção (exemplo):
 ```bash
 cd backend
 uv run python manage.py collectstatic --noinput --settings=config.settings.prod
-uv run gunicorn config.wsgi:application --bind 0.0.0.0:8000
+# --timeout maior que REALOCAI_TIMEOUT_SECONDS: o envio de mensagem espera o agente
+uv run gunicorn config.wsgi:application --bind 0.0.0.0:8000 --timeout 90
 ```
 
 Todas as variáveis estão documentadas em [`.env.example`](.env.example).
