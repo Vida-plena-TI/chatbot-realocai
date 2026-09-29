@@ -152,6 +152,8 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "API do chatbot da clínica multidisciplinar Vida Plena.",
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    # /api/schema/ and /api/docs/ are public only with DEBUG=True; otherwise staff only.
+    "SERVE_PERMISSIONS": ["core.permissions.IsStaffOrDebug"],
 }
 
 # Logging: never log request bodies (they may contain patient data).
