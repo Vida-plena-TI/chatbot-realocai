@@ -35,7 +35,8 @@ class ConversationAdmin(admin.ModelAdmin):
     list_filter = ["status", "user"]
     list_select_related = ["user"]
     search_fields = ["user__email"]
-    readonly_fields = ["id", "created_at", "updated_at"]
+    # external_conversation_id is managed by the RealocAI integration.
+    readonly_fields = ["id", "external_conversation_id", "created_at", "updated_at"]
     raw_id_fields = ["user"]
     inlines = [MessageInline]
 
