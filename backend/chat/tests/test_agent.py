@@ -1,16 +1,21 @@
 import json
 import logging
+import threading
+import time
 
 import httpx
 import pytest
+from django.db import connection
 
-from chat.models import Message
+from chat.models import Conversation, Message
+from chat.services import agent
 from chat.services.agent import (
     AGENT_UNAVAILABLE_MESSAGE,
     AgentUnavailableError,
     exchange_messages,
     send_user_message,
 )
+from chat.services.realocai_client import ChatSuccess
 
 from .conftest import REALOCAI_API_KEY, REALOCAI_CHAT_URL
 
@@ -161,3 +166,46 @@ def test_blank_content_is_rejected_before_anything(respx_mock, conversation, con
 
     assert not route.called
     assert conversation.messages.count() == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_first_messages_open_a_single_realocai_conversation(monkeypatch, conversation):
+    threads_count = 5
+    barrier = threading.Barrier(threads_count)
+    calls_lock = threading.Lock()
+    sent = []
+    errors = []
+
+    def fake_send(conversa_id, mensagem):
+        with calls_lock:
+            sent.append(conversa_id)
+        # Widen the race window: without the row lock every thread would get here
+        # with conversa_id=None before the first one stores the new id.
+        time.sleep(0.5)
+        return ChatSuccess(conversa_id=conversa_id or "ext-new", resposta=ANSWER)
+
+    monkeypatch.setattr(agent, "send_chat_message", fake_send)
+
+    def worker(n):
+        try:
+            # Like separate HTTP requests, each thread loads its own instance.
+            own = Conversation.objects.get(pk=conversation.pk)
+            barrier.wait()
+            send_user_message(own, f"Pergunta {n}")
+        except Exception as exc:  # noqa: BLE001 - surfaced by the assertion below
+            errors.append(exc)
+        finally:
+            connection.close()
+
+    threads = [threading.Thread(target=worker, args=(n,)) for n in range(threads_count)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert sent.count(None) == 1
+    assert sorted(sent, key=str) == [None] + ["ext-new"] * (threads_count - 1)
+    conversation.refresh_from_db()
+    assert conversation.external_conversation_id == "ext-new"
+    assert conversation.messages.count() == threads_count * 2

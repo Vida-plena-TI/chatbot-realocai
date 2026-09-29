@@ -10,7 +10,9 @@ a secret, so failures are logged with the conversation id and error kind only.
 import logging
 from dataclasses import dataclass
 
-from chat.models import Message
+from django.db import transaction
+
+from chat.models import Conversation, Message
 from chat.services.conversations import append_message
 from chat.services.realocai_client import (
     ChatErrorKind,
@@ -54,15 +56,13 @@ def exchange_messages(conversation, content) -> Exchange:
 
     user_message = append_message(conversation, Message.Role.USER, content)
 
-    external_id = conversation.external_conversation_id or None
-    result = send_chat_message(external_id, content)
-
-    if external_id is not None and _is_expired(result):
-        logger.warning(
-            "RealocAI conversation expired; restarting it (conversation=%s)", conversation.id
-        )
-        _set_external_id(conversation, "")
-        result = send_chat_message(None, content)
+    # The conversation row stays locked while RealocAI answers, so concurrent turns of
+    # the same conversation are serialized: a second request waits here and then sees
+    # the conversa_id stored by the first one, instead of opening another conversation.
+    with transaction.atomic():
+        locked = Conversation.objects.select_for_update().get(pk=conversation.pk)
+        result = _ask_agent(locked, content)
+        conversation.external_conversation_id = locked.external_conversation_id
 
     if not isinstance(result, ChatSuccess):
         logger.error(
@@ -73,11 +73,23 @@ def exchange_messages(conversation, content) -> Exchange:
         )
         raise AgentUnavailableError()
 
-    if result.conversa_id != conversation.external_conversation_id:
-        _set_external_id(conversation, result.conversa_id)
-
     assistant_message = append_message(conversation, Message.Role.ASSISTANT, result.resposta)
     return Exchange(user_message, assistant_message)
+
+
+def _ask_agent(locked, content):
+    """Call RealocAI for a locked conversation and persist the resulting conversa_id."""
+    external_id = locked.external_conversation_id or None
+    result = send_chat_message(external_id, content)
+
+    if external_id is not None and _is_expired(result):
+        logger.warning("RealocAI conversation expired; restarting it (conversation=%s)", locked.id)
+        _set_external_id(locked, "")
+        result = send_chat_message(None, content)
+
+    if isinstance(result, ChatSuccess) and result.conversa_id != locked.external_conversation_id:
+        _set_external_id(locked, result.conversa_id)
+    return result
 
 
 def _set_external_id(conversation, value):
