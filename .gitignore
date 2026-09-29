@@ -22,6 +22,21 @@ venv/
 env/
 *.egg-info/
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Django
+*.sqlite3
+*.sqlite3-journal
+staticfiles/
+media/
+
+# Dados sensíveis (LGPD): dumps e exportações nunca vão para o repositório
+*.dump
+*.sql.gz
+*.backup
 
 # Logs
 logs/
