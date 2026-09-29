@@ -15,7 +15,7 @@ segurança e privacidade têm prioridade sobre conveniência.
 │   │   └── settings/   base.py, dev.py, prod.py
 │   ├── accounts/       Custom User (login por e-mail) + endpoints /api/auth/
 │   ├── core/           Utilitários compartilhados + health check
-│   └── chat/           Chat/agente de IA (ainda vazio)
+│   └── chat/           Conversas, mensagens e memórias do agente (models + services)
 ├── frontend/           React + Vite (será adicionado depois; não modificar sem pedido)
 ├── .env.example        Todas as variáveis de ambiente documentadas
 └── CLAUDE.md
@@ -70,6 +70,48 @@ Fluxo que o frontend deve seguir:
 
 Anônimo recebe **401**; autenticado sem permissão, **403** (via
 `core.authentication.SessionAuthentication`). O CSRF é exigido também no login.
+
+## Modelo de dados do chat (`backend/chat/`)
+
+Todas as PKs são UUID. Dados de saúde: usar só dados fictícios em testes e exemplos.
+
+- **Conversation** — pertence a um `user` (`related_name="conversations"`); `title`,
+  `status` (`active`/`archived`), `summary` (resumo incremental para contexto longo),
+  `metadata` (JSON), `created_at`, `updated_at`, `deleted_at` (soft delete: conversa
+  "apagada" continua no banco, com as mensagens). Índice em `(user, -updated_at)`.
+- **Message** — pertence a uma `conversation` (`related_name="messages"`); `seq` (ordem na
+  conversa, único por conversa via `UniqueConstraint`), `role`
+  (`system`/`user`/`assistant`/`tool`), `content`, `model`, `prompt_tokens`,
+  `completion_tokens`, `finish_reason`, `metadata` (tool calls etc.), `created_at`.
+  Ordenação padrão por `seq`.
+- **Memory** — memória de longo prazo de um `user` (`related_name="memories"`); `kind`
+  (`fact`/`preference`/`summary`), `content`, `source_message` (FK para Message,
+  `SET_NULL`), `importance` (1–5, padrão 3), `is_active` (desativar em vez de apagar),
+  `last_used_at`, `expires_at`, `created_at`, `updated_at`. Índice em
+  `(user, is_active, -importance)`.
+
+Apagar um User apaga em cascata suas conversas, mensagens e memórias.
+
+### Camada de serviço (`chat/services/conversations.py`)
+
+Views e a integração com o LLM devem usar estas funções, não escrever nos models direto:
+
+- `create_conversation(user, title="")`
+- `append_message(conversation, role, content, **extra)` — atribui `seq = último + 1`
+  dentro de `transaction.atomic()` com `select_for_update()` na Conversation (seguro sob
+  concorrência) e atualiza `updated_at`. `extra`: `model`, `prompt_tokens`,
+  `completion_tokens`, `finish_reason`, `metadata`. `role` inválido → `ValueError`.
+- `get_context_messages(conversation, limit=None)` — últimas N mensagens em ordem
+  cronológica, como `[{"role", "content"}]`.
+- `soft_delete_conversation(conversation)` — preenche `deleted_at` (idempotente).
+- `add_memory(user, kind, content, source_message=None, importance=3)` — roda
+  `full_clean()` (valida `kind` e `importance`); inválido → `ValidationError`.
+- `deactivate_memory(memory)`
+- `get_active_memories(user, limit=20)` — ativas e não expiradas, por `importance` desc e
+  `created_at` desc.
+
+No admin, mensagens são somente leitura (registro de auditoria) e não podem ser criadas
+por lá.
 
 ## Regras invioláveis
 
