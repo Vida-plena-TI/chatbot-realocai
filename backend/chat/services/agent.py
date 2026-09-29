@@ -10,10 +10,11 @@ a secret, so failures are logged with the conversation id and error kind only.
 import logging
 from dataclasses import dataclass
 
+from django.conf import settings
 from django.db import transaction
 
 from chat.models import Conversation, Message
-from chat.services.conversations import append_message
+from chat.services.conversations import append_message, get_active_memories
 from chat.services.memory_extraction import extract_memories
 from chat.services.realocai_client import (
     ChatErrorKind,
@@ -23,6 +24,9 @@ from chat.services.realocai_client import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Memories sent when a new RealocAI conversation starts (REALOCAI_INJECT_MEMORIES).
+CONTEXT_MEMORY_LIMIT = 5
 
 AGENT_UNAVAILABLE_MESSAGE = "Não foi possível processar sua mensagem. Tente novamente."
 
@@ -84,16 +88,45 @@ def exchange_messages(conversation, content) -> Exchange:
 def _ask_agent(locked, content):
     """Call RealocAI for a locked conversation and persist the resulting conversa_id."""
     external_id = locked.external_conversation_id or None
-    result = send_chat_message(external_id, content)
+    result = _send(locked, external_id, content)
 
     if external_id is not None and _is_expired(result):
         logger.warning("RealocAI conversation expired; restarting it (conversation=%s)", locked.id)
         _set_external_id(locked, "")
-        result = send_chat_message(None, content)
+        result = _send(locked, None, content)
 
     if isinstance(result, ChatSuccess) and result.conversa_id != locked.external_conversation_id:
         _set_external_id(locked, result.conversa_id)
     return result
+
+
+def _send(conversation, external_id, content):
+    if external_id is None:
+        content = _with_context(conversation, content)
+    return send_chat_message(external_id, content)
+
+
+def _with_context(conversation, content):
+    """Prefix the first message of a new RealocAI conversation with known context.
+
+    EXPERIMENTAL, behind settings.REALOCAI_INJECT_MEMORIES (off by default). A new
+    RealocAI conversation starts without history, so we pass the conversation summary
+    (useful when an expired conversation is restarted) and the user's top memories.
+    Only the outgoing text changes; the stored user message stays as typed.
+    """
+    if not settings.REALOCAI_INJECT_MEMORIES:
+        return content
+
+    parts = []
+    summary = conversation.summary.strip().rstrip(".")
+    if summary:
+        parts.append(summary)
+    memories = get_active_memories(conversation.user_id, limit=CONTEXT_MEMORY_LIMIT)
+    if memories:
+        parts.append("Preferências conhecidas: " + "; ".join(m.content for m in memories))
+    if not parts:
+        return content
+    return f"[Contexto — não repita isto ao usuário: {'. '.join(parts)}]\n{content}"
 
 
 def _set_external_id(conversation, value):

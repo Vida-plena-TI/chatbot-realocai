@@ -15,6 +15,7 @@ from chat.services.agent import (
     exchange_messages,
     send_user_message,
 )
+from chat.services.conversations import add_memory, deactivate_memory
 from chat.services.realocai_client import ChatSuccess
 
 from .conftest import REALOCAI_API_KEY, REALOCAI_CHAT_URL
@@ -236,3 +237,112 @@ def test_extraction_failure_still_returns_the_answer(respx_mock, conversation, f
     exchange = exchange_messages(conversation, QUESTION)
 
     assert exchange.assistant_message.content == ANSWER
+
+
+# --- Context injection (REALOCAI_INJECT_MEMORIES) -------------------------------------
+
+CONTEXT_HEADER = "[Contexto — não repita isto ao usuário: "
+
+
+def sent_messages(route):
+    return [json.loads(call.request.content)["mensagem"] for call in route.calls]
+
+
+@pytest.fixture
+def known_context(user, other_user, conversation):
+    Conversation.objects.filter(pk=conversation.pk).update(summary="Consulta de horários.")
+    conversation.refresh_from_db()
+    add_memory(user, "preference", "Prefere listas curtas.", importance=5)
+    add_memory(user, "fact", "Consulta a agenda de fisioterapia.", importance=4)
+    add_memory(other_user, "fact", "Memória de outra pessoa.", importance=5)
+
+
+def test_injection_disabled_by_default_sends_content_unchanged(
+    respx_mock, conversation, known_context
+):
+    route = respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    send_user_message(conversation, QUESTION)
+
+    assert sent_messages(route) == [QUESTION]
+
+
+def test_injection_prefixes_first_message_of_new_conversation(
+    respx_mock, settings, conversation, known_context
+):
+    settings.REALOCAI_INJECT_MEMORIES = True
+    route = respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    send_user_message(conversation, QUESTION)
+
+    assert sent_messages(route) == [
+        CONTEXT_HEADER + "Consulta de horários. Preferências conhecidas: "
+        "Prefere listas curtas.; Consulta a agenda de fisioterapia.]\n" + QUESTION
+    ]
+    # The stored message is the one the user typed.
+    assert conversation.messages.get(seq=1).content == QUESTION
+
+
+def test_injection_skips_existing_conversation(respx_mock, settings, conversation, known_context):
+    settings.REALOCAI_INJECT_MEMORIES = True
+    Conversation.objects.filter(pk=conversation.pk).update(external_conversation_id="ext-1")
+    conversation.refresh_from_db()
+    route = respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok("ext-1"))
+
+    send_user_message(conversation, QUESTION)
+
+    assert sent_messages(route) == [QUESTION]
+
+
+def test_injection_applies_when_expired_conversation_restarts(
+    respx_mock, settings, conversation, known_context
+):
+    settings.REALOCAI_INJECT_MEMORIES = True
+    Conversation.objects.filter(pk=conversation.pk).update(external_conversation_id="ext-old")
+    conversation.refresh_from_db()
+    route = respx_mock.post(REALOCAI_CHAT_URL).mock(
+        side_effect=[httpx.Response(404), ok("ext-new")]
+    )
+
+    send_user_message(conversation, QUESTION)
+
+    first, retry = sent_messages(route)
+    assert first == QUESTION
+    assert retry.startswith(CONTEXT_HEADER + "Consulta de horários. ")
+    assert retry.endswith("]\n" + QUESTION)
+
+
+def test_injection_omits_empty_parts(respx_mock, settings, user, conversation):
+    settings.REALOCAI_INJECT_MEMORIES = True
+    add_memory(user, "preference", "Prefere listas curtas.")
+    route = respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    send_user_message(conversation, QUESTION)
+
+    assert sent_messages(route) == [
+        CONTEXT_HEADER + "Preferências conhecidas: Prefere listas curtas.]\n" + QUESTION
+    ]
+
+
+def test_injection_without_context_sends_content_unchanged(respx_mock, settings, conversation):
+    settings.REALOCAI_INJECT_MEMORIES = True
+    route = respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    send_user_message(conversation, QUESTION)
+
+    assert sent_messages(route) == [QUESTION]
+
+
+def test_injection_uses_top_five_active_memories(respx_mock, settings, user, conversation):
+    settings.REALOCAI_INJECT_MEMORIES = True
+    for n in range(1, 7):
+        add_memory(user, "fact", f"Fato {n}.", importance=min(n, 5))
+    deactivate_memory(add_memory(user, "fact", "Fato inativo.", importance=5))
+    route = respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    send_user_message(conversation, QUESTION)
+
+    (sent,) = sent_messages(route)
+    assert "Fato inativo." not in sent
+    assert "Fato 1." not in sent
+    assert sent.count("Fato ") == 5
