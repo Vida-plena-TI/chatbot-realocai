@@ -17,7 +17,7 @@ segurança e privacidade têm prioridade sobre conveniência.
 │   ├── core/           Utilitários compartilhados + health check
 │   └── chat/           Conversas, mensagens e memórias; endpoints /api/conversations/;
 │                       integração com o RealocAI e extração de memórias (services/)
-├── frontend/           React + Vite (será adicionado depois; não modificar sem pedido)
+├── frontend/           React 18 + Vite 5 (SPA do chat; ver [Frontend](#frontend))
 ├── .env.example        Todas as variáveis de ambiente documentadas
 └── CLAUDE.md
 ```
@@ -42,6 +42,24 @@ uv run python manage.py check --deploy --settings=config.settings.prod
   porta **8001** (a 8000 é do `runserver`). Ver [Integração com o RealocAI](#integração-com-o-realocai).
 - Banco: PostgreSQL gerenciado no **Supabase**, via *Session pooler* (porta 5432) com
   `sslmode=require`. Não usar o Transaction pooler (6543). Não há Docker no projeto.
+
+## Frontend
+
+Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://localhost:5173`);
+`npm run build` gera `frontend/dist/` (ignorado pelo git).
+
+- Já segue o contrato de API do backend: sessão + CSRF (cookie `csrftoken` lido a cada
+  requisição, `credentials: "include"`), paginação do DRF e **nada em `localStorage`**.
+- Configuração via `.env.development` / `.env.production` (versionados, sem segredos;
+  exceção no `frontend/.gitignore`) e `.env.local` para ajustes locais (ignorado):
+  - `VITE_USE_MOCK=true` (padrão no dev) usa o mock em `src/api/mock/`, sem backend;
+    `false` chama a API real.
+  - `VITE_API_BASE_URL` — origem do Django (vazio = mesma origem, como em produção).
+  - `VITE_PROXY_TARGET` (só no dev) — encaminha `/api` para o Django; use com
+    `VITE_API_BASE_URL` vazio.
+- Com a API real no dev, a origem do Vite (`http://localhost:5173`) precisa estar em
+  `CORS_ALLOWED_ORIGINS` (acesso direto) ou em `CSRF_TRUSTED_ORIGINS` (via proxy).
+- Nunca colocar segredos em variáveis `VITE_*`: elas vão parar no bundle do navegador.
 
 ## Convenções
 
