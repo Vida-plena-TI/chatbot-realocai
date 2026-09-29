@@ -162,6 +162,14 @@ REALOCAI_BASE_URL = env("REALOCAI_BASE_URL", default="")
 REALOCAI_API_KEY = env("REALOCAI_API_KEY", default="")
 # The agent makes several model calls per message: allow a generous timeout.
 REALOCAI_TIMEOUT_SECONDS = env.float("REALOCAI_TIMEOUT_SECONDS", default=60)
+# EXPERIMENTAL: prefix the first message of a new RealocAI conversation with the
+# conversation summary and the user's top memories. Keep False until validated manually.
+REALOCAI_INJECT_MEMORIES = env.bool("REALOCAI_INJECT_MEMORIES", default=False)
+
+# OpenAI: called directly only to extract long-term memories after each chat turn
+# (the chat itself goes through RealocAI). Empty key = extraction disabled.
+OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+OPENAI_EXTRACTION_MODEL = env("OPENAI_EXTRACTION_MODEL", default="gpt-4o-mini")
 
 # Logging: never log request bodies (they may contain patient data).
 LOGGING = {
