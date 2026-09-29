@@ -17,6 +17,7 @@ env = environ.Env(
     DEBUG=(bool, False),
     ALLOWED_HOSTS=(list, []),
     CORS_ALLOWED_ORIGINS=(list, []),
+    CSRF_TRUSTED_ORIGINS=(list, []),
 )
 
 # The .env file is optional: in production variables come from the environment.
@@ -117,15 +118,33 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# CORS
+# Sessions and CSRF. The SPA authenticates with the session cookie and must send the
+# csrftoken cookie value back in the X-CSRFToken header on unsafe requests.
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+# JavaScript has to read the token, so the CSRF cookie cannot be HttpOnly.
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
+
+# CORS (only needed when the frontend is served from another origin, e.g. Vite in dev)
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
+CORS_ALLOW_CREDENTIALS = True
 
 # Django REST Framework
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_AUTHENTICATION_CLASSES": ["core.authentication.SessionAuthentication"],
     # Secure by default: every endpoint requires authentication unless it opts out.
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    # Rates only apply to views that opt in with `throttle_scope`.
+    # login: 5 attempts per minute per client IP, to slow down password guessing.
+    "DEFAULT_THROTTLE_RATES": {"login": "5/min"},
+    # Number of trusted reverse proxies in front of the app. Throttling keys on the
+    # client IP; behind a proxy, set this so it is taken from X-Forwarded-For instead
+    # of REMOTE_ADDR (otherwise every client shares the proxy's IP).
+    "NUM_PROXIES": env.int("NUM_PROXIES", default=None),
 }
 
 SPECTACULAR_SETTINGS = {
