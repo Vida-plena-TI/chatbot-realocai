@@ -1,0 +1,57 @@
+[project]
+name = "realocai-backend"
+version = "0.1.0"
+description = "Backend (Django + DRF) do chatbot RealocAI"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.2,<6.0",
+    "django-cors-headers>=4.9.0",
+    "django-environ>=0.14.0",
+    "djangorestframework>=3.18.1",
+    "drf-spectacular>=0.30.0",
+    "gunicorn>=26.2.0",
+    "psycopg[binary]>=3.3.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-django>=4.14.0",
+    "ruff>=0.16.9",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.dev"
+python_files = ["test_*.py", "tests.py"]
+testpaths = ["."]
+# --reuse-db: the Supabase pooler keeps server connections open, so the test DB
+# cannot be dropped at teardown. Use `--create-db` after adding migrations.
+addopts = "--strict-markers --reuse-db"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["**/migrations/*"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "DJ",  # flake8-django
+    "S",   # flake8-bandit
+    "SIM", # flake8-simplify
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106"]
+"**/test_*.py" = ["S101", "S105", "S106"]
+
+[tool.ruff.format]
+quote-style = "double"
