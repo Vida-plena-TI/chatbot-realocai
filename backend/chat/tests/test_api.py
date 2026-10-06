@@ -478,7 +478,7 @@ def test_blank_content_is_400(api, conversation, respx_mock, payload):
     response = api.post(messages_url(conversation), payload, format="json")
 
     assert response.status_code == 400
-    assert "content" in response.json()
+    assert set(response.json()) == {"detail"}
     assert not route.called
     assert conversation.messages.count() == 0
 

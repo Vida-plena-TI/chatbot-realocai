@@ -6,7 +6,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ParseError
+from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -70,7 +70,7 @@ class ConversationViewSet(
         if value is None:
             return queryset
         if value not in Conversation.Status.values:
-            raise ParseError(INVALID_STATUS)
+            raise ValidationError(INVALID_STATUS)
         return queryset.filter(status=value)
 
     @extend_schema(

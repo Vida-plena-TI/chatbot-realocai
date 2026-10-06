@@ -1,4 +1,6 @@
-from rest_framework import authentication
+from rest_framework import authentication, exceptions
+
+from .exceptions import CSRF_FAILED
 
 
 class SessionAuthentication(authentication.SessionAuthentication):
@@ -11,3 +13,10 @@ class SessionAuthentication(authentication.SessionAuthentication):
 
     def authenticate_header(self, request):
         return "Session"
+
+    def enforce_csrf(self, request):
+        # DRF's message is in English and includes the failure reason.
+        try:
+            super().enforce_csrf(request)
+        except exceptions.PermissionDenied:
+            raise exceptions.PermissionDenied(CSRF_FAILED) from None

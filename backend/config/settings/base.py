@@ -126,6 +126,8 @@ SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
+# JSON {"detail"} instead of the HTML page, for views protected by Django itself (login).
+CSRF_FAILURE_VIEW = "core.exceptions.csrf_failure"
 
 # CORS (only needed when the frontend is served from another origin, e.g. Vite in dev)
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
@@ -138,6 +140,8 @@ REST_FRAMEWORK = {
     # Secure by default: every endpoint requires authentication unless it opts out.
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    # Every error becomes {"detail": "<first message, in Portuguese>"}.
+    "EXCEPTION_HANDLER": "core.exceptions.exception_handler",
     # Rates only apply to views that opt in with `throttle_scope`.
     # login: 5 attempts per minute per client IP, to slow down password guessing.
     # chat_messages: sending a chat message, per user. Each message triggers two paid
