@@ -52,6 +52,10 @@ def ok(conversa_id="ext-1", resposta=ANSWER):
     return httpx.Response(200, json={"conversa_id": conversa_id, "resposta": resposta})
 
 
+def answer_with_blocks(blocos):
+    return httpx.Response(200, json={"conversa_id": "ext-1", "resposta": ANSWER, "blocos": blocos})
+
+
 @pytest.fixture
 def api(user):
     client = APIClient()
@@ -566,8 +570,20 @@ def test_post_message_to_other_users_conversation_is_404(api, others_conversatio
         [httpx.Response(401)],
         [httpx.Response(502)],
         [httpx.ConnectError("refused")],
+        [httpx.ReadTimeout("timeout")],
+        [answer_with_blocks([load_fixture("ocupacao_agregada")])],
+        [answer_with_blocks("inválido")],
     ],
-    ids=["success", "expired-restart", "401", "502", "connect-error"],
+    ids=[
+        "success",
+        "expired-restart",
+        "401",
+        "502",
+        "connect-error",
+        "timeout",
+        "blocks",
+        "invalid-blocks",
+    ],
 )
 def test_api_key_never_in_responses_or_logs(api, conversation, respx_mock, caplog, side_effect):
     conversation.external_conversation_id = "ext-old"
@@ -580,11 +596,17 @@ def test_api_key_never_in_responses_or_logs(api, conversation, respx_mock, caplo
             api.get(messages_url(conversation)),
             api.get(detail_url(conversation)),
             api.get(list_url()),
+            api.post(
+                "/api/reports/export/",
+                {"formato": "excel", "blocos": [load_fixture("ocupacao_agregada")]},
+                format="json",
+            ),
         ]
 
     for response in responses:
-        assert REALOCAI_API_KEY not in response.content.decode()
-        assert "external_conversation_id" not in response.content.decode()
+        # Bytes: the export response is a binary .xlsx.
+        assert REALOCAI_API_KEY.encode() not in response.content
+        assert b"external_conversation_id" not in response.content
     assert REALOCAI_API_KEY not in caplog.text
     assert settings.REALOCAI_API_KEY == REALOCAI_API_KEY  # the fixture was active
 
@@ -757,10 +779,6 @@ def test_user_message_is_stored_trimmed(api, conversation, respx_mock):
 
 
 # --- Report blocks through the API --------------------------------------------------------
-
-
-def answer_with_blocks(blocos):
-    return httpx.Response(200, json={"conversa_id": "ext-1", "resposta": ANSWER, "blocos": blocos})
 
 
 def test_blocks_are_returned_on_post_and_on_get(api, conversation, respx_mock):
