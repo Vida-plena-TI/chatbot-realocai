@@ -162,11 +162,25 @@ SPECTACULAR_SETTINGS = {
 # The API key must never reach the browser nor be logged.
 REALOCAI_BASE_URL = env("REALOCAI_BASE_URL", default="")
 REALOCAI_API_KEY = env("REALOCAI_API_KEY", default="")
-# The agent makes several model calls per message: allow a generous timeout.
-REALOCAI_TIMEOUT_SECONDS = env.float("REALOCAI_TIMEOUT_SECONDS", default=60)
+# Read timeout (s): the agent makes several model calls per message, so allow a generous
+# one. Connecting has its own short timeout (realocai_client.CONNECT_TIMEOUT_SECONDS).
+REALOCAI_TIMEOUT_SECONDS = env.float("REALOCAI_TIMEOUT_SECONDS", default=90)
+# Local development/demos only: answer with canned replies and sample report blocks
+# instead of calling RealocAI (chat.services.realocai_fake).
+REALOCAI_USE_FAKE = env.bool("REALOCAI_USE_FAKE", default=False)
 # EXPERIMENTAL: prefix the first message of a new RealocAI conversation with the
 # conversation summary and the user's top memories. Keep False until validated manually.
 REALOCAI_INJECT_MEMORIES = env.bool("REALOCAI_INJECT_MEMORIES", default=False)
+
+# Upper bound (characters) for a single user message sent to the agent.
+MESSAGE_MAX_LENGTH = env.int("MESSAGE_MAX_LENGTH", default=2000)
+
+# Largest request body (bytes) accepted by POST /api/reports/export/.
+REPORTS_EXPORT_MAX_BYTES = env.int("REPORTS_EXPORT_MAX_BYTES", default=2 * 1024 * 1024)
+
+# Message contents are health data: the admin shows only metadata (seq, role, date,
+# size) unless this is explicitly enabled.
+ADMIN_SHOW_MESSAGE_CONTENT = env.bool("ADMIN_SHOW_MESSAGE_CONTENT", default=False)
 
 # OpenAI: called directly only to extract long-term memories after each chat turn
 # (the chat itself goes through RealocAI). Empty key = extraction disabled.
