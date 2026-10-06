@@ -44,9 +44,7 @@ class Conversation(models.Model):
     # Set while a chat turn is in flight (claimed by an atomic conditional UPDATE), so
     # a second concurrent message gets a 409 instead of opening another RealocAI
     # conversation. Stale claims expire (see chat.services.agent).
-    processing_started_at = models.DateTimeField(
-        "processamento iniciado em", null=True, blank=True
-    )
+    processing_started_at = models.DateTimeField("processamento iniciado em", null=True, blank=True)
 
     class Meta:
         verbose_name = "conversa"

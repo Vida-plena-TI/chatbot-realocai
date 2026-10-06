@@ -1,11 +1,15 @@
-"""HTTP client for the RealocAI agent service (server-to-server only).
+"""Client for the RealocAI agent service (server-to-server only).
+
+`send_chat_message` is the only interface the rest of the code uses. It talks HTTP to
+RealocAI, or, with settings.REALOCAI_USE_FAKE, to the canned implementation in
+chat.services.realocai_fake (local development and demos).
 
 The API key is sent in the X-API-Key header and must never be logged, returned to
-the frontend or included in error messages. Message contents are health data: this
-module never logs them either.
+the frontend or included in error messages. Message contents and report blocks are
+health data: this module never logs them either.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 import httpx
@@ -14,6 +18,9 @@ from django.conf import settings
 CHAT_PATH = "/agenda/chat"
 # Matches Conversation.external_conversation_id.
 MAX_CONVERSATION_ID_LENGTH = 64
+# Reading the answer uses settings.REALOCAI_TIMEOUT_SECONDS; connecting must be quick.
+CONNECT_TIMEOUT_SECONDS = 5
+MAX_BLOCOS = 10
 
 
 class ChatErrorKind(StrEnum):
@@ -28,6 +35,11 @@ class ChatErrorKind(StrEnum):
 class ChatSuccess:
     conversa_id: str
     resposta: str
+    # Report blocks, opaque JSON. Only the envelope is checked (see validate_blocos).
+    blocos: list = field(default_factory=list)
+    # True when RealocAI sent blocks that failed validation and were dropped. The
+    # turn still succeeds; the caller logs a warning.
+    blocos_descartados: bool = False
 
 
 @dataclass(frozen=True)
@@ -46,10 +58,35 @@ _STATUS_TO_KIND = {
 
 
 def send_chat_message(conversa_id: str | None, mensagem: str) -> ChatResult:
-    """POST one user message to RealocAI; `conversa_id=None` starts a new conversation.
+    """Send one user message to RealocAI; `conversa_id=None` starts a new conversation.
 
     Never raises for HTTP or network errors: every outcome is returned as a result.
     """
+    if settings.REALOCAI_USE_FAKE:
+        from chat.services import realocai_fake
+
+        return realocai_fake.send_chat_message(conversa_id, mensagem)
+    return _send_http(conversa_id, mensagem)
+
+
+def validate_blocos(raw) -> tuple[list, bool]:
+    """Return (blocos, dropped). Missing blocks are an empty list.
+
+    Blocks are kept as opaque JSON: only a list of at most MAX_BLOCOS objects, each
+    with "tipo" and "versao", is accepted. Anything else is dropped as a whole, never
+    reshaped, and `dropped` is True.
+    """
+    if raw is None:
+        return [], False
+    valid = (
+        isinstance(raw, list)
+        and len(raw) <= MAX_BLOCOS
+        and all(isinstance(b, dict) and "tipo" in b and "versao" in b for b in raw)
+    )
+    return (raw, False) if valid else ([], True)
+
+
+def _send_http(conversa_id, mensagem):
     base_url = settings.REALOCAI_BASE_URL
     api_key = settings.REALOCAI_API_KEY
     if not base_url or not api_key:
@@ -59,8 +96,14 @@ def send_chat_message(conversa_id: str | None, mensagem: str) -> ChatResult:
         response = httpx.post(
             base_url.rstrip("/") + CHAT_PATH,
             headers={"X-API-Key": api_key},
-            json={"conversa_id": conversa_id, "mensagem": mensagem},
-            timeout=settings.REALOCAI_TIMEOUT_SECONDS,
+            json={
+                "conversa_id": conversa_id,
+                "mensagem": mensagem,
+                "renderiza_relatorios": True,
+            },
+            timeout=httpx.Timeout(
+                settings.REALOCAI_TIMEOUT_SECONDS, connect=CONNECT_TIMEOUT_SECONDS
+            ),
         )
     except httpx.HTTPError:
         # Covers timeouts, connection errors and invalid URLs. The exception text is
@@ -79,9 +122,11 @@ def _parse_success(response: httpx.Response) -> ChatResult:
         data = response.json()
     except ValueError:
         return ChatFailure(ChatErrorKind.UPSTREAM, response.status_code)
+    if not isinstance(data, dict):
+        return ChatFailure(ChatErrorKind.UPSTREAM, response.status_code)
 
-    conversa_id = data.get("conversa_id") if isinstance(data, dict) else None
-    resposta = data.get("resposta") if isinstance(data, dict) else None
+    conversa_id = data.get("conversa_id")
+    resposta = data.get("resposta")
     valid = (
         isinstance(conversa_id, str)
         and 0 < len(conversa_id) <= MAX_CONVERSATION_ID_LENGTH
@@ -90,4 +135,8 @@ def _parse_success(response: httpx.Response) -> ChatResult:
     )
     if not valid:
         return ChatFailure(ChatErrorKind.UPSTREAM, response.status_code)
-    return ChatSuccess(conversa_id=conversa_id, resposta=resposta)
+
+    blocos, dropped = validate_blocos(data.get("blocos"))
+    return ChatSuccess(
+        conversa_id=conversa_id, resposta=resposta, blocos=blocos, blocos_descartados=dropped
+    )
