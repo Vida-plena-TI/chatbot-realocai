@@ -46,7 +46,30 @@ async function request(method, path, { body, query, skipAuthRedirect = false } =
   return data;
 }
 
+// Exportação de relatórios: o backend gera o arquivo a partir dos blocos.
+// Endpoint proposto (a confirmar): POST /api/reports/export/ {formato, blocos} → arquivo.
+async function requestBlob(path, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = getCsrfToken();
+  if (token) headers['X-CSRFToken'] = token;
+  let res;
+  try {
+    res = await fetch(BASE_URL + path, { method: 'POST', headers, credentials: 'include', body: JSON.stringify(body) });
+  } catch {
+    throw new ApiError(0, 'Sem conexão com o servidor.');
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    if (res.status === 401) onUnauthorized?.();
+    throw new ApiError(res.status, data?.detail, data);
+  }
+  const cd = res.headers.get('Content-Disposition') || '';
+  const m = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  return { blob: await res.blob(), arquivo: m ? decodeURIComponent(m[1]) : null };
+}
+
 export const httpApi = {
+  exportReports: ({ blocos, formato }) => requestBlob('/api/reports/export/', { formato, blocos }),
   csrf: () => request('GET', '/api/auth/csrf/'),
   login: (email, password) =>
     request('POST', '/api/auth/login/', { body: { email, password }, skipAuthRedirect: true }),

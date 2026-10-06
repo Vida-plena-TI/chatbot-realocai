@@ -6,7 +6,7 @@ const SUGGESTIONS = [
   ['Encaixe', 'Preciso encaixar uma avaliação de fonoaudiologia hoje à tarde.'],
   ['Consultar agenda', 'Quais horários de psicologia estão livres hoje?'],
   ['Confirmar pacientes', 'Quais atendimentos de hoje ainda aguardam autorização?'],
-  ['Disponibilidade', 'Qual profissional de terapia ocupacional tem horário amanhã de manhã?'],
+  ['Relatório', 'Qual a taxa de ocupação da Helena Prado nesta semana?'],
 ];
 
 export function WelcomeState({ onPick, disabled }) {

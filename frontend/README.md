@@ -94,6 +94,12 @@ src/
 └─ styles/                  tokens.css, global.css (+ CSS Modules por componente)
 ```
 
+## Relatórios
+
+As respostas do assistente podem trazer `blocos` de relatório, desenhados como cartões dentro da conversa e exportáveis em PDF ou Excel. No mock, peça "ocupação da Helena", "pacientes por profissional" ou "relatório completo". A especificação, os tokens e as decisões em aberto estão em [`docs/relatorios.md`](docs/relatorios.md).
+
+O botão de lua no cabeçalho alterna o tema escuro.
+
 ## Dados fictícios
 
 O mock usa apenas identificadores genéricos ("Paciente A", "Profissional B", "Sala 3"). Mantenha esse padrão em testes e demonstrações.

@@ -4,6 +4,7 @@ import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { Button } from '../ui/Button';
 import { decisionOf, parseContent } from '../../utils/content';
+import { pareceRelatorio } from '../../reports/format';
 
 export function MessageList({ messages, sending, hasOlder, loadingOlder, onLoadOlder, canDecide, onDecide }) {
   const ref = useRef(null);
@@ -55,7 +56,7 @@ export function MessageList({ messages, sending, hasOlder, loadingOlder, onLoadO
             onDecide={onDecide}
           />
         ))}
-        {sending && <TypingIndicator />}
+        {sending && <TypingIndicator report={pareceRelatorio(messages[messages.length - 1]?.content)} />}
       </div>
     </div>
   );

@@ -2,6 +2,9 @@
 import { ApiError } from '../errors';
 import { summarize, titleFrom } from '../../utils/content';
 import { MOCK_USER, MOCK_PASSWORD, seedConversations, gerarResposta } from './fixtures';
+import { gerarRelatorio } from './reportFixtures';
+import { gerarExcel, imprimirBlocos } from '../../reports/localExport';
+import { nomeArquivo } from '../../reports/format';
 
 const PAGE_CONVERSATIONS = 20;
 const PAGE_MESSAGES = 30;
@@ -49,13 +52,26 @@ function findConversation(id) {
   return c;
 }
 
-function addMessage(c, role, content) {
+function addMessage(c, role, content, blocos) {
   const m = { id: db.nextMsgId++, seq: c.messages.length + 1, role, content, created_at: now() };
+  if (blocos?.length) m.blocos = blocos;
   c.messages.push(m);
   return m;
 }
 
 export const mockApi = {
+  // PDF: impressão do navegador. Excel: SpreadsheetML gerado no cliente (.xls).
+  // Para testar o erro de exportação, peça um relatório "parcial" e exporte em Excel.
+  async exportReports({ blocos, formato }) {
+    requireSession();
+    await wait(1200, 2200);
+    if (formato === 'excel' && blocos.some((b) => b.parcial)) throw new ApiError(502, 'Falha ao gerar a planilha.');
+    if (formato === 'pdf') {
+      await imprimirBlocos(blocos);
+      return { impressao: true };
+    }
+    return { blob: gerarExcel(blocos), arquivo: nomeArquivo(blocos, 'excel').replace(/\.xlsx$/, '.xls') };
+  },
   async csrf() {
     await wait(80, 160);
     document.cookie = 'csrftoken=mock-csrf-token; path=/; SameSite=Lax';
@@ -141,7 +157,10 @@ export const mockApi = {
     if (/\b(erro|falha)\b/i.test(text)) throw new ApiError(502, 'O agente não respondeu a tempo.');
 
     const user_message = addMessage(c, 'user', text);
-    const assistant_message = addMessage(c, 'assistant', gerarResposta(text));
+    const rel = gerarRelatorio(text);
+    const assistant_message = rel
+      ? addMessage(c, 'assistant', rel.content, rel.blocos)
+      : addMessage(c, 'assistant', gerarResposta(text));
     c.summary = summarize(assistant_message.content);
     c.updated_at = assistant_message.created_at;
     if (!c.title) c.title = titleFrom(text);

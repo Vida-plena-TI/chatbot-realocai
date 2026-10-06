@@ -1,5 +1,6 @@
 import s from './chat.module.css';
 import { ProposalCard } from './ProposalCard';
+import { ReportGroup } from '../../reports/ReportGroup';
 import { formatMessageTime } from '../../utils/formatDate';
 
 export function AgentAvatar() {
@@ -40,6 +41,7 @@ export function MessageBubble({ message, parsed, proposalStatus, canDecide, onDe
             onDecide={(action) => onDecide(proposal, action)}
           />
         )}
+        {message.blocos?.length > 0 && <ReportGroup blocos={message.blocos} />}
       </div>
     </div>
   );

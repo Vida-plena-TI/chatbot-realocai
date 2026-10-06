@@ -13,6 +13,7 @@ import { EmptyState, WelcomeState } from '../components/chat/EmptyState';
 import { Button } from '../components/ui/Button';
 import { IconButton } from '../components/ui/IconButton';
 import { Spinner } from '../components/ui/Spinner';
+import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { DECISION, titleFrom } from '../utils/content';
 import { formatToday } from '../utils/formatDate';
 
@@ -207,6 +208,7 @@ export default function ChatPage() {
             Só sugere
           </span>
           <span className={s.pillDate}>{formatToday()}</span>
+          <ThemeToggle />
         </header>
 
         <div className={s.body}>{body}</div>
