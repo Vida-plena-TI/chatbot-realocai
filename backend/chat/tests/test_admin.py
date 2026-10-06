@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 
 from chat.models import Memory, Message
-from chat.services.conversations import add_memory, append_message
+from chat.services.conversations import add_memory, append_message, record_exchange
 
 
 @pytest.fixture
@@ -31,16 +31,51 @@ def test_changelist_loads_with_search_and_filters(admin_client, message, user, m
     assert admin_client.get(url, {"q": user.email}).status_code == 200
 
 
+@pytest.fixture
+def answered(conversation):
+    _, answer = record_exchange(
+        conversation,
+        "Pergunta fictícia",
+        "Resposta fictícia com prévia",
+        blocos=[{"tipo": "x", "versao": 1, "titulo": "Bloco fictício"}],
+    )
+    return answer
+
+
+def admin_pages(admin_client, conversation, answer):
+    return [
+        admin_client.get(reverse("admin:chat_conversation_change", args=[conversation.pk])),
+        admin_client.get(reverse("admin:chat_message_change", args=[answer.pk])),
+    ]
+
+
 @pytest.mark.django_db
-def test_conversation_change_page_shows_read_only_messages(admin_client, conversation, message):
-    response = admin_client.get(reverse("admin:chat_conversation_change", args=[conversation.pk]))
+def test_message_contents_are_hidden_by_default(admin_client, conversation, answered, settings):
+    settings.ADMIN_SHOW_MESSAGE_CONTENT = False
 
-    assert response.status_code == 200
-    assert "Mensagem fictícia" in response.content.decode()
+    for response in admin_pages(admin_client, conversation, answered):
+        html = response.content.decode()
+        assert response.status_code == 200
+        for text in ("Pergunta fictícia", "Resposta fictícia", "Bloco fictício"):
+            assert text not in html
+        # Metadata is still shown.
+        assert "28 caracteres, 1 bloco(s) de relatório" in html
 
 
 @pytest.mark.django_db
-def test_message_content_is_read_only(admin_client, message):
+def test_message_contents_are_shown_when_enabled(admin_client, conversation, answered, settings):
+    settings.ADMIN_SHOW_MESSAGE_CONTENT = True
+
+    conversation_page, message_page = admin_pages(admin_client, conversation, answered)
+
+    assert "Pergunta fictícia" in conversation_page.content.decode()
+    assert "Resposta fictícia com prévia" in message_page.content.decode()
+    assert "Bloco fictício" in message_page.content.decode()
+
+
+@pytest.mark.django_db
+def test_message_content_is_read_only(admin_client, message, settings):
+    settings.ADMIN_SHOW_MESSAGE_CONTENT = True
     url = reverse("admin:chat_message_change", args=[message.pk])
 
     admin_client.post(url, {"content": "Alterado", "model": "", "finish_reason": ""})
