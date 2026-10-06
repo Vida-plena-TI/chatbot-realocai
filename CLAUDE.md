@@ -57,11 +57,14 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   com 2 ou mais). A tela só formata, nunca recalcula números. `meta` pode ser `null`
   (pacientes por profissional não tem meta): sem marca de meta nem linha "Meta de
   ocupação" na impressão.
+- Os blocos (componentes, `src/reports/types.js` e fixtures) seguem os nomes de campo dos
+  exemplos reais do RealocAI, sem camada de adaptação; `npm run check:blocks` valida as
+  fixtures de `sampleBlocks.js` contra os campos obrigatórios do contrato real.
 - **Exportação:** Excel é gerado pelo backend (`POST /api/reports/export/`, via
   `httpApi.exportReports`); PDF é a impressão do navegador (`imprimirBlocos` em
   `src/reports/localExport.js`), no mock e na API real.
 - **Selo "Sem escala":** dia ou item com `escalados === 0` e `ocupados > 0` é
-  inconsistência de dados; em vez de "Meta atingida" mostra selo e barra neutros (texto +
+  inconsistência de dados (na ocupação agregada: `slots_escalados`/`slots_ocupados`); em vez de "Meta atingida" mostra selo e barra neutros (texto +
   ícone, tokens existentes), percentual "—" se não for número finito (`semEscala` e
   `pctOuTraco` em `src/reports/format.js`). No mock: peça "ocupação da Helena".
 - **Tema escuro:** `ThemeToggle` no cabeçalho alterna `:root[data-theme='dark']`
