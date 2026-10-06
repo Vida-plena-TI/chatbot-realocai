@@ -20,7 +20,7 @@ from .serializers import (
     MessageCreateSerializer,
     MessageSerializer,
 )
-from .services.agent import AgentUnavailableError, exchange_messages
+from .services.agent import AgentUnavailableError, ConversationBusyError, exchange_messages
 from .services.conversations import create_conversation, soft_delete_conversation
 
 DetailSerializer = inline_serializer("ChatDetail", fields={"detail": serializers.CharField()})
@@ -115,6 +115,7 @@ class ConversationViewSet(
         responses={
             201: ExchangeSerializer,
             400: OpenApiResponse(description="Conteúdo inválido ou conversa arquivada."),
+            409: OpenApiResponse(DetailSerializer, description="Mensagem em andamento."),
             429: OpenApiResponse(DetailSerializer, description="Muitas mensagens."),
             502: OpenApiResponse(DetailSerializer, description="Agente indisponível."),
         },
@@ -133,8 +134,10 @@ class ConversationViewSet(
         serializer.is_valid(raise_exception=True)
         try:
             exchange = exchange_messages(conversation, serializer.validated_data["content"])
+        except ConversationBusyError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
         except AgentUnavailableError as exc:
-            # The user message is already stored; the client can confirm it via GET.
+            # Nothing was stored: the client can resend the same text.
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response(ExchangeSerializer(exchange).data, status=status.HTTP_201_CREATED)

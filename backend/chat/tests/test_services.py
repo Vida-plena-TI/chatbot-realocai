@@ -14,6 +14,7 @@ from chat.services.conversations import (
     deactivate_memory,
     get_active_memories,
     get_context_messages,
+    record_exchange,
     soft_delete_conversation,
 )
 
@@ -226,3 +227,46 @@ def test_get_active_memories_respects_limit(user):
         add_memory(user, "fact", f"fato {i}")
 
     assert len(get_active_memories(user, limit=2)) == 2
+
+
+@pytest.mark.django_db
+def test_record_exchange_stores_consecutive_messages(conversation):
+    append_message(conversation, "user", "Antiga")
+
+    user_message, assistant_message = record_exchange(
+        conversation, "Pergunta", "Resposta", blocos=[{"tipo": "x", "versao": 1}]
+    )
+
+    assert (user_message.seq, user_message.role, user_message.blocos) == (2, "user", [])
+    assert (assistant_message.seq, assistant_message.role) == (3, "assistant")
+    assert assistant_message.blocos == [{"tipo": "x", "versao": 1}]
+
+
+@pytest.mark.django_db
+def test_record_exchange_updates_conversation_in_the_same_transaction(user):
+    conversation = Conversation.objects.create(user=user)
+    before = conversation.updated_at
+
+    record_exchange(conversation, "Pergunta", "Resposta", external_conversation_id="ext-9")
+
+    conversation.refresh_from_db()
+    assert (conversation.title, conversation.preview) == ("Pergunta", "Resposta")
+    assert conversation.external_conversation_id == "ext-9"
+    assert conversation.updated_at > before
+
+
+@pytest.mark.django_db
+def test_record_exchange_is_all_or_nothing(conversation, monkeypatch):
+    from chat.services import conversations
+
+    def boom(content):
+        raise RuntimeError("falha depois de criar as mensagens")
+
+    monkeypatch.setattr(conversations, "summarize", boom)
+
+    with pytest.raises(RuntimeError):
+        record_exchange(conversation, "Pergunta", "Resposta", external_conversation_id="ext-9")
+
+    assert conversation.messages.count() == 0
+    conversation.refresh_from_db()
+    assert conversation.external_conversation_id == ""

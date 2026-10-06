@@ -9,6 +9,7 @@ from django.db.models import Max, Q
 from django.utils import timezone
 
 from chat.models import Conversation, Memory, Message
+from chat.services.content import summarize, title_from
 
 
 def create_conversation(user, title=""):
@@ -37,6 +38,44 @@ def append_message(conversation, role, content, **extra):
 
     conversation.updated_at = locked.updated_at
     return message
+
+
+def record_exchange(
+    conversation, user_content, assistant_content, *, blocos=None, external_conversation_id=None
+):
+    """Store a user message and its answer, with consecutive `seq`s, in one transaction.
+
+    Nothing is written unless both messages are. The same transaction refreshes the
+    sidebar preview, sets an automatic title when the conversation has none and, when
+    given, stores the RealocAI `conversa_id`. Returns (user_message, assistant_message).
+    The row lock only lasts for these few writes (never during a call to the agent).
+    """
+    with transaction.atomic():
+        locked = Conversation.objects.select_for_update().get(pk=conversation.pk)
+        last_seq = locked.messages.aggregate(last=Max("seq"))["last"] or 0
+        user_message = Message.objects.create(
+            conversation=locked, seq=last_seq + 1, role=Message.Role.USER, content=user_content
+        )
+        assistant_message = Message.objects.create(
+            conversation=locked,
+            seq=last_seq + 2,
+            role=Message.Role.ASSISTANT,
+            content=assistant_content,
+            blocos=blocos or [],
+        )
+        locked.preview = summarize(assistant_content)
+        update_fields = ["preview", "updated_at"]
+        if not locked.title.strip():
+            locked.title = title_from(user_content)
+            update_fields.append("title")
+        if external_conversation_id is not None:
+            locked.external_conversation_id = external_conversation_id
+            update_fields.append("external_conversation_id")
+        locked.save(update_fields=update_fields)
+
+    for field in ("preview", "title", "external_conversation_id", "updated_at"):
+        setattr(conversation, field, getattr(locked, field))
+    return user_message, assistant_message
 
 
 def get_context_messages(conversation, limit=None):

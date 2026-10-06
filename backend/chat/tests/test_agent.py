@@ -2,23 +2,30 @@ import json
 import logging
 import threading
 import time
+from datetime import timedelta
 
 import httpx
 import pytest
 from django.db import connection
+from django.utils import timezone
 
 from chat.models import Conversation, Message
 from chat.services import agent
 from chat.services.agent import (
     AGENT_UNAVAILABLE_MESSAGE,
+    PROPOSAL_APPROVED_REPLY,
+    PROPOSAL_REJECTED_REPLY,
     AgentUnavailableError,
+    ConversationBusyError,
     exchange_messages,
     send_user_message,
 )
+from chat.services.content import summarize
 from chat.services.conversations import add_memory, deactivate_memory
 from chat.services.realocai_client import ChatSuccess
 
 from .conftest import REALOCAI_API_KEY, REALOCAI_CHAT_URL
+from .test_realocai_client import load_fixture
 
 pytestmark = pytest.mark.django_db
 
@@ -86,7 +93,7 @@ def test_expired_conversation_restarts_once(respx_mock, conversation, caplog):
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 
-def test_expired_twice_raises_and_keeps_user_message(respx_mock, conversation, caplog):
+def test_expired_twice_raises_and_stores_nothing(respx_mock, conversation, caplog):
     conversation.external_conversation_id = "ext-old"
     conversation.save()
     route = respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=httpx.Response(404))
@@ -94,11 +101,13 @@ def test_expired_twice_raises_and_keeps_user_message(respx_mock, conversation, c
     with pytest.raises(AgentUnavailableError) as excinfo:
         send_user_message(conversation, QUESTION)
 
-    assert str(excinfo.value) == AGENT_UNAVAILABLE_MESSAGE
+    assert str(excinfo.value) == AGENT_UNAVAILABLE_MESSAGE == "O agente não respondeu a tempo."
     assert route.call_count == 2
-    assert list(conversation.messages.values_list("role", flat=True)) == ["user"]
+    assert conversation.messages.count() == 0
     conversation.refresh_from_db()
-    assert conversation.external_conversation_id == ""
+    # Only updated after a success.
+    assert conversation.external_conversation_id == "ext-old"
+    assert conversation.processing_started_at is None
     assert "expired" in caplog.text
 
 
@@ -120,27 +129,38 @@ def test_expired_without_external_id_is_not_retried(respx_mock, conversation):
         httpx.Response(401),
         httpx.ReadTimeout("timeout"),
         httpx.ConnectError("refused"),
+        httpx.Response(200, json={"resposta": "sem id"}),
     ],
-    ids=["502", "500", "422", "401", "timeout", "connect-error"],
+    ids=["502", "500", "422", "401", "timeout", "connect-error", "malformed"],
 )
-def test_failure_raises_logs_error_and_keeps_user_message(
+def test_failure_raises_logs_error_and_stores_nothing(
     respx_mock, conversation, caplog, side_effect
 ):
     conversation.external_conversation_id = "ext-1"
     conversation.save()
+    before = Conversation.objects.get(pk=conversation.pk)
     route = respx_mock.post(REALOCAI_CHAT_URL).mock(side_effect=[side_effect])
 
     with caplog.at_level(logging.DEBUG), pytest.raises(AgentUnavailableError):
         send_user_message(conversation, QUESTION)
 
     assert route.call_count == 1
-    assert list(conversation.messages.values_list("role", flat=True)) == ["user"]
-    conversation.refresh_from_db()
-    assert conversation.external_conversation_id == "ext-1"
+    # Not even the question is stored, and the conversation is untouched.
+    assert conversation.messages.count() == 0
+    after = Conversation.objects.get(pk=conversation.pk)
+    assert after.external_conversation_id == "ext-1"
+    assert (after.title, after.preview, after.updated_at) == (
+        before.title,
+        before.preview,
+        before.updated_at,
+    )
+    assert after.processing_started_at is None
 
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1
-    assert str(conversation.id) in errors[0].getMessage()
+    logged = errors[0].getMessage()
+    assert str(conversation.id) in logged
+    assert "duration_ms=" in logged
     # No health data nor secrets in the logs.
     assert QUESTION not in caplog.text
     assert REALOCAI_API_KEY not in caplog.text
@@ -175,13 +195,13 @@ def test_concurrent_first_messages_open_a_single_realocai_conversation(monkeypat
     barrier = threading.Barrier(threads_count)
     calls_lock = threading.Lock()
     sent = []
+    busy = []
     errors = []
 
     def fake_send(conversa_id, mensagem):
         with calls_lock:
             sent.append(conversa_id)
-        # Widen the race window: without the row lock every thread would get here
-        # with conversa_id=None before the first one stores the new id.
+        # Widen the race window: every other thread tries while this one is in flight.
         time.sleep(0.5)
         return ChatSuccess(conversa_id=conversa_id or "ext-new", resposta=ANSWER)
 
@@ -193,6 +213,8 @@ def test_concurrent_first_messages_open_a_single_realocai_conversation(monkeypat
             own = Conversation.objects.get(pk=conversation.pk)
             barrier.wait()
             send_user_message(own, f"Pergunta {n}")
+        except ConversationBusyError as exc:
+            busy.append(exc)
         except Exception as exc:  # noqa: BLE001 - surfaced by the assertion below
             errors.append(exc)
         finally:
@@ -205,11 +227,199 @@ def test_concurrent_first_messages_open_a_single_realocai_conversation(monkeypat
         thread.join()
 
     assert errors == []
-    assert sent.count(None) == 1
-    assert sorted(sent, key=str) == [None] + ["ext-new"] * (threads_count - 1)
+    # Exactly one request won the claim; the others got a 409 without calling RealocAI.
+    assert sent == [None]
+    assert len(busy) == threads_count - 1
     conversation.refresh_from_db()
     assert conversation.external_conversation_id == "ext-new"
-    assert conversation.messages.count() == threads_count * 2
+    assert conversation.processing_started_at is None
+    assert conversation.messages.count() == 2
+
+    # Once released, the next message reuses the stored conversa_id.
+    send_user_message(conversation, "E amanhã?")
+    assert sent == [None, "ext-new"]
+
+
+# --- Claim (409) ------------------------------------------------------------------------
+
+
+def test_busy_conversation_is_rejected_without_calling_the_agent(respx_mock, conversation):
+    claimed_at = timezone.now()
+    Conversation.objects.filter(pk=conversation.pk).update(processing_started_at=claimed_at)
+    route = respx_mock.post(REALOCAI_CHAT_URL)
+
+    with pytest.raises(ConversationBusyError) as excinfo:
+        send_user_message(conversation, QUESTION)
+
+    assert str(excinfo.value) == "Já há uma mensagem sendo processada nesta conversa."
+    assert not route.called
+    assert conversation.messages.count() == 0
+    # The other request's claim is left alone.
+    conversation.refresh_from_db()
+    assert conversation.processing_started_at == claimed_at
+
+
+def test_stale_claim_is_taken_over(respx_mock, settings, conversation):
+    stale = timezone.now() - timedelta(seconds=settings.REALOCAI_TIMEOUT_SECONDS + 31)
+    Conversation.objects.filter(pk=conversation.pk).update(processing_started_at=stale)
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    send_user_message(conversation, QUESTION)
+
+    conversation.refresh_from_db()
+    assert conversation.processing_started_at is None
+    assert conversation.messages.count() == 2
+
+
+def test_claim_within_the_grace_period_is_respected(respx_mock, settings, conversation):
+    recent = timezone.now() - timedelta(seconds=settings.REALOCAI_TIMEOUT_SECONDS + 20)
+    Conversation.objects.filter(pk=conversation.pk).update(processing_started_at=recent)
+    route = respx_mock.post(REALOCAI_CHAT_URL)
+
+    with pytest.raises(ConversationBusyError):
+        send_user_message(conversation, QUESTION)
+
+    assert not route.called
+
+
+def test_claim_is_released_after_an_unexpected_error(monkeypatch, conversation):
+    def boom(conversa_id, mensagem):
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(agent, "send_chat_message", boom)
+
+    with pytest.raises(RuntimeError):
+        send_user_message(conversation, QUESTION)
+
+    conversation.refresh_from_db()
+    assert conversation.processing_started_at is None
+    assert conversation.messages.count() == 0
+
+
+def test_failed_turn_does_not_touch_updated_at(respx_mock, conversation):
+    before = Conversation.objects.get(pk=conversation.pk).updated_at
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=httpx.Response(500))
+
+    with pytest.raises(AgentUnavailableError):
+        send_user_message(conversation, QUESTION)
+
+    assert Conversation.objects.get(pk=conversation.pk).updated_at == before
+
+
+# --- Stored turn: blocks, title, preview --------------------------------------------------
+
+
+def with_blocks(blocos, resposta=ANSWER):
+    return httpx.Response(
+        200, json={"conversa_id": "ext-1", "resposta": resposta, "blocos": blocos}
+    )
+
+
+def test_success_stores_two_consecutive_messages_with_blocks(respx_mock, conversation):
+    bloco = load_fixture("ocupacao_profissional")
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=with_blocks([bloco]))
+
+    exchange = exchange_messages(conversation, QUESTION)
+
+    assert (exchange.user_message.seq, exchange.assistant_message.seq) == (1, 2)
+    assert Message.objects.get(pk=exchange.user_message.pk).blocos == []
+    assert Message.objects.get(pk=exchange.assistant_message.pk).blocos == [bloco]
+
+
+def test_invalid_blocks_are_dropped_with_a_warning(respx_mock, conversation, caplog):
+    secret_title = "Título fictício que não pode ir para o log"
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=with_blocks([{"titulo": secret_title}]))
+
+    with caplog.at_level(logging.DEBUG):
+        exchange = exchange_messages(conversation, QUESTION)
+
+    assert Message.objects.get(pk=exchange.assistant_message.pk).blocos == []
+    assert exchange.assistant_message.content == ANSWER
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert str(conversation.id) in warnings[0].getMessage()
+    for text in (secret_title, ANSWER, QUESTION):
+        assert text not in caplog.text
+
+
+def test_first_answer_sets_title_and_preview(respx_mock, user):
+    conversation = Conversation.objects.create(user=user)
+    proposal = json.dumps({"paciente": "Paciente A", "para": {"horario": "10:00"}})
+    answer = f"Encontrei   duas opções.\n\n```proposta\n{proposal}\n```"
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok(resposta=answer))
+
+    send_user_message(conversation, "Quais   horários\nlivres amanhã para a Sala 3?")
+
+    conversation.refresh_from_db()
+    assert conversation.title == "Quais horários livres amanhã para a Sala 3?"
+    assert conversation.preview == "Encontrei duas opções."
+    # The answer itself is stored untouched, proposal block included.
+    assert conversation.messages.get(seq=2).content == answer
+
+
+def test_existing_title_is_kept_and_preview_follows_the_last_answer(respx_mock, conversation):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(
+        side_effect=[ok(resposta="Primeira."), ok(resposta="Segunda.")]
+    )
+
+    send_user_message(conversation, QUESTION)
+    send_user_message(conversation, "E depois?")
+
+    conversation.refresh_from_db()
+    assert conversation.title == "Conversa de teste"
+    assert conversation.preview == "Segunda."
+
+
+# --- Proposal decisions -------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "content, reply",
+    [
+        ("Proposta aprovada: Paciente A, 16:30 → 10:00 (Sala 2).", PROPOSAL_APPROVED_REPLY),
+        ("Proposta recusada: Paciente A, 16:30 → 10:00 (Sala 2).", PROPOSAL_REJECTED_REPLY),
+    ],
+    ids=["approved", "rejected"],
+)
+def test_proposal_decisions_get_a_fixed_reply_without_the_agent(
+    respx_mock, conversation, fake_openai, content, reply
+):
+    route = respx_mock.post(REALOCAI_CHAT_URL)
+
+    exchange = exchange_messages(conversation, content)
+
+    assert not route.called
+    assert fake_openai.calls == []  # no memory extraction either
+    assert (exchange.user_message.content, exchange.assistant_message.content) == (content, reply)
+    assert (exchange.user_message.seq, exchange.assistant_message.seq) == (1, 2)
+    conversation.refresh_from_db()
+    assert conversation.processing_started_at is None
+    assert conversation.preview == summarize(reply)
+
+
+def test_proposal_replies_are_the_agreed_texts():
+    assert PROPOSAL_APPROVED_REPLY == (
+        "Registrado. O realocAI não altera a agenda: aplique a mudança no sistema de "
+        "agendamento e avise o paciente."
+    )
+    assert PROPOSAL_REJECTED_REPLY == "Registrado. Quer que eu busque outra opção?"
+
+
+def test_message_mentioning_a_proposal_mid_text_goes_to_the_agent(respx_mock, conversation):
+    route = respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    send_user_message(conversation, "A proposta aprovada ontem ainda vale?")
+
+    assert route.called
+
+
+def test_proposal_decision_on_busy_conversation_is_rejected(conversation):
+    Conversation.objects.filter(pk=conversation.pk).update(processing_started_at=timezone.now())
+
+    with pytest.raises(ConversationBusyError):
+        send_user_message(conversation, "Proposta aprovada: Paciente A.")
+
+    assert conversation.messages.count() == 0
 
 
 def test_extraction_runs_after_a_successful_turn(respx_mock, conversation, fake_openai):

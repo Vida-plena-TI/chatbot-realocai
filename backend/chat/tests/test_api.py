@@ -6,6 +6,7 @@ import httpx
 import pytest
 from django.conf import settings
 from django.urls import reverse
+from django.utils import timezone
 from drf_spectacular.generators import SchemaGenerator
 from rest_framework.test import APIClient
 from rest_framework.throttling import ScopedRateThrottle
@@ -380,7 +381,7 @@ def test_expired_external_id_is_restarted(api, conversation, respx_mock):
     assert conversation.external_conversation_id == "ext-new"
 
 
-def test_expired_twice_returns_502_and_keeps_user_message(api, conversation, respx_mock):
+def test_expired_twice_returns_502_and_stores_nothing(api, conversation, respx_mock):
     conversation.external_conversation_id = "ext-old"
     conversation.save()
     route = respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=httpx.Response(404))
@@ -390,16 +391,47 @@ def test_expired_twice_returns_502_and_keeps_user_message(api, conversation, res
     assert response.status_code == 502
     assert response.json() == {"detail": AGENT_UNAVAILABLE_MESSAGE}
     assert route.call_count == 2
-    saved = api.get(messages_url(conversation)).json()["results"]
-    assert [(m["role"], m["content"]) for m in saved] == [("user", QUESTION)]
+    assert api.get(messages_url(conversation)).json()["results"] == []
+
+
+def test_busy_conversation_returns_409_without_calling_the_agent(api, conversation, respx_mock):
+    Conversation.objects.filter(pk=conversation.pk).update(processing_started_at=timezone.now())
+    route = respx_mock.post(REALOCAI_CHAT_URL)
+
+    response = post_message(api, conversation)
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Já há uma mensagem sendo processada nesta conversa."}
+    assert not route.called
+    assert conversation.messages.count() == 0
+
+
+@pytest.mark.parametrize("decision", ["Proposta aprovada", "Proposta recusada"])
+def test_proposal_decision_returns_201_without_calling_the_agent(
+    api, conversation, respx_mock, decision
+):
+    route = respx_mock.post(REALOCAI_CHAT_URL)
+
+    response = post_message(api, conversation, f"{decision}: Paciente A, 16:30 → 10:00.")
+
+    assert response.status_code == 201
+    assert response.json()["assistant_message"]["content"].startswith("Registrado.")
+    assert not route.called
 
 
 @pytest.mark.parametrize(
     "side_effect",
-    [httpx.Response(502), httpx.Response(500), httpx.ReadTimeout("timeout")],
-    ids=["502", "500", "timeout"],
+    [
+        httpx.Response(502),
+        httpx.Response(500),
+        httpx.Response(401),
+        httpx.Response(422),
+        httpx.ReadTimeout("timeout"),
+        httpx.ConnectError("refused"),
+    ],
+    ids=["502", "500", "401", "422", "timeout", "network"],
 )
-def test_upstream_failure_returns_502_and_logs_error(
+def test_upstream_failure_returns_502_stores_nothing_and_logs_error(
     api, conversation, respx_mock, caplog, side_effect
 ):
     respx_mock.post(REALOCAI_CHAT_URL).mock(side_effect=[side_effect])
@@ -408,8 +440,9 @@ def test_upstream_failure_returns_502_and_logs_error(
         response = post_message(api, conversation)
 
     assert response.status_code == 502
-    assert response.json() == {"detail": AGENT_UNAVAILABLE_MESSAGE}
-    assert list(conversation.messages.values_list("role", "content")) == [("user", QUESTION)]
+    assert response.json() == {"detail": "O agente não respondeu a tempo."}
+    assert conversation.messages.count() == 0
+    assert api.get(messages_url(conversation)).json()["count"] == 0
     errors = [
         r for r in caplog.records if r.levelno == logging.ERROR and r.name == "chat.services.agent"
     ]
