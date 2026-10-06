@@ -25,14 +25,18 @@ export const ocupacaoProfissional = {
       { data: '2026-10-06', dia_semana: 'terça-feira', escalados: 19, ocupados: 13, livres: 6, percentual: 0.6842, abaixo_da_meta: true, slots_para_meta: 3,
         manha: { escalados: 10, ocupados: 7 }, tarde: { escalados: 9, ocupados: 6 },
         por_sala_posto: [{ sala: 'Sala 12', posto: 1, escalados: 19, ocupados: 13 }] },
+      // Inconsistência de dados: ocupados sem escala. A tela mostra o selo neutro "Sem escala".
+      { data: '2026-10-07', dia_semana: 'quarta-feira', escalados: 0, ocupados: 2, livres: 0, percentual: null, abaixo_da_meta: false, slots_para_meta: 0,
+        manha: { escalados: 0, ocupados: 2 }, tarde: { escalados: 0, ocupados: 0 },
+        por_sala_posto: [{ sala: 'Sala 12', posto: 1, escalados: 0, ocupados: 2 }] },
       { data: '2026-10-08', dia_semana: 'quinta-feira', escalados: 20, ocupados: 19, livres: 1, percentual: 0.95, abaixo_da_meta: false, slots_para_meta: 0,
         manha: { escalados: 7, ocupados: 6 }, tarde: { escalados: 13, ocupados: 13 },
         por_sala_posto: [{ sala: 'Sala 12', posto: 1, escalados: 14, ocupados: 13 }, { sala: 'Sala 12', posto: 2, escalados: 6, ocupados: 6 }] },
       { data: '2026-10-09', dia_semana: 'sexta-feira', escalados: 15, ocupados: 12, livres: 3, percentual: 0.8, abaixo_da_meta: false, slots_para_meta: 0,
         manha: { escalados: 7, ocupados: 6 }, tarde: { escalados: 8, ocupados: 6 }, por_sala_posto: [] },
     ],
-    dias_sem_agenda: ['2026-10-05', '2026-10-07', '2026-10-10'],
-    inconsistencia: false,
+    dias_sem_agenda: ['2026-10-05', '2026-10-10'],
+    inconsistencia: true,
   },
   tabelas: [
     {
@@ -47,6 +51,7 @@ export const ocupacaoProfissional = {
       ],
       linhas: [
         { data: '2026-10-06', escalados: 19, ocupados: 13, livres: 6, percentual: 0.6842, status: 'Abaixo da meta' },
+        { data: '2026-10-07', escalados: 0, ocupados: 2, livres: 0, percentual: null, status: 'Sem escala' },
         { data: '2026-10-08', escalados: 20, ocupados: 19, livres: 1, percentual: 0.95, status: 'Meta atingida' },
         { data: '2026-10-09', escalados: 15, ocupados: 12, livres: 3, percentual: 0.8, status: 'Meta atingida' },
       ],
@@ -94,7 +99,7 @@ export const pacientesSemana = {
   tipo: 'pacientes_por_profissional',
   titulo: 'Pacientes por profissional',
   periodo: periodoSemana,
-  meta: 0.8,
+  meta: null, // esta métrica não tem meta
   parcial: false,
   avisos: ['Um mesmo paciente com mais de uma sessão no dia conta uma vez.'],
   resumo: [{ rotulo: 'Pacientes distintos na semana', valor: 154, formato: 'inteiro', exibicao: '154' }],

@@ -1,5 +1,6 @@
 import { ApiError } from './errors';
 import { getCsrfToken } from './csrf';
+import { imprimirBlocos } from '../reports/localExport';
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -69,7 +70,14 @@ async function requestBlob(path, body) {
 }
 
 export const httpApi = {
-  exportReports: ({ blocos, formato }) => requestBlob('/api/reports/export/', { formato, blocos }),
+  // PDF (v1): impressão do navegador, como no mock. Só o Excel é gerado pelo backend.
+  exportReports: async ({ blocos, formato }) => {
+    if (formato === 'pdf') {
+      await imprimirBlocos(blocos);
+      return { impressao: true };
+    }
+    return requestBlob('/api/reports/export/', { formato, blocos });
+  },
   csrf: () => request('GET', '/api/auth/csrf/'),
   login: (email, password) =>
     request('POST', '/api/auth/login/', { body: { email, password }, skipAuthRedirect: true }),

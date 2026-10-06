@@ -24,7 +24,7 @@
  * @property {'ocupacao_profissional'|'pacientes_por_profissional'|'ocupacao_agregada'} tipo
  * @property {string} titulo
  * @property {{inicio: string, fim: string}} periodo Datas ISO AAAA-MM-DD.
- * @property {number} meta Fração de 0 a 1 (ex.: 0.8).
+ * @property {number|null} meta Fração de 0 a 1 (ex.: 0.8); null quando a métrica não tem meta.
  * @property {boolean} parcial
  * @property {string[]} [dias_nao_lidos] Proposta: datas que não puderam ser lidas quando `parcial`.
  * @property {string[]} avisos

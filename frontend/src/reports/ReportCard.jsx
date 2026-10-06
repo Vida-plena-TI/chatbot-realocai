@@ -24,7 +24,8 @@ function cabecalho(b) {
   if (b.tipo === 'pacientes_por_profissional') {
     return { titulo: b.dados.escopo === 'dia' ? 'Pacientes do dia' : 'Semana por especialidade', sub: periodo(b.periodo) };
   }
-  return { titulo: 'Por especialidade e por sala', sub: `${periodo(b.periodo)} · meta ${Math.round(b.meta * 100)}%` };
+  const meta = b.meta != null ? ` · meta ${Math.round(b.meta * 100)}%` : '';
+  return { titulo: 'Por especialidade e por sala', sub: `${periodo(b.periodo)}${meta}` };
 }
 
 function vazio(b) {

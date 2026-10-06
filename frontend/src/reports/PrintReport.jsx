@@ -23,8 +23,12 @@ export function PrintReport({ blocos, clinica = 'Vida Plena', subtitulo = 'Espa�
             </div>
             <div className="pr-meta">
               Gerado em {quando}
-              <br />
-              Meta de ocupação: {Math.round((b.meta ?? 0.8) * 100)}%
+              {b.meta != null && (
+                <>
+                  <br />
+                  Meta de ocupação: {Math.round(b.meta * 100)}%
+                </>
+              )}
             </div>
           </header>
 
