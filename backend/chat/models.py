@@ -22,7 +22,11 @@ class Conversation(models.Model):
     title = models.CharField("título", max_length=200, blank=True)
     status = models.CharField("status", max_length=20, choices=Status, default=Status.ACTIVE)
     # Incremental summary used to fit long conversations into the LLM context window.
+    # Internal (memory extraction / context injection): never exposed by the API.
     summary = models.TextField("resumo", blank=True)
+    # One-line excerpt of the last assistant answer, shown in the sidebar. Exposed by
+    # the API as `summary` (see chat.services.content.summarize).
+    preview = models.CharField("prévia", max_length=90, blank=True, default="")
     metadata = models.JSONField("metadados", default=dict, blank=True)
     # `conversa_id` of the matching conversation in the RealocAI service. Empty until
     # the first exchange; internal only, never exposed to the frontend.
@@ -37,6 +41,12 @@ class Conversation(models.Model):
     updated_at = models.DateTimeField("atualizada em", auto_now=True)
     # Soft delete: set instead of removing the row.
     deleted_at = models.DateTimeField("apagada em", null=True, blank=True)
+    # Set while a chat turn is in flight (claimed by an atomic conditional UPDATE), so
+    # a second concurrent message gets a 409 instead of opening another RealocAI
+    # conversation. Stale claims expire (see chat.services.agent).
+    processing_started_at = models.DateTimeField(
+        "processamento iniciado em", null=True, blank=True
+    )
 
     class Meta:
         verbose_name = "conversa"
@@ -77,6 +87,9 @@ class Message(models.Model):
     finish_reason = models.CharField("motivo de término", max_length=50, blank=True)
     # Reserved for tool calls and similar LLM details.
     metadata = models.JSONField("metadados", default=dict, blank=True)
+    # Report blocks sent by RealocAI with an assistant answer, stored as opaque JSON
+    # (a list of objects with at least "tipo" and "versao"). Empty for most messages.
+    blocos = models.JSONField("blocos de relatório", default=list, blank=True)
     created_at = models.DateTimeField("criada em", auto_now_add=True)
 
     class Meta:
