@@ -50,7 +50,25 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
 `npm run build` gera `frontend/dist/` (ignorado pelo git).
 
 - Já segue o contrato de API do backend: sessão + CSRF (cookie `csrftoken` lido a cada
-  requisição, `credentials: "include"`), paginação do DRF e **nada em `localStorage`**.
+  requisição, `credentials: "include"`), paginação do DRF e **nenhum dado de sessão ou de
+  conversa em `localStorage`** (só a preferência de tema).
+- **Relatórios no chat** (`src/reports/`, especificação em `frontend/docs/relatorios.md`):
+  a mensagem do assistente pode trazer `blocos` (1 a 10), desenhados como cartões (abas
+  com 2 ou mais). A tela só formata, nunca recalcula números. `meta` pode ser `null`
+  (pacientes por profissional não tem meta): sem marca de meta nem linha "Meta de
+  ocupação" na impressão.
+- **Exportação:** Excel é gerado pelo backend (`POST /api/reports/export/`, via
+  `httpApi.exportReports`); PDF é a impressão do navegador (`imprimirBlocos` em
+  `src/reports/localExport.js`), no mock e na API real.
+- **Selo "Sem escala":** dia ou item com `escalados === 0` e `ocupados > 0` é
+  inconsistência de dados; em vez de "Meta atingida" mostra selo e barra neutros (texto +
+  ícone, tokens existentes), percentual "—" se não for número finito (`semEscala` e
+  `pctOuTraco` em `src/reports/format.js`). No mock: peça "ocupação da Helena".
+- **Tema escuro:** `ThemeToggle` no cabeçalho alterna `:root[data-theme='dark']`
+  (`src/styles/tokens.css`).
+- Atualizações vindas do design (zip): copiar por cima de `frontend/` sem apagar
+  `node_modules`, `package-lock.json`, `.gitignore` (tem exceções para os `.env.*`
+  versionados) nem `.env*.local`.
 - Configuração via `.env.development` / `.env.production` (versionados, sem segredos;
   exceção no `frontend/.gitignore`) e `.env.local` para ajustes locais (ignorado):
   - `VITE_USE_MOCK=true` (padrão no dev) usa o mock em `src/api/mock/`, sem backend;
@@ -236,7 +254,7 @@ Gera o arquivo **só a partir do corpo** (não lê o banco: nada de outro usuár
   `colunas[chave, rotulo, formato]`, `linhas` de valores simples). `dados` e chaves
   desconhecidas são ignorados. Tipos estritos ("0.8" não é número).
 - Planilha (`reports/excel.py`) segue a "Especificação do Excel" de
-  `docs/relatorios.md` do front novo (referência: `gerarExcel` em `localExport.js`): aba
+  `frontend/docs/relatorios.md` (referência: `gerarExcel` em `localExport.js`): aba
   "Resumo" (Relatório, Período, Meta `0.0%` — vazia se null, Gerado em = data local do
   servidor `dd/mm/yyyy`, Avisos = avisos + "Dados parciais" com " | "); uma aba por tabela
   (nome sem `\ / ? * [ ] :`, ≤ 31, sufixo " (n)" com vários blocos, repetidos numerados);
