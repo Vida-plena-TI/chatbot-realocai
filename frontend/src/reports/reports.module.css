@@ -806,3 +806,35 @@
     display: none !important;
   }
 }
+
+/* Documento de impressão (PDF): os mesmos cartões, sem controles e com quebras entre linhas */
+.printDoc .card {
+  box-shadow: none;
+  overflow: visible;
+}
+.printDoc .tableWrap {
+  overflow: visible;
+}
+.printDoc .head,
+.printDoc .sectionBtn {
+  break-after: avoid;
+}
+.printDoc .hero,
+.printDoc .table tbody tr,
+.printDoc .heatTable tbody tr,
+.printDoc .agrRow,
+.printDoc .dayItem,
+.printDoc .dayCard,
+.printDoc .profCard,
+.printDoc .clinic,
+.printDoc .notice {
+  break-inside: avoid;
+}
+.printDoc .toggle,
+.printDoc .chev {
+  display: none;
+}
+.agrTitle {
+  font-size: 14.5px;
+  font-weight: 900;
+}

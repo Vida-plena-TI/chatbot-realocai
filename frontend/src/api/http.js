@@ -71,9 +71,10 @@ async function requestBlob(path, body) {
 
 export const httpApi = {
   // PDF (v1): impressão do navegador, como no mock. Só o Excel é gerado pelo backend.
-  exportReports: async ({ blocos, formato }) => {
+  // `texto` só serve ao cabeçalho do PDF; o backend recebe apenas {formato, blocos}.
+  exportReports: async ({ blocos, formato, texto }) => {
     if (formato === 'pdf') {
-      await imprimirBlocos(blocos);
+      await imprimirBlocos(blocos, { texto });
       return { impressao: true };
     }
     return requestBlob('/api/reports/export/', { formato, blocos });

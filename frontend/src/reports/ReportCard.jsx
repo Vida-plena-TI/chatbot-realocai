@@ -71,9 +71,10 @@ export function ReportError({ onRetry }) {
 
 /**
  * Cartão de relatório: cabeçalho, corpo do tipo, avisos e exportação.
- * @param {{bloco: import('./types').Bloco, exportavel?: boolean, expandido?: boolean, onExpand?: () => void}} props
+ * `impressao`: versão do PDF, sem exportação nem controles. `texto`: destaque da mensagem, vai para o PDF.
+ * @param {{bloco: import('./types').Bloco, texto?: string, exportavel?: boolean, expandido?: boolean, impressao?: boolean, onExpand?: () => void}} props
  */
-export function ReportCard({ bloco, exportavel = true, expandido = false, onExpand }) {
+export function ReportCard({ bloco, texto, exportavel = true, expandido = false, impressao = false, onExpand }) {
   const Corpo = CORPOS[bloco.tipo];
   const h = cabecalho(bloco);
   const semDados = vazio(bloco);
@@ -86,7 +87,7 @@ export function ReportCard({ bloco, exportavel = true, expandido = false, onExpa
           <h3 className={s.title}>{h.titulo}</h3>
           <span className={s.sub}>{h.sub}</span>
         </div>
-        {!expandido && onExpand && (
+        {!expandido && !impressao && onExpand && (
           <button type="button" className={s.expandBtn} aria-label="Expandir relatório" title="Expandir" onClick={onExpand}>
             <Maximize2 size={16} strokeWidth={2.2} aria-hidden="true" />
           </button>
@@ -112,19 +113,19 @@ export function ReportCard({ bloco, exportavel = true, expandido = false, onExpa
       ) : semDados ? (
         <div className={s.stateBox}><div><strong>Nenhum atendimento no período.</strong><span>{periodo(bloco.periodo)}</span></div></div>
       ) : (
-        <Corpo bloco={bloco} />
+        <Corpo bloco={bloco} impressao={impressao} />
       )}
 
       {bloco.avisos?.map((a) => (
         <Notice key={a}>{a}</Notice>
       ))}
 
-      {exportavel && Corpo && !semDados && <ExportBar blocos={[bloco]} />}
+      {exportavel && !impressao && Corpo && !semDados && <ExportBar blocos={[bloco]} texto={texto} />}
     </section>
   );
 }
 
-export function ReportModal({ bloco, onClose }) {
+export function ReportModal({ bloco, texto, onClose }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
@@ -139,7 +140,7 @@ export function ReportModal({ bloco, onClose }) {
     <div className={s.backdrop} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={s.modal} role="dialog" aria-modal="true" aria-label={bloco.titulo}>
         <IconButton className={s.modalClose} label="Fechar" icon={X} onClick={onClose} autoFocus />
-        <ReportCard bloco={bloco} expandido />
+        <ReportCard bloco={bloco} texto={texto} expandido />
       </div>
     </div>,
     document.body,

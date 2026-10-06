@@ -6,9 +6,9 @@ import { exportarBlocos } from './exporters';
 const NOME = { pdf: 'PDF', excel: 'Excel' };
 
 /**
- * @param {{blocos: import('./types').Bloco[], pergunta?: string, compact?: boolean}} props
+ * @param {{blocos: import('./types').Bloco[], texto?: string, pergunta?: string, compact?: boolean}} props
  */
-export function ExportBar({ blocos, pergunta = 'Deseja exportar este relatório?' }) {
+export function ExportBar({ blocos, texto, pergunta = 'Deseja exportar este relatório?' }) {
   const [estado, setEstado] = useState({ fase: 'ocioso', formato: null, arquivo: '' });
   const ativo = useRef(false);
 
@@ -17,7 +17,7 @@ export function ExportBar({ blocos, pergunta = 'Deseja exportar este relatório?
     ativo.current = true;
     setEstado({ fase: 'gerando', formato, arquivo: '' });
     try {
-      const r = await exportarBlocos(blocos, formato);
+      const r = await exportarBlocos(blocos, formato, { texto });
       setEstado({ fase: 'concluido', formato, arquivo: r.arquivo, impressao: r.impressao });
     } catch {
       setEstado({ fase: 'erro', formato, arquivo: '' });

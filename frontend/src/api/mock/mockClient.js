@@ -62,12 +62,12 @@ function addMessage(c, role, content, blocos) {
 export const mockApi = {
   // PDF: impressão do navegador. Excel: SpreadsheetML gerado no cliente (.xls).
   // Para testar o erro de exportação, peça um relatório "parcial" e exporte em Excel.
-  async exportReports({ blocos, formato }) {
+  async exportReports({ blocos, formato, texto }) {
     requireSession();
     await wait(1200, 2200);
     if (formato === 'excel' && blocos.some((b) => b.parcial)) throw new ApiError(502, 'Falha ao gerar a planilha.');
     if (formato === 'pdf') {
-      await imprimirBlocos(blocos);
+      await imprimirBlocos(blocos, { texto });
       return { impressao: true };
     }
     return { blob: gerarExcel(blocos), arquivo: nomeArquivo(blocos, 'excel').replace(/\.xlsx$/, '.xls') };

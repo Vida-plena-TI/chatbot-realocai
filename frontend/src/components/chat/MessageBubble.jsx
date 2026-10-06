@@ -41,7 +41,7 @@ export function MessageBubble({ message, parsed, proposalStatus, canDecide, onDe
             onDecide={(action) => onDecide(proposal, action)}
           />
         )}
-        {message.blocos?.length > 0 && <ReportGroup blocos={message.blocos} />}
+        {message.blocos?.length > 0 && <ReportGroup blocos={message.blocos} texto={text} />}
       </div>
     </div>
   );

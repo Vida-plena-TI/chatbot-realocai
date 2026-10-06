@@ -8,9 +8,9 @@ const MAX_BLOCOS = 10;
 
 /**
  * Um turno pode trazer até 10 blocos. 1 bloco: cartão direto. 2 ou mais: abas + "Exportar todos".
- * @param {{blocos: import('./types').Bloco[]}} props
+ * @param {{blocos: import('./types').Bloco[], texto?: string}} props `texto`: destaque da mensagem, para o PDF
  */
-export function ReportGroup({ blocos }) {
+export function ReportGroup({ blocos, texto }) {
   const lista = blocos.slice(0, MAX_BLOCOS);
   const [ativo, setAtivo] = useState(0);
   const { aberto, abrir, fechar } = useExpand();
@@ -55,16 +55,16 @@ export function ReportGroup({ blocos }) {
       )}
 
       <div role={lista.length > 1 ? 'tabpanel' : undefined} id={`${id}-panel`} aria-labelledby={lista.length > 1 ? `${id}-tab-${ativo}` : undefined}>
-        <ReportCard key={ativo} bloco={atual} onExpand={() => abrir(atual)} />
+        <ReportCard key={ativo} bloco={atual} texto={texto} onExpand={() => abrir(atual)} />
       </div>
 
       {lista.length > 1 && (
         <div className={s.card} style={{ boxShadow: 'none' }}>
-          <ExportBar blocos={lista} pergunta={`Exportar os ${lista.length} relatórios juntos?`} />
+          <ExportBar blocos={lista} texto={texto} pergunta={`Exportar os ${lista.length} relatórios juntos?`} />
         </div>
       )}
 
-      {aberto && <ReportModal bloco={aberto} onClose={fechar} />}
+      {aberto && <ReportModal bloco={aberto} texto={texto} onClose={fechar} />}
     </div>
   );
 }

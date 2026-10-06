@@ -1,36 +1,72 @@
-// Geração local, usada pelo mock (e como alternativa enquanto o backend não gera os arquivos).
+// Geração local: PDF pela impressão do navegador (mock e API real) e Excel do mock.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { PrintReport } from './PrintReport';
 import printCss from './print.css?raw';
-import { periodo } from './format';
+import { nomeArquivo, periodo } from './format';
 
-/** Abre a impressão do navegador num iframe oculto (o usuário salva como PDF). */
-export function imprimirBlocos(blocos) {
-  return new Promise((resolve) => {
-    const html = renderToStaticMarkup(createElement(PrintReport, { blocos, logoUrl: `${window.location.origin}/vida-plena-simbolo.png` }));
-    const iframe = document.createElement('iframe');
-    iframe.setAttribute('aria-hidden', 'true');
-    Object.assign(iframe.style, { position: 'fixed', right: 0, bottom: 0, width: 0, height: 0, border: 0 });
-    document.body.appendChild(iframe);
+const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/**
+ * Documento de impressão: os mesmos cartões do chat (layout largo), com os estilos do app
+ * copiados do documento atual e sempre no tema claro.
+ * @param {import('./types').Bloco[]} blocos
+ * @param {{texto?: string}} [opcoes] texto de destaque da mensagem do assistente
+ */
+export function documentoImpressao(blocos, { texto = '' } = {}) {
+  const estilos = [...document.querySelectorAll('style, link[rel="stylesheet"]')]
+    .map((el) => (el.tagName === 'LINK' ? `<link rel="stylesheet" href="${esc(el.href)}">` : el.outerHTML))
+    .join('');
+  const corpo = renderToStaticMarkup(createElement(PrintReport, { blocos, texto, logoUrl: new URL('/vida-plena-simbolo.png', window.location.origin).href }));
+  const titulo = nomeArquivo(blocos, 'pdf').replace(/\.pdf$/, '');
+  return `<!doctype html><html lang="pt-BR" data-theme="light"><head><meta charset="utf-8"><base href="${esc(document.baseURI)}"><title>${esc(titulo)}</title>${estilos}<style>${printCss}</style></head><body>${corpo}</body></html>`;
+}
+
+const carregado = (el) =>
+  new Promise((ok) => {
+    if (el.tagName === 'IMG' ? el.complete : el.sheet) return ok();
+    el.addEventListener('load', ok, { once: true });
+    el.addEventListener('error', ok, { once: true });
+  });
+
+/** Espera folhas de estilo, imagens e os pesos da Nunito usados pelos cartões. */
+async function prontoParaImprimir(doc) {
+  await Promise.all([...doc.querySelectorAll('link[rel="stylesheet"], img')].map(carregado));
+  await Promise.all([400, 600, 700, 800, 900].map((p) => doc.fonts.load(`${p} 16px Nunito`).catch(() => {})));
+  await doc.fonts.ready;
+}
+
+/**
+ * Abre a impressão do navegador num iframe oculto (o usuário salva como PDF).
+ * @param {import('./types').Bloco[]} blocos
+ * @param {{texto?: string}} [opcoes]
+ */
+export async function imprimirBlocos(blocos, opcoes) {
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.tabIndex = -1;
+  // Fora da tela, mas com o tamanho da página: o layout e as fontes carregam antes de imprimir.
+  Object.assign(iframe.style, { position: 'fixed', left: '-10000px', top: 0, width: '297mm', height: '210mm', border: 0 });
+  document.body.appendChild(iframe);
+  try {
     const doc = iframe.contentDocument;
     doc.open();
-    doc.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>RealocAI</title><style>${printCss}</style></head><body>${html}</body></html>`);
+    doc.write(documentoImpressao(blocos, opcoes));
     doc.close();
-    const go = () => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      setTimeout(() => iframe.remove(), 1000);
-      resolve();
-    };
-    const img = doc.querySelector('img');
-    if (img && !img.complete) img.onload = img.onerror = go;
-    else setTimeout(go, 50);
-  });
+    await prontoParaImprimir(doc);
+    const win = iframe.contentWindow;
+    const remover = () => iframe.remove();
+    win.addEventListener('afterprint', () => setTimeout(remover, 0), { once: true });
+    setTimeout(remover, 60000);
+    win.focus();
+    win.print();
+  } catch (e) {
+    iframe.remove();
+    throw e;
+  }
 }
 
 // --- Excel (SpreadsheetML 2003, abre no Excel sem biblioteca) -----------------
-const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const ESTILO = { percentual: 'pct', inteiro: 'int', decimal: 'dec', data: 'date', texto: 'txt' };
 const LARGURA = { percentual: 70, inteiro: 70, decimal: 70, data: 80, texto: 160 };
 

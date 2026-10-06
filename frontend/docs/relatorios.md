@@ -19,8 +19,8 @@ Mockups para revisão: `Relatorios realocAI.dc.html`, no projeto de design. O c�
 | `ReportCard.jsx` | Cabeçalho, avisos, estados (esqueleto, erro, vazio, parcial), exportação |
 | `OcupacaoProfissional.jsx`, `PacientesPorProfissional.jsx`, `OcupacaoAgregada.jsx` | Corpo de cada tipo |
 | `ExportBar.jsx` | "Deseja exportar este relatório?" com os estados ocioso, gerando, concluído e erro |
-| `PrintReport.jsx` + `print.css` | Versão impressa A4 paisagem |
-| `localExport.js` | Impressão em PDF via iframe e planilha Excel gerada no navegador (usados pelo mock) |
+| `PrintReport.jsx` + `print.css` | Documento de impressão do PDF: cabeçalho de registro + os mesmos `ReportCard` (`impressao`), A4 paisagem |
+| `localExport.js` | PDF pela impressão do navegador num iframe (mock e API real) e planilha Excel do mock |
 | `sampleBlocks.js` | Dados fictícios dos três tipos |
 
 No mock, experimente:
@@ -39,9 +39,14 @@ No mock, experimente:
 
 ## PDF
 
-- Gerado a partir do bloco: resumo, `tabelas` e avisos. Nada vem do texto da conversa.
-- A4 paisagem, com `thead` repetido em cada página, `tr { break-inside: avoid }` e um bloco por página.
-- Cabeçalho: logo, "Vida Plena · Espaço Multidisciplinar", título, período, data e hora de geração e meta. Rodapé: "Gerado pelo RealocAI".
+- **Cópia visual do cartão do chat.** `imprimirBlocos(blocos, {texto})` renderiza os mesmos `ReportCard` com `impressao` (sem Expandir, exportação, abas nem setas) num iframe oculto e abre a impressão do navegador. Os `<style>` e `<link rel="stylesheet">` do documento atual são copiados para o iframe, então os CSS Modules, os tokens e a Nunito são os do app. A impressão espera as folhas de estilo, as imagens e os pesos da Nunito.
+- **Sempre tema claro:** o `<html>` do iframe tem `data-theme="light"`; o tema escuro do chat não vaza.
+- **A4 paisagem**, margem de 10 mm: a área útil (277 mm ≈ 1047 px) ativa o layout largo de tabela (> 600 px), como no Expandir. `print-color-adjust: exact` mantém barras, selos e fundos.
+- **Ocupação agregada:** sem as abas Especialidade/Sala, os dois agrupamentos saem um depois do outro. Detalhes recolhidos (salas por dia) não entram.
+- Cada bloco começa numa página nova, com o cabeçalho de registro (logo, "Vida Plena · Espaço Multidisciplinar", "Gerado em dd/mm/aaaa às hh:mm"). O texto de destaque da mensagem do assistente (sem o bloco de proposta; nunca a pergunta do usuário) vem uma vez, antes do primeiro bloco. Esse texto fica no navegador: não vai para o backend.
+- Bloco maior que uma página continua na seguinte: quebra só entre linhas de tabela (`break-inside: avoid`), com o `thead` repetido.
+- O `<title>` do documento é `realocai-<tipo>-<AAAA-MM-DD>` (ou `realocai-relatorios-…`), que os navegadores sugerem como nome do PDF.
+- **Limite aceito:** o cabeçalho e o rodapé do navegador (URL, data, numeração) são opções do diálogo de impressão ("Cabeçalhos e rodapés"); o código não os remove.
 
 ## Especificação do Excel
 
