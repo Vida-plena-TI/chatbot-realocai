@@ -15,8 +15,9 @@ segurança e privacidade têm prioridade sobre conveniência.
 │   │   └── settings/   base.py, dev.py, prod.py
 │   ├── accounts/       Custom User (login por e-mail) + endpoints /api/auth/
 │   ├── core/           Utilitários compartilhados + health check
-│   └── chat/           Conversas, mensagens e memórias; endpoints /api/conversations/;
-│                       integração com o RealocAI e extração de memórias (services/)
+│   ├── chat/           Conversas, mensagens e memórias; endpoints /api/conversations/;
+│   │                   integração com o RealocAI e extração de memórias (services/)
+│   └── reports/        Exportação de blocos de relatório em Excel (/api/reports/export/)
 ├── frontend/           React 18 + Vite 5 (SPA do chat; ver [Frontend](#frontend))
 ├── .env.example        Todas as variáveis de ambiente documentadas
 └── CLAUDE.md
@@ -92,18 +93,28 @@ Fluxo que o frontend deve seguir:
 Anônimo recebe **401**; autenticado sem permissão, **403** (via
 `core.authentication.SessionAuthentication`). O CSRF é exigido também no login.
 
+**Formato de erro:** todo erro da API é `{"detail": "<texto em português>"}`
+(`core.exceptions.exception_handler`): erros de validação do DRF viram a primeira
+mensagem; 401 é "Não autenticado."; JSON malformado é "Requisição malformada."; falha de
+CSRF (DRF ou Django, via `CSRF_FAILURE_VIEW`) é JSON 403 em português. Exceções não
+tratadas continuam com o Django (500).
+
 ## Modelo de dados do chat (`backend/chat/`)
 
 Todas as PKs são UUID. Dados de saúde: usar só dados fictícios em testes e exemplos.
 
 - **Conversation** — pertence a um `user` (`related_name="conversations"`); `title`,
-  `status` (`active`/`archived`), `summary` (resumo incremental para contexto longo),
-  `metadata` (JSON), `memory_extracted_seq` (último `Message.seq` já processado pela
-  extração de memórias), `created_at`, `updated_at`, `deleted_at` (soft delete: conversa
-  "apagada" continua no banco, com as mensagens). Índice em `(user, -updated_at)`.
+  `status` (`active`/`archived`), `summary` (resumo incremental para contexto longo,
+  **interno**), `preview` (prévia de até 90 caracteres da última resposta, exposta na API
+  como `summary`), `metadata` (JSON), `memory_extracted_seq` (último `Message.seq` já
+  processado pela extração de memórias), `processing_started_at` (turno em andamento; ver
+  [409](#integração-com-o-realocai)), `created_at`, `updated_at`, `deleted_at` (soft
+  delete: conversa "apagada" continua no banco, com as mensagens). Índice em
+  `(user, -updated_at)`.
 - **Message** — pertence a uma `conversation` (`related_name="messages"`); `seq` (ordem na
   conversa, único por conversa via `UniqueConstraint`), `role`
-  (`system`/`user`/`assistant`/`tool`), `content`, `model`, `prompt_tokens`,
+  (`system`/`user`/`assistant`/`tool`), `content`, `blocos` (JSON, lista de blocos de
+  relatório do RealocAI; `[]` na maioria), `model`, `prompt_tokens`,
   `completion_tokens`, `finish_reason`, `metadata` (tool calls etc.), `created_at`.
   Ordenação padrão por `seq`.
 - **Memory** — memória de longo prazo de um `user` (`related_name="memories"`); `kind`
@@ -123,6 +134,10 @@ Views e a integração com o LLM devem usar estas funções, não escrever nos m
   dentro de `transaction.atomic()` com `select_for_update()` na Conversation (seguro sob
   concorrência) e atualiza `updated_at`. `extra`: `model`, `prompt_tokens`,
   `completion_tokens`, `finish_reason`, `metadata`. `role` inválido → `ValueError`.
+- `record_exchange(conversation, user_content, assistant_content, *, blocos=None,
+  external_conversation_id=None)` — grava a pergunta e a resposta com `seq` consecutivos
+  numa única transação (lock de linha só durante essas escritas) e, na mesma transação,
+  atualiza `preview`, o título automático (se vazio) e o `conversa_id`. Usada pelo agente.
 - `get_context_messages(conversation, limit=None)` — últimas N mensagens em ordem
   cronológica, como `[{"role", "content"}]`.
 - `soft_delete_conversation(conversation)` — preenche `deleted_at` (idempotente).
@@ -138,7 +153,19 @@ leitura no admin. O mesmo vale para `summary` e `memory_extracted_seq` (geridos 
 extração de memórias). Ainda não há endpoints REST para `Memory`.
 
 No admin, mensagens são somente leitura (registro de auditoria) e não podem ser criadas
-por lá.
+por lá. Por padrão o admin mostra só metadados das mensagens (seq, papel, data, tamanho);
+o texto, os blocos e a `preview` da conversa só aparecem com
+`ADMIN_SHOW_MESSAGE_CONTENT=true` (padrão `false`).
+
+Título e prévia seguem o front (`src/utils/content.js`), em `chat/services/content.py`:
+`title_from` (espaços colapsados, corte em 60 com "…") e `summarize` (resposta sem o
+bloco ```` ```proposta ```` / ```` ```json ```` válido, espaços colapsados, corte em 90 com "…").
+Mantenha os dois em sincronia com o front.
+
+**Retenção:** `manage.py purge_old_conversations --days N [--dry-run]` apaga de vez as
+conversas com `deleted_at` há mais de N dias e as arquivadas sem atividade (`updated_at`)
+há mais de N dias, com as mensagens. Ativas nunca. Sem `--days`, não faz nada; `--days`
+≥ 1. Sem agendamento; imprime só contagens.
 
 ## Regras invioláveis
 
@@ -153,26 +180,72 @@ Todos exigem sessão (401 se anônimo) e CSRF nos métodos não seguros. O query
 pelo usuário logado e exclui conversas soft-deleted: conversa de outro usuário ou apagada
 responde **404** (nunca 403).
 
-- `GET /api/conversations/` — lista paginada (`?page=`, `?page_size=` até 100; padrão 50),
-  por `updated_at` desc. `?status=active` ou `?status=archived` filtra pelo status (usado
-  pelas abas da sidebar); sem o parâmetro, lista ambos; qualquer outro valor (inclusive
-  vazio) → 400 `{"detail": "status inválido"}`. O filtro só vale para a listagem e se
-  soma às regras de dono e soft delete. `POST` com `{title?}` cria (sempre `active`).
+O contrato segue o mock do front (`src/api/mock/mockClient.js`, a especificação
+executável); `chat/tests/test_frontend_contract.py` percorre todas as chamadas de
+`src/api/http.js`.
+
+- Conversa exposta: `id`, `title`, `status`, `summary` (= `Conversation.preview`, nunca
+  o resumo interno de memória), `message_count`, `created_at`, `updated_at`.
+- `GET /api/conversations/` — lista paginada (`?page=`; **20** por página; `?page_size=`
+  até 100), por `updated_at` desc. Página além do fim → 404 "Página inválida.".
+  `?status=active` ou `?status=archived` filtra pelo status (abas da sidebar); sem o
+  parâmetro, lista ambos; qualquer outro valor (inclusive vazio) → 400
+  `{"detail": "Status inválido."}`. O filtro só vale para a listagem e se soma às regras
+  de dono e soft delete. `POST` com `{title?}` cria (sempre `active`).
 - `GET/PATCH/DELETE /api/conversations/{id}/` — PATCH altera só `title`/`status` (sem PUT);
-  DELETE é soft delete (204).
-- `GET /api/conversations/{id}/messages/` — paginada, por `seq`. Campos: `id`, `seq`,
-  `role`, `content`, `created_at`.
-- `POST /api/conversations/{id}/messages/` com `{content}` (1–5000 caracteres, sem ser só
-  espaço):
-  - conversa arquivada → 400 `{"detail": ...}` (o agente não é chamado); conteúdo inválido → 400;
-  - sucesso → **201** `{"user_message": {...}, "assistant_message": {...}}`;
-  - agente indisponível → **502** `{"detail": "Não foi possível processar sua mensagem.
-    Tente novamente."}`. A mensagem do usuário **já está salva**; o frontend pode
-    confirmar via GET e oferecer "tentar de novo" (reenviar cria uma nova mensagem).
+  `title` sofre trim e corte em 120 caracteres (sem erro); status inválido → 400
+  "Status inválido.". DELETE é soft delete (204). Inexistente → 404 "Conversa não
+  encontrada.".
+- Título automático: se a conversa não tem título, a primeira troca gravada o define a
+  partir da mensagem do usuário (`title_from`).
+- `GET /api/conversations/{id}/messages/` — paginada (**30** por página), por `seq`
+  crescente. Campos: `id`, `seq`, `role`, `content`, `created_at` e `blocos` **só quando
+  a mensagem tem blocos** (igual ao mock), para o histórico reabrir com os cartões.
+- `POST /api/conversations/{id}/messages/` com `{content}` (trim; 1 a `MESSAGE_MAX_LENGTH`
+  caracteres, padrão 2000):
+  - conversa arquivada → 400 (o agente não é chamado); vazio/só espaços → 400 "A mensagem
+    não pode ficar vazia."; longo demais → 400 com o limite no texto;
+  - sucesso → **201** `{"user_message": {...}, "assistant_message": {...}}` (o front aceita
+    qualquer 2xx); `assistant_message.blocos` quando houver relatório;
+  - já há uma mensagem em andamento nesta conversa → **409** `{"detail": "Já há uma
+    mensagem sendo processada nesta conversa."}` (nada é gravado);
+  - agente falhou (qualquer causa) → **502** `{"detail": "O agente não respondeu a
+    tempo."}`. **Nada é gravado**, nem a pergunta: o front pode reenviar o mesmo texto.
   - muitas mensagens → **429**: throttle `chat_messages`, **30/min por usuário**, só neste
     POST. Justificativa: cada mensagem dispara **duas chamadas de IA pagas** (RealocAI e a
     extração de memórias na OpenAI); o limite contém o custo que uma conta pode gerar.
   - A chamada é síncrona e pode levar vários segundos (sem streaming).
+- **Propostas:** mensagem que começa com "Proposta aprovada" ou "Proposta recusada" (o
+  front envia assim a decisão sobre um cartão de proposta) é gravada com uma resposta
+  **fixa** (`PROPOSAL_APPROVED_REPLY` / `PROPOSAL_REJECTED_REPLY` em `agent.py`), **sem
+  chamar o RealocAI** nem extrair memórias. O realocAI nunca altera a agenda. O `content`
+  do agente é gravado sem alteração (blocos ```` ```proposta ```` incluídos).
+
+## Exportação de relatórios (`/api/reports/export/`)
+
+`POST /api/reports/export/` com `{formato, blocos}` → arquivo. Sessão + CSRF obrigatórios.
+Gera o arquivo **só a partir do corpo** (não lê o banco: nada de outro usuário entra).
+
+- `formato`: só `"excel"` (.xlsx, openpyxl). Qualquer outro, inclusive `"pdf"`, → 400
+  "Formato não suportado." (o PDF v1 é impressão do navegador, feita no front).
+- Corpo limitado por `REPORTS_EXPORT_MAX_BYTES` (padrão 2 MB) → 413. Acima de 2,5 MB o
+  limite do próprio Django (`DATA_UPLOAD_MAX_MEMORY_SIZE`) age antes.
+- Serializer estrito (`reports/serializers.py`): 1 a 10 blocos; `tipo` em
+  `^[a-z0-9_]{1,50}$`; `titulo`, `periodo{inicio,fim}` (ISO), `meta` (número ou null; sem
+  checar intervalo), `parcial` (bool), `avisos`, `resumo`, `tabelas` (`nome`,
+  `colunas[chave, rotulo, formato]`, `linhas` de valores simples). `dados` e chaves
+  desconhecidas são ignorados. Tipos estritos ("0.8" não é número).
+- Planilha (`reports/excel.py`) segue a "Especificação do Excel" de
+  `docs/relatorios.md` do front novo (referência: `gerarExcel` em `localExport.js`): aba
+  "Resumo" (Relatório, Período, Meta `0.0%` — vazia se null, Gerado em = data local do
+  servidor `dd/mm/yyyy`, Avisos = avisos + "Dados parciais" com " | "); uma aba por tabela
+  (nome sem `\ / ? * [ ] :`, ≤ 31, sufixo " (n)" com vários blocos, repetidos numerados);
+  cabeçalho negrito em `#E6F3EF`; 1ª linha congelada; larguras 10/12/22–40; vazio = célula
+  vazia; booleanos em colunas de texto viram "Sim"/"Não".
+- **Injeção de fórmula:** todo texto é gravado como célula de texto (`data_type "s"`);
+  "=cmd|...", "+", "-", "@" nunca viram fórmula (coberto por teste).
+- Resposta: `Content-Disposition: attachment; filename="realocai-<tipo>-<AAAA-MM-DD>.xlsx"`
+  (vários blocos: `realocai-relatorios-<AAAA-MM-DD>.xlsx`), igual a `nomeArquivo`.
 
 ## Integração com o RealocAI
 
@@ -186,14 +259,22 @@ Variáveis (ver `.env.example`):
 
 - `REALOCAI_BASE_URL` — ex.: `http://localhost:8001` em dev.
 - `REALOCAI_API_KEY` — enviada no header `X-API-Key`. Segredo: nunca logar nem commitar.
-- `REALOCAI_TIMEOUT_SECONDS` — padrão 60. Em produção, o `--timeout` do gunicorn tem de
-  ser maior que ele somado ao timeout da extração (20 s) — ex.: 90 —, senão o worker é
-  morto antes da resposta.
+- `REALOCAI_TIMEOUT_SECONDS` — timeout de **leitura**, padrão 90 (a conexão tem 5 s fixos,
+  `CONNECT_TIMEOUT_SECONDS`). Sem retentativa além do 404. Em produção: gunicorn com
+  workers **gthread** (ex.: 2 workers × 4 threads) e `--timeout` maior que este valor
+  (ex.: 120). Ver "Deploy" no README.
+- `REALOCAI_USE_FAKE` — padrão `False`. Com `True`, `send_chat_message` usa
+  `chat/services/realocai_fake.py` (respostas fixas + blocos de exemplo copiados dos
+  exemplos reais, em `chat/services/fake_blocos/`), sem rede nem chave. Só dev/demo.
 - `REALOCAI_INJECT_MEMORIES` — **experimental**, padrão `False`. Ver
   [Injeção de contexto](#injeção-de-contexto-no-realocai-experimental).
 
-Sem `REALOCAI_BASE_URL`/`REALOCAI_API_KEY`, o envio de mensagens responde 502 (erro
-`config_error` no log).
+Sem `REALOCAI_BASE_URL`/`REALOCAI_API_KEY` (e sem o fake), o envio de mensagens responde
+502 (erro `config_error` no log).
+
+Contrato do RealocAI (`POST {REALOCAI_BASE_URL}/agenda/chat`, header `X-API-Key`): envia
+`{conversa_id, mensagem, renderiza_relatorios: true}`; recebe `{conversa_id, resposta,
+blocos}` (`blocos` ausente → `[]`).
 
 Fluxo de uma mensagem:
 
@@ -201,45 +282,59 @@ Fluxo de uma mensagem:
 navegador ──POST /api/conversations/{id}/messages/──▶ Django (view)
   1. valida (404 / arquivada 400 / conteúdo 400)
   2. chat.services.agent.exchange_messages:
-     a. append_message(role="user")                 ← salva ANTES de chamar o agente
-     b. transaction.atomic() + select_for_update() na Conversation (b–d sob o lock):
-        realocai_client.send_chat_message(external_conversation_id or None, content)
-          └──POST {REALOCAI_BASE_URL}/agenda/chat  (X-API-Key)──▶ RealocAI ──▶ OpenAI
+     a. reivindica a conversa: UPDATE condicional em processing_started_at (livre OU mais
+        antigo que REALOCAI_TIMEOUT_SECONDS + 30 s). Perdeu → ConversationBusyError (409)
+     b. "Proposta aprovada/recusada…" → record_exchange com resposta fixa; pula c–d e f
+     c. sem transação aberta: realocai_client.send_chat_message(external_id or None, content)
+          └──POST /agenda/chat ──▶ RealocAI ──▶ OpenAI
         (com conversa_id=null e REALOCAI_INJECT_MEMORIES=True, a mensagem enviada ganha
         o prefixo de contexto)
-     c. 404 (conversa expirou no RealocAI) e havia id → limpa o id e tenta UMA vez com
+        404 (conversa expirou no RealocAI) e havia id → log WARNING e tenta UMA vez com
         conversa_id=null (o RealocAI começa sem o histórico anterior)
-     d. sucesso → salva o novo conversa_id (se mudou); fim do lock
-     e. append_message(role="assistant")
+        falha → log ERROR (conversation.id, tipo, status, duração) e AgentUnavailableError
+        (502); NADA é gravado e o external_conversation_id não muda
+     d. sucesso → record_exchange: UMA transação grava user + assistant (seq consecutivos,
+        blocos), preview, título automático e o novo conversa_id
+     e. finally: libera a reivindicação (só se ainda for a nossa)
      f. memory_extraction.extract_memories(conversation) — nunca levanta exceção
-     g. falha do agente em b/c → log ERROR (conversation.id + tipo) e AgentUnavailableError
-  3. 201 {user_message, assistant_message}  ou  502 {detail genérico}
+  3. 201 {user_message, assistant_message}  ou  409/502 {detail}
 ```
 
 Módulos:
 
-- `chat/services/realocai_client.py` — `send_chat_message(conversa_id, mensagem)` devolve
-  `ChatSuccess(conversa_id, resposta)` ou `ChatFailure(kind, status_code)`, com `kind` em
+- `chat/services/realocai_client.py` — `send_chat_message(conversa_id, mensagem)` é a
+  **única interface** (HTTP ou fake). Devolve `ChatSuccess(conversa_id, resposta, blocos,
+  blocos_descartados)` ou `ChatFailure(kind, status_code)`, com `kind` em
   `ChatErrorKind`: `expired` (404), `invalid` (422), `upstream_error` (5xx, status
   inesperado ou resposta malformada), `network_error` (timeout/conexão), `config_error`
   (401 ou settings ausentes). Não levanta exceção para erros HTTP e não loga.
+  `validate_blocos`: blocos são JSON **opaco**; só se valida o envelope (lista de até 10
+  objetos, cada um com `tipo` e `versao`). Inválido → `blocos=[]`,
+  `blocos_descartados=True` (o agente loga WARNING; o turno nunca falha por isso). Nunca
+  remodelar `dados` nem extrair números do texto do agente.
 - `chat/services/agent.py` — `send_user_message(conversation, content) -> Message` (a do
   assistant) e `exchange_messages(conversation, content) -> Exchange(user_message,
-  assistant_message)` (usada pela view). Conteúdo vazio → `ValueError`; falha do agente →
-  `AgentUnavailableError` (mensagem genérica em português, segura para o usuário).
+  assistant_message)` (usada pela view). Conteúdo vazio → `ValueError`; conversa ocupada →
+  `ConversationBusyError`; falha do agente → `AgentUnavailableError` (mensagem genérica em
+  português, segura para o usuário).
 
-O lock da etapa 2b serializa os turnos de uma mesma conversa: uma segunda requisição
-concorrente espera a primeira gravar o `conversa_id` em vez de abrir outra conversa no
-RealocAI. Custo: a transação fica aberta durante a chamada HTTP (até o timeout); outras
-conversas não são afetadas.
+A reivindicação (2a) substitui o antigo lock de linha segurado durante a chamada HTTP: não
+fica transação aberta por até 90 s atrás do pooler do Supabase, e duas requisições
+simultâneas na mesma conversa nunca abrem duas conversas no RealocAI (a segunda recebe
+409). `QuerySet.update()` não mexe em `updated_at`. Uma reivindicação "presa" (worker morto
+antes do `finally`) expira após `REALOCAI_TIMEOUT_SECONDS + 30 s`. Limite conhecido: com o
+reinício após 404, um turno pode durar até ~2× o timeout; nesse caso raro outra
+requisição pode assumir a reivindicação antes do fim.
 
-Regras de log: registrar só `conversation.id`, tipo de erro e status HTTP. **Nunca** o
-conteúdo da mensagem, a resposta do agente ou a API key. Os loggers `httpx`/`httpcore`
-ficam em WARNING.
+Regras de log: registrar só `conversation.id`, tipo de erro, status HTTP e duração.
+**Nunca** o conteúdo da mensagem, a resposta do agente, os blocos ou a API key. Os loggers
+`httpx`/`httpcore` ficam em WARNING.
 
 Testes: `chat/tests/conftest.py` aponta as settings para `http://realocai.test` com uma
 chave falsa, e as chamadas HTTP são mockadas com o fixture `respx_mock` (requisição não
-mockada falha o teste). Nunca apontar testes para um RealocAI real.
+mockada falha o teste). Nunca apontar testes para um RealocAI real. Exemplos reais de
+blocos (dados fictícios) ficam em `chat/tests/fixtures/` e são usados nos testes do
+cliente, da API e da exportação.
 
 ## Memória de longo prazo (extração com a OpenAI)
 
@@ -319,4 +414,5 @@ memórias injetadas não contêm dados de pacientes.
 
 Ainda não implementado: endpoints REST para `Memory`, uso de `Memory.last_used_at`,
 endpoints auxiliares do RealocAI (`/agenda/disponibilidade`, `/agenda/ocupacao`,
-`/relatorio/enviar`) e streaming.
+`/relatorio/enviar`), streaming, PDF gerado no servidor, throttle na exportação e
+agendamento da retenção.

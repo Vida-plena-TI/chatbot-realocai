@@ -8,14 +8,14 @@ Aplicação web da clínica multidisciplinar Vida Plena: um agente de IA com cha
 ## Status
 
 🚧 Backend (Django + DRF) com autenticação, conversas, envio de mensagens ao agente
-RealocAI e extração de memórias de longo prazo (OpenAI). O frontend virá nas próximas
-etapas.
+RealocAI (com blocos de relatório), exportação de relatórios em Excel e extração de
+memórias de longo prazo (OpenAI). Frontend em React + Vite em `frontend/`.
 
 ## Estrutura
 
 ```
 backend/    Django 5.2 LTS + Django REST Framework
-frontend/   React + Vite (em breve)
+frontend/   React + Vite (SPA do chat)
 ```
 
 ## Pré-requisitos
@@ -76,11 +76,17 @@ No `.env` (nunca no `.env.example` nem em outro arquivo versionado):
 ```bash
 REALOCAI_BASE_URL=http://localhost:8001
 REALOCAI_API_KEY=<a mesma chave configurada no RealocAI>
-REALOCAI_TIMEOUT_SECONDS=60
+REALOCAI_TIMEOUT_SECONDS=90
 ```
 
 Peça a chave ao responsável pelo RealocAI (ou use a que você configurou na sua instância
 local dele). Sem essas variáveis o resto da API funciona, mas enviar mensagem responde 502.
+
+**Sem o RealocAI:** com `REALOCAI_USE_FAKE=true` o Django responde com textos fixos e com
+os blocos de relatório de exemplo do RealocAI (dados fictícios), sem rede e sem chave. Só
+para desenvolvimento e demonstração; nunca em produção. Peça "ocupação da semana",
+"ocupação por especialidade", "pacientes por profissional", "relatório completo" (3 blocos)
+ou "realocar" (proposta).
 
 Deixe `REALOCAI_INJECT_MEMORIES=false`: é experimental e só deve ser ligada após validação
 manual (ver `CLAUDE.md`).
@@ -175,11 +181,29 @@ CSRF=$(awk '$6=="csrftoken"{print $7}' cookies.txt)
 # 1. Cria uma conversa e guarda o id
 ID=$(curl -s -b cookies.txt -H "X-CSRFToken: $CSRF" -H "Content-Type: application/json"   -d '{"title":"Teste"}' http://localhost:8000/api/conversations/   | python -c "import sys,json;print(json.load(sys.stdin)['id'])")
 
-# 2. Envia uma mensagem: 201 com user_message e assistant_message (pode levar segundos)
+# 2. Envia uma mensagem: 201 com user_message e assistant_message (pode levar segundos).
+#    502 = o agente falhou e NADA foi gravado; 409 = já há uma mensagem em andamento.
 curl -s -b cookies.txt -H "X-CSRFToken: $CSRF" -H "Content-Type: application/json"   -d '{"content":"Quais horarios livres amanha?"}'   http://localhost:8000/api/conversations/$ID/messages/
 
-# 3. Lista as mensagens salvas
+# 3. Lista as mensagens salvas (as do assistente com relatório trazem "blocos")
 curl -s -b cookies.txt http://localhost:8000/api/conversations/$ID/messages/
+```
+
+### Testar relatórios e a exportação Excel (sem o RealocAI)
+
+Suba o Django com `REALOCAI_USE_FAKE=true` (no `.env` ou no shell) e, após o login:
+
+```bash
+CSRF=$(awk '$6=="csrftoken"{print $7}' cookies.txt)
+ID=$(curl -s -b cookies.txt -H "X-CSRFToken: $CSRF" -H "Content-Type: application/json"   -d '{}' http://localhost:8000/api/conversations/   | python -c "import sys,json;print(json.load(sys.stdin)['id'])")
+
+# Pede um relatório: assistant_message.blocos traz os 3 blocos de exemplo
+curl -s -b cookies.txt -H "X-CSRFToken: $CSRF" -H "Content-Type: application/json"   -d '{"content":"relatorio completo"}' -o resposta.json   http://localhost:8000/api/conversations/$ID/messages/
+
+# Exporta os blocos em Excel (.xlsx)
+python -c "import json;b=json.load(open('resposta.json',encoding='utf-8'))['assistant_message']['blocos'];json.dump({'formato':'excel','blocos':b},open('export.json','w',encoding='utf-8'))"
+curl -s -b cookies.txt -H "X-CSRFToken: $CSRF" -H "Content-Type: application/json"   --data-binary @export.json -OJ http://localhost:8000/api/reports/export/
+# → realocai-relatorios-AAAA-MM-DD.xlsx
 ```
 
 > No Git Bash do Windows, texto acentuado passado em `-d` pode sair fora de UTF-8 (o
@@ -207,13 +231,41 @@ uv run python manage.py check --deploy --settings=config.settings.prod
 | `config.settings.dev`   | Padrão do `manage.py` e do pytest               |
 | `config.settings.prod`  | Padrão do `wsgi`/`asgi` (gunicorn); HTTPS, HSTS e cookies seguros |
 
-Produção (exemplo):
+### Deploy
+
+Cada mensagem segura um worker enquanto o RealocAI responde (até
+`REALOCAI_TIMEOUT_SECONDS`, padrão 90 s) e depois a extração de memórias (até 20 s). Use
+workers **gthread**, para que uma resposta lenta não bloqueie as demais requisições, e um
+`--timeout` maior que `REALOCAI_TIMEOUT_SECONDS` (ex.: 120):
 
 ```bash
 cd backend
+uv run python manage.py migrate --settings=config.settings.prod
 uv run python manage.py collectstatic --noinput --settings=config.settings.prod
-# --timeout maior que REALOCAI_TIMEOUT_SECONDS + 20 s da extração de memórias
-uv run gunicorn config.wsgi:application --bind 0.0.0.0:8000 --timeout 90
+uv run gunicorn config.wsgi:application --bind 0.0.0.0:8000 \
+  --worker-class gthread --workers 2 --threads 4 --timeout 120
 ```
+
+> Com 2 × 4 threads, até 8 mensagens são atendidas ao mesmo tempo; cada thread usa uma
+> conexão com o Supabase (Session pooler), então confira o limite de conexões do plano.
+
+Nunca use `REALOCAI_USE_FAKE=true` nem `ADMIN_SHOW_MESSAGE_CONTENT=true` em produção sem
+necessidade justificada.
+
+### Retenção de dados (LGPD)
+
+Conversas apagadas pelo usuário continuam no banco (soft delete). Para removê-las de vez,
+junto com as arquivadas sem atividade, rode à mão (não há agendamento):
+
+```bash
+cd backend
+uv run python manage.py purge_old_conversations --days 365 --dry-run   # só conta
+uv run python manage.py purge_old_conversations --days 365             # apaga
+```
+
+Regra: apaga as conversas com `deleted_at` há mais de N dias e as **arquivadas** sem
+atividade (`updated_at`) há mais de N dias, com as mensagens. Conversas ativas nunca são
+apagadas. Sem `--days` o comando não faz nada; `--days` precisa ser ≥ 1. Memórias não são
+apagadas (perdem só o vínculo com a mensagem de origem).
 
 Todas as variáveis estão documentadas em [`.env.example`](.env.example).
