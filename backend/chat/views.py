@@ -1,3 +1,5 @@
+from django.db.models import Count
+from django.http import Http404
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,
@@ -6,7 +8,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -14,6 +16,7 @@ from rest_framework.throttling import ScopedRateThrottle
 
 from .models import Conversation
 from .serializers import (
+    INVALID_STATUS,
     ConversationCreateSerializer,
     ConversationSerializer,
     ExchangeSerializer,
@@ -26,13 +29,18 @@ from .services.conversations import create_conversation, soft_delete_conversatio
 DetailSerializer = inline_serializer("ChatDetail", fields={"detail": serializers.CharField()})
 
 ARCHIVED_CONVERSATION = "Conversas arquivadas não aceitam novas mensagens."
-INVALID_STATUS = "status inválido"
+CONVERSATION_NOT_FOUND = "Conversa não encontrada."
 
 
-class ChatPagination(PageNumberPagination):
-    page_size = 50
+class ConversationPagination(PageNumberPagination):
+    # Page sizes follow the SPA's mock client. A page past the end is a 404.
+    page_size = 20
     page_size_query_param = "page_size"
     max_page_size = 100
+
+
+class MessagePagination(ConversationPagination):
+    page_size = 30
 
 
 @extend_schema(tags=["conversations"])
@@ -50,7 +58,7 @@ class ConversationViewSet(
     answer 404 (never 403) and their existence is not revealed.
     """
 
-    pagination_class = ChatPagination
+    pagination_class = ConversationPagination
     # Only applied to sending messages (see get_throttles): ScopedRateThrottle keys on
     # the user id for authenticated requests.
     throttle_scope = "chat_messages"
@@ -63,7 +71,16 @@ class ConversationViewSet(
         queryset = Conversation.objects.filter(user=self.request.user, deleted_at__isnull=True)
         if self.action == "list":
             queryset = self._filter_by_status(queryset)
-        return queryset
+        if self.action in ("list", "retrieve", "partial_update"):
+            queryset = queryset.annotate(message_count=Count("messages"))
+        # Explicit: Meta.ordering is ignored by aggregated (GROUP BY) queries.
+        return queryset.order_by("-updated_at")
+
+    def get_object(self):
+        try:
+            return super().get_object()
+        except Http404:
+            raise NotFound(CONVERSATION_NOT_FOUND) from None
 
     def _filter_by_status(self, queryset):
         value = self.request.query_params.get("status")
@@ -124,8 +141,11 @@ class ConversationViewSet(
     def messages(self, request: Request, pk=None) -> Response:
         conversation = self.get_object()
         if request.method == "GET":
-            page = self.paginate_queryset(conversation.messages.order_by("seq"))
-            return self.get_paginated_response(MessageSerializer(page, many=True).data)
+            paginator = MessagePagination()
+            page = paginator.paginate_queryset(
+                conversation.messages.order_by("seq"), request, view=self
+            )
+            return paginator.get_paginated_response(MessageSerializer(page, many=True).data)
 
         if conversation.status == Conversation.Status.ARCHIVED:
             return Response({"detail": ARCHIVED_CONVERSATION}, status=status.HTTP_400_BAD_REQUEST)

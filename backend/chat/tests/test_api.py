@@ -16,12 +16,21 @@ from chat.services.agent import AGENT_UNAVAILABLE_MESSAGE
 from chat.services.conversations import append_message, soft_delete_conversation
 
 from .conftest import OPENAI_API_KEY, REALOCAI_API_KEY, REALOCAI_CHAT_URL
+from .test_realocai_client import load_fixture
 
 pytestmark = pytest.mark.django_db
 
 QUESTION = "Quais horários a Dra. Fictícia tem livres amanhã?"
 ANSWER = "A Dra. Fictícia tem horários às 9h e às 14h."
-CONVERSATION_FIELDS = {"id", "title", "status", "created_at", "updated_at"}
+CONVERSATION_FIELDS = {
+    "id",
+    "title",
+    "status",
+    "summary",
+    "message_count",
+    "created_at",
+    "updated_at",
+}
 MESSAGE_FIELDS = {"id", "seq", "role", "content", "created_at"}
 
 
@@ -150,7 +159,7 @@ def test_list_with_invalid_status_is_400(api, active_and_archived, value):
     response = api.get(list_url(), {"status": value})
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "status inválido"}
+    assert response.json() == {"detail": "Status inválido."}
 
 
 def test_status_filter_only_applies_to_listing(api, active_and_archived):
@@ -504,24 +513,28 @@ def test_archived_conversation_rejects_message_before_calling_agent(api, convers
     assert conversation.messages.count() == 0
 
 
-@pytest.mark.parametrize("payload", [{"content": ""}, {"content": "   \n"}, {}])
+@pytest.mark.parametrize("payload", [{"content": ""}, {"content": "   \n"}, {"content": None}, {}])
 def test_blank_content_is_400(api, conversation, respx_mock, payload):
     route = respx_mock.post(REALOCAI_CHAT_URL)
 
     response = api.post(messages_url(conversation), payload, format="json")
 
     assert response.status_code == 400
-    assert set(response.json()) == {"detail"}
+    assert response.json() == {"detail": "A mensagem não pode ficar vazia."}
     assert not route.called
     assert conversation.messages.count() == 0
 
 
-def test_too_long_content_is_400(api, conversation, respx_mock):
+def test_too_long_content_is_400(api, conversation, respx_mock, settings):
+    settings.MESSAGE_MAX_LENGTH = 2000  # the default; .env may override it locally
     route = respx_mock.post(REALOCAI_CHAT_URL)
 
-    response = post_message(api, conversation, "a" * 5001)
+    response = post_message(api, conversation, "a" * 2001)
 
     assert response.status_code == 400
+    assert response.json() == {
+        "detail": "A mensagem é longa demais: o limite é de 2000 caracteres."
+    }
     assert not route.called
 
 
@@ -625,3 +638,161 @@ def test_sending_messages_is_throttled_per_user(
     other.force_login(other_user)
     other_conversation = Conversation.objects.create(user=other_user)
     assert post_message(other, other_conversation).status_code == 201
+
+
+# --- Contract details (follow the SPA's mock client) -------------------------------------
+
+
+def test_conversations_page_has_20_items(api, user):
+    Conversation.objects.bulk_create(Conversation(user=user, title=f"C{i}") for i in range(21))
+
+    first = api.get(list_url()).json()
+    second = api.get(list_url(), {"page": 2}).json()
+
+    assert (first["count"], len(first["results"]), len(second["results"])) == (21, 20, 1)
+    assert first["next"] and second["previous"]
+
+
+def test_messages_page_has_30_items(api, conversation):
+    Message.objects.bulk_create(
+        Message(conversation=conversation, seq=i, role="user", content=f"M{i}")
+        for i in range(1, 32)
+    )
+
+    first = api.get(messages_url(conversation)).json()
+    second = api.get(messages_url(conversation), {"page": 2}).json()
+
+    assert len(first["results"]) == 30
+    assert [m["seq"] for m in second["results"]] == [31]
+
+
+@pytest.mark.parametrize("url", ["list", "messages"])
+def test_page_past_the_end_is_404(api, conversation, url):
+    target = list_url() if url == "list" else messages_url(conversation)
+
+    response = api.get(target, {"page": 5})
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Página inválida."}
+
+
+def test_unknown_conversation_has_a_portuguese_detail(api):
+    response = api.get(detail_url(uuid.uuid4()))
+
+    assert response.json() == {"detail": "Conversa não encontrada."}
+
+
+def test_patch_trims_and_cuts_the_title_without_error(api, conversation):
+    response = api.patch(
+        detail_url(conversation), {"title": "  " + "t" * 150 + "  "}, format="json"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "t" * 120
+    conversation.refresh_from_db()
+    assert conversation.title == "t" * 120
+
+
+@pytest.mark.parametrize("value", ["apagada", "", None, "ACTIVE"])
+def test_patch_invalid_status_has_a_portuguese_detail(api, conversation, value):
+    response = api.patch(detail_url(conversation), {"status": value}, format="json")
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Status inválido."}
+
+
+def test_create_trims_and_cuts_the_title(api):
+    response = api.post(list_url(), {"title": " " + "x" * 130}, format="json")
+
+    assert response.status_code == 201
+    assert response.json()["title"] == "x" * 120
+
+
+def test_summary_is_the_preview_and_message_count_is_exposed(api, conversation, respx_mock):
+    Conversation.objects.filter(pk=conversation.pk).update(summary="Resumo interno de memória.")
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok(resposta="Resposta   curta.\nOk"))
+
+    post_message(api, conversation)
+    listed = api.get(list_url()).json()["results"][0]
+    detail = api.get(detail_url(conversation)).json()
+
+    for body in (listed, detail):
+        assert body["summary"] == "Resposta curta. Ok"
+        assert body["message_count"] == 2
+    assert "Resumo interno de memória." not in api.get(list_url()).content.decode()
+
+
+def test_new_conversation_starts_with_empty_summary(api):
+    body = api.post(list_url(), {}, format="json").json()
+
+    assert (body["title"], body["summary"], body["message_count"]) == ("", "", 0)
+
+
+def test_first_message_sets_an_automatic_title(api, user, respx_mock):
+    conversation = Conversation.objects.create(user=user)
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    post_message(api, conversation, "  Horários   livres da Sala 3 amanhã  ")
+
+    assert api.get(detail_url(conversation)).json()["title"] == "Horários livres da Sala 3 amanhã"
+
+
+def test_message_length_limit_comes_from_settings(api, conversation, respx_mock, settings):
+    settings.MESSAGE_MAX_LENGTH = 10
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    assert post_message(api, conversation, "a" * 10).status_code == 201
+    response = post_message(api, conversation, "a" * 11)
+
+    assert response.status_code == 400
+    assert "10 caracteres" in response.json()["detail"]
+
+
+def test_user_message_is_stored_trimmed(api, conversation, respx_mock):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    response = post_message(api, conversation, "  Pergunta fictícia  \n")
+
+    assert response.json()["user_message"]["content"] == "Pergunta fictícia"
+
+
+# --- Report blocks through the API --------------------------------------------------------
+
+
+def answer_with_blocks(blocos):
+    return httpx.Response(200, json={"conversa_id": "ext-1", "resposta": ANSWER, "blocos": blocos})
+
+
+def test_blocks_are_returned_on_post_and_on_get(api, conversation, respx_mock):
+    blocos = [load_fixture("ocupacao_profissional"), load_fixture("ocupacao_agregada")]
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=answer_with_blocks(blocos))
+
+    body = post_message(api, conversation).json()
+    history = api.get(messages_url(conversation)).json()["results"]
+
+    assert body["assistant_message"]["blocos"] == blocos
+    assert "blocos" not in body["user_message"]
+    assert history[1]["blocos"] == blocos
+    assert set(history[1]) == MESSAGE_FIELDS | {"blocos"}
+    assert set(history[0]) == MESSAGE_FIELDS
+
+
+def test_missing_blocks_are_omitted_from_the_api(api, conversation, respx_mock):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=ok())
+
+    body = post_message(api, conversation).json()
+
+    assert "blocos" not in body["assistant_message"]
+    assert Message.objects.get(pk=body["assistant_message"]["id"]).blocos == []
+
+
+def test_invalid_blocks_are_omitted_and_the_answer_is_kept(api, conversation, respx_mock, caplog):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=answer_with_blocks([{"sem": "tipo"}]))
+
+    with caplog.at_level(logging.WARNING):
+        response = post_message(api, conversation)
+
+    assert response.status_code == 201
+    assert response.json()["assistant_message"]["content"] == ANSWER
+    assert "blocos" not in response.json()["assistant_message"]
+    assert any(r.levelno == logging.WARNING for r in caplog.records)
