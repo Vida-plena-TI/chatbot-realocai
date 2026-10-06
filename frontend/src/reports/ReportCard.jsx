@@ -19,7 +19,7 @@ const CORPOS = {
 function cabecalho(b) {
   if (b.tipo === 'ocupacao_profissional') {
     const p = b.dados.profissional;
-    return { titulo: p.nome, sub: `${p.especialidade} · ${periodo(b.periodo)}` };
+    return { titulo: p.nome, sub: [p.especialidade, periodo(b.periodo)].filter(Boolean).join(' · ') };
   }
   if (b.tipo === 'pacientes_por_profissional') {
     return { titulo: b.dados.escopo === 'dia' ? 'Pacientes do dia' : 'Semana por especialidade', sub: periodo(b.periodo) };

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import s from './reports.module.css';
 import { Meter, StatusBadge } from './parts';
-import { ariaOcupacao, pctOuTraco, rotuloStatus, semEscala } from './format';
+import { ariaOcupacao, ouTraco, pctOuTraco, rotuloStatus, semEscala } from './format';
 
 const ABAS = [
   ['por_especialidade', 'Especialidade'],
@@ -15,7 +15,8 @@ export function OcupacaoAgregada({ bloco }) {
   // Ordenar é apresentação; os valores vêm como estão.
   const itens = useMemo(() => [...(bloco.dados[aba] || [])].sort((a, b) => a.percentual - b.percentual), [bloco, aba]);
   const abaixo = itens.filter((i) => i.abaixo_da_meta).length;
-  const aria = (i) => ariaOcupacao(i.rotulo, i);
+  const sem = (i) => semEscala(i.slots_escalados, i.slots_ocupados);
+  const aria = (i) => ariaOcupacao(i.rotulo, i.percentual, sem(i), i.abaixo_da_meta);
 
   return (
     <>
@@ -35,11 +36,11 @@ export function OcupacaoAgregada({ bloco }) {
           <div key={i.rotulo}>
             <div className={`${s.agrRow} ${i.abaixo_da_meta ? s.agrBelow : ''} ${s.wideOnly}`}>
               <span className={s.agrLabel}>{i.rotulo}</span>
-              <Meter value={i.percentual} meta={meta} neutro={semEscala(i)} label={aria(i)} />
-              <span className={s.agrNum}>{i.ocupados}/{i.escalados}</span>
+              <Meter value={i.percentual} meta={meta} neutro={sem(i)} label={aria(i)} />
+              <span className={s.agrNum}>{ouTraco(i.slots_ocupados)}/{ouTraco(i.slots_escalados)}</span>
               <span className={s.agrPct}>{pctOuTraco(i.percentual)}</span>
               <span>
-                <StatusBadge value={i.percentual} meta={meta} below={i.abaixo_da_meta} neutro={semEscala(i)}>{rotuloStatus(i, 0, true)}</StatusBadge>
+                <StatusBadge value={i.percentual} meta={meta} below={i.abaixo_da_meta} neutro={sem(i)}>{rotuloStatus(sem(i), i.abaixo_da_meta, 0, true)}</StatusBadge>
               </span>
             </div>
             <div className={`${s.dayCard} ${s.compactOnly} ${i.abaixo_da_meta ? s.agrBelow : ''}`} style={{ border: 0, borderTop: '1px solid var(--border)', borderRadius: 0, padding: '10px 0' }}>
@@ -47,10 +48,10 @@ export function OcupacaoAgregada({ bloco }) {
                 <span className={`${s.agrLabel} ${s.grow}`}>{i.rotulo}</span>
                 <span className={s.agrPct}>{pctOuTraco(i.percentual)}</span>
               </div>
-              <Meter value={i.percentual} meta={meta} neutro={semEscala(i)} label={aria(i)} />
+              <Meter value={i.percentual} meta={meta} neutro={sem(i)} label={aria(i)} />
               <div className={`${s.row} ${s.spread}`}>
-                <span className={s.agrNum}>{i.ocupados}/{i.escalados} slots</span>
-                <StatusBadge value={i.percentual} meta={meta} below={i.abaixo_da_meta} neutro={semEscala(i)}>{rotuloStatus(i, 0, true)}</StatusBadge>
+                <span className={s.agrNum}>{ouTraco(i.slots_ocupados)}/{ouTraco(i.slots_escalados)} slots</span>
+                <StatusBadge value={i.percentual} meta={meta} below={i.abaixo_da_meta} neutro={sem(i)}>{rotuloStatus(sem(i), i.abaixo_da_meta, 0, true)}</StatusBadge>
               </div>
             </div>
           </div>

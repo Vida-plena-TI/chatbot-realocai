@@ -1,9 +1,12 @@
 // Blocos de exemplo (dados fictícios). Só nomes fictícios de profissionais; nunca pacientes.
+// Mesma FORMA dos exemplos reais do RealocAI (ver types.js); `npm run check:blocks` confere.
 
 const SEMANA = ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10'];
 const NOMES = ['segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
 const diaSemana = (iso) => NOMES[SEMANA.indexOf(iso)] || '';
+const dataRelatorio = (iso) => ({ data: iso, dia_semana: diaSemana(iso) });
 const periodoSemana = { inicio: '2026-10-05', fim: '2026-10-10' };
+const sala12 = (posto, escalados, ocupados) => ({ escalados, ocupados, sala_id: 'sala-12', sala_nome: 'Sala 12', posto });
 
 /** @type {import('./types').BlocoOcupacaoProfissional} */
 export const ocupacaoProfissional = {
@@ -13,29 +16,35 @@ export const ocupacaoProfissional = {
   periodo: periodoSemana,
   meta: 0.8,
   parcial: false,
+  dias_nao_lidos: [],
   avisos: ['Os números refletem a grade semanal da planilha, não uma semana específica do calendário.'],
   resumo: [
-    { rotulo: 'Semana', valor: 0.8148, formato: 'percentual', exibicao: '81,5%' },
-    { rotulo: 'Slots ocupados', valor: 44, formato: 'inteiro', exibicao: '44 de 54' },
+    { rotulo: 'Ocupação da semana', valor: 0.8148, formato: 'percentual', exibicao: '81,5%' },
+    { rotulo: 'Slots ocupados / escalados', valor: 44, formato: 'inteiro', exibicao: '44 de 54' },
   ],
   dados: {
-    profissional: { nome: 'Helena Prado', especialidade: 'Terapia Ocupacional' },
+    tipo: 'ocupacao_profissional',
+    profissional: { id: 'profissional-ficticio-1', nome: 'Helena Prado', especialidade: 'Terapia Ocupacional' },
     semana: { escalados: 54, ocupados: 44, livres: 10, percentual: 0.8148, abaixo_da_meta: false, slots_para_meta: 0 },
     dias: [
-      { data: '2026-10-06', dia_semana: 'terça-feira', escalados: 19, ocupados: 13, livres: 6, percentual: 0.6842, abaixo_da_meta: true, slots_para_meta: 3,
+      { escalados: 19, ocupados: 13, livres: 6, percentual: 0.6842, abaixo_da_meta: true, slots_para_meta: 3,
+        data: '2026-10-06', dia_semana: 'terça-feira',
         manha: { escalados: 10, ocupados: 7 }, tarde: { escalados: 9, ocupados: 6 },
-        por_sala_posto: [{ sala: 'Sala 12', posto: 1, escalados: 19, ocupados: 13 }] },
+        por_sala_posto: [sala12(1, 19, 13)] },
       // Inconsistência de dados: ocupados sem escala. A tela mostra o selo neutro "Sem escala".
-      { data: '2026-10-07', dia_semana: 'quarta-feira', escalados: 0, ocupados: 2, livres: 0, percentual: null, abaixo_da_meta: false, slots_para_meta: 0,
+      { escalados: 0, ocupados: 2, livres: 0, percentual: null, abaixo_da_meta: false, slots_para_meta: 0,
+        data: '2026-10-07', dia_semana: 'quarta-feira',
         manha: { escalados: 0, ocupados: 2 }, tarde: { escalados: 0, ocupados: 0 },
-        por_sala_posto: [{ sala: 'Sala 12', posto: 1, escalados: 0, ocupados: 2 }] },
-      { data: '2026-10-08', dia_semana: 'quinta-feira', escalados: 20, ocupados: 19, livres: 1, percentual: 0.95, abaixo_da_meta: false, slots_para_meta: 0,
+        por_sala_posto: [sala12(1, 0, 2)] },
+      { escalados: 20, ocupados: 19, livres: 1, percentual: 0.95, abaixo_da_meta: false, slots_para_meta: 0,
+        data: '2026-10-08', dia_semana: 'quinta-feira',
         manha: { escalados: 7, ocupados: 6 }, tarde: { escalados: 13, ocupados: 13 },
-        por_sala_posto: [{ sala: 'Sala 12', posto: 1, escalados: 14, ocupados: 13 }, { sala: 'Sala 12', posto: 2, escalados: 6, ocupados: 6 }] },
-      { data: '2026-10-09', dia_semana: 'sexta-feira', escalados: 15, ocupados: 12, livres: 3, percentual: 0.8, abaixo_da_meta: false, slots_para_meta: 0,
+        por_sala_posto: [sala12(1, 14, 13), sala12(2, 6, 6)] },
+      { escalados: 15, ocupados: 12, livres: 3, percentual: 0.8, abaixo_da_meta: false, slots_para_meta: 0,
+        data: '2026-10-09', dia_semana: 'sexta-feira',
         manha: { escalados: 7, ocupados: 6 }, tarde: { escalados: 8, ocupados: 6 }, por_sala_posto: [] },
     ],
-    dias_sem_agenda: ['2026-10-05', '2026-10-10'],
+    dias_sem_agenda: [dataRelatorio('2026-10-05'), dataRelatorio('2026-10-10')],
     inconsistencia: true,
   },
   tabelas: [
@@ -60,25 +69,28 @@ export const ocupacaoProfissional = {
       nome: 'Por sala e posto',
       colunas: [
         { chave: 'data', rotulo: 'Data', formato: 'data' },
-        { chave: 'sala', rotulo: 'Sala', formato: 'texto' },
+        { chave: 'sala_nome', rotulo: 'Sala', formato: 'texto' },
         { chave: 'posto', rotulo: 'Posto', formato: 'inteiro' },
         { chave: 'escalados', rotulo: 'Escalados', formato: 'inteiro' },
         { chave: 'ocupados', rotulo: 'Ocupados', formato: 'inteiro' },
       ],
       linhas: [
-        { data: '2026-10-06', sala: 'Sala 12', posto: 1, escalados: 19, ocupados: 13 },
-        { data: '2026-10-08', sala: 'Sala 12', posto: 1, escalados: 14, ocupados: 13 },
-        { data: '2026-10-08', sala: 'Sala 12', posto: 2, escalados: 6, ocupados: 6 },
+        { data: '2026-10-06', sala_nome: 'Sala 12', posto: 1, escalados: 19, ocupados: 13 },
+        { data: '2026-10-07', sala_nome: 'Sala 12', posto: 1, escalados: 0, ocupados: 2 },
+        { data: '2026-10-08', sala_nome: 'Sala 12', posto: 1, escalados: 14, ocupados: 13 },
+        { data: '2026-10-08', sala_nome: 'Sala 12', posto: 2, escalados: 6, ocupados: 6 },
       ],
     },
   ],
 };
 
+let proxId = 1;
 const prof = (nome, especialidade, mapa, media, distintos) => ({
+  id: `profissional-ficticio-${proxId++}`,
   nome,
   especialidade,
   dias: SEMANA.filter((d) => mapa[d] != null).map((d) => ({ data: d, dia_semana: diaSemana(d), pacientes: mapa[d], sessoes: mapa[d], slots_ocupados: mapa[d] })),
-  dias_sem_agenda: SEMANA.filter((d) => mapa[d] == null),
+  dias_sem_agenda: SEMANA.filter((d) => mapa[d] == null).map(dataRelatorio),
   media_pacientes_por_dia: media,
   pacientes_distintos_semana: distintos,
 });
@@ -91,7 +103,7 @@ const profissionais = [
   prof('Ana Paula Lima', 'Psicologia', { '2026-10-05': 8, '2026-10-06': 9, '2026-10-07': 7, '2026-10-08': 9, '2026-10-09': 8 }, 8.2, 18),
   prof('Tatiana Rocha', 'Psicologia', { '2026-10-05': 6, '2026-10-07': 7, '2026-10-09': 7 }, 6.67, 14),
 ];
-const clinica = [47, 44, 45, 45, 46, 13].map((n, i) => ({ data: SEMANA[i], pacientes_distintos: n }));
+const clinica = [47, 44, 45, 45, 46, 13].map((n, i) => ({ ...dataRelatorio(SEMANA[i]), pacientes_distintos: n }));
 
 /** @type {import('./types').BlocoPacientesPorProfissional} */
 export const pacientesSemana = {
@@ -101,9 +113,10 @@ export const pacientesSemana = {
   periodo: periodoSemana,
   meta: null, // esta métrica não tem meta
   parcial: false,
+  dias_nao_lidos: [],
   avisos: ['Um mesmo paciente com mais de uma sessão no dia conta uma vez.'],
   resumo: [{ rotulo: 'Pacientes distintos na semana', valor: 154, formato: 'inteiro', exibicao: '154' }],
-  dados: { escopo: 'semana', profissionais, clinica_por_dia: clinica },
+  dados: { tipo: 'pacientes_por_profissional', escopo: 'semana', profissionais, clinica_por_dia: clinica },
   tabelas: [
     {
       nome: 'Por profissional',
@@ -128,7 +141,7 @@ export const pacientesSemana = {
         { chave: 'data', rotulo: 'Data', formato: 'data' },
         { chave: 'pacientes_distintos', rotulo: 'Pacientes distintos', formato: 'inteiro' },
       ],
-      linhas: clinica,
+      linhas: clinica.map(({ data, pacientes_distintos }) => ({ data, pacientes_distintos })),
     },
   ],
 };
@@ -138,18 +151,25 @@ export const pacientesDia = {
   ...pacientesSemana,
   periodo: { inicio: '2026-10-08', fim: '2026-10-08' },
   avisos: [],
-  resumo: [{ rotulo: 'Pacientes distintos no dia', valor: 45, formato: 'inteiro', exibicao: '45' }],
+  resumo: [{ rotulo: 'Pacientes distintos na clínica no dia', valor: 45, formato: 'inteiro', exibicao: '45' }],
   dados: {
+    tipo: 'pacientes_por_profissional',
     escopo: 'dia',
     profissionais: profissionais
-      .map((p) => ({ ...p, dias: p.dias.filter((d) => d.data === '2026-10-08') }))
+      .map((p) => ({ ...p, dias: p.dias.filter((d) => d.data === '2026-10-08'), dias_sem_agenda: [] }))
       .filter((p) => p.dias.length),
-    clinica_por_dia: [{ data: '2026-10-08', pacientes_distintos: 45 }],
+    clinica_por_dia: [{ ...dataRelatorio('2026-10-08'), pacientes_distintos: 45 }],
   },
   tabelas: [],
 };
 
-const ag = (rotulo, escalados, ocupados, percentual) => ({ rotulo, escalados, ocupados, percentual, abaixo_da_meta: percentual < 0.8 });
+const ag = (rotulo, slots_escalados, slots_ocupados, percentual) => ({
+  rotulo,
+  slots_escalados,
+  slots_ocupados,
+  percentual,
+  abaixo_da_meta: percentual < 0.8,
+});
 const porEspecialidade = [
   ag('Fonoaudiologia', 140, 126, 0.9), ag('Psicomotricidade', 37, 20, 0.5405), ag('Psicologia', 60, 50, 0.8333),
   ag('Musicoterapia', 24, 16, 0.6667), ag('Terapia Ocupacional', 110, 95, 0.8636), ag('Psicopedagogia', 40, 30, 0.75),
@@ -162,8 +182,8 @@ const porSala = [
 ];
 const colsAg = [
   { chave: 'rotulo', rotulo: 'Item', formato: 'texto' },
-  { chave: 'escalados', rotulo: 'Escalados', formato: 'inteiro' },
-  { chave: 'ocupados', rotulo: 'Ocupados', formato: 'inteiro' },
+  { chave: 'slots_escalados', rotulo: 'Escalados', formato: 'inteiro' },
+  { chave: 'slots_ocupados', rotulo: 'Ocupados', formato: 'inteiro' },
   { chave: 'percentual', rotulo: 'Ocupação', formato: 'percentual' },
 ];
 
@@ -172,12 +192,20 @@ export const ocupacaoAgregada = {
   versao: 1,
   tipo: 'ocupacao_agregada',
   titulo: 'Ocupação por especialidade e por sala',
-  periodo: periodoSemana,
+  // No RealocAI a ocupação agregada é de um dia (dados.data).
+  periodo: { inicio: '2026-10-08', fim: '2026-10-08' },
   meta: 0.8,
   parcial: false,
+  dias_nao_lidos: [],
   avisos: [],
   resumo: [{ rotulo: 'Clínica', valor: 0.8165, formato: 'percentual', exibicao: '81,7%' }],
-  dados: { por_especialidade: porEspecialidade, por_sala: porSala },
+  dados: {
+    data: '2026-10-08',
+    dia_semana: 'quinta-feira',
+    tipo: 'ocupacao_agregada',
+    por_especialidade: porEspecialidade,
+    por_sala: porSala,
+  },
   tabelas: [
     { nome: 'Por especialidade', colunas: colsAg, linhas: porEspecialidade },
     { nome: 'Por sala', colunas: colsAg, linhas: porSala },

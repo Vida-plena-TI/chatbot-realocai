@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import s from './reports.module.css';
-import { dec1, ddmm, diaCurto, diaLongo, exibir } from './format';
+import { dec1OuTraco, ddmm, diaCurto, diaLongo, exibir, ouTraco } from './format';
 
 // Métrica sem meta: uma cor só, intensidade relativa ao maior valor do bloco.
 const nivel = (v, max) => (v ? Math.max(1, Math.ceil((v / max) * 5)) : 0);
 const agrupar = (lista) =>
   lista.reduce((acc, p) => {
-    (acc[p.especialidade] ||= []).push(p);
+    (acc[ouTraco(p.especialidade)] ||= []).push(p);
     return acc;
   }, {});
 
@@ -76,7 +76,7 @@ function EscopoSemana({ bloco }) {
                             return <td key={d} className={c.cls} aria-label={c.aria}>{c.v}</td>;
                           })}
                           <td className={s.plain}>
-                            <strong>{dec1(p.media_pacientes_por_dia)}</strong>{' '}
+                            <strong>{dec1OuTraco(p.media_pacientes_por_dia)}</strong>{' '}
                             <span className={s.muted} style={{ fontSize: 11.5 }}>em {p.dias.length} dias</span>
                           </td>
                           <td className={s.plain}><strong>{p.pacientes_distintos_semana}</strong></td>
@@ -91,7 +91,7 @@ function EscopoSemana({ bloco }) {
                       <div className={`${s.row} ${s.spread}`}>
                         <strong>{p.nome}</strong>
                         <span className={s.muted} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                          <b style={{ color: 'var(--text)' }}>{dec1(p.media_pacientes_por_dia)}</b>/dia ·{' '}
+                          <b style={{ color: 'var(--text)' }}>{dec1OuTraco(p.media_pacientes_por_dia)}</b>/dia ·{' '}
                           <b style={{ color: 'var(--text)' }}>{p.pacientes_distintos_semana}</b> distintos
                         </span>
                       </div>
@@ -133,7 +133,7 @@ function EscopoSemana({ bloco }) {
 function EscopoDia({ bloco }) {
   const { profissionais, clinica_por_dia: clinica } = bloco.dados;
   const max = Math.max(1, ...profissionais.map((p) => p.dias[0]?.pacientes ?? 0));
-  const total = exibir(bloco, 'Pacientes distintos no dia', String(clinica[0]?.pacientes_distintos ?? '—'));
+  const total = exibir(bloco, 'Pacientes distintos na clínica no dia', String(clinica[0]?.pacientes_distintos ?? '—'));
   return (
     <>
       <div className={s.dayTotal}>

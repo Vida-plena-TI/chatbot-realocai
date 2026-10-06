@@ -39,18 +39,24 @@ export function statusMeta(abaixo, faltam, curto = false) {
 }
 
 /** Ocupados sem escala (escalados 0): inconsistência de dados, nunca "Meta atingida". */
-export const semEscala = (d) => d?.escalados === 0 && d?.ocupados > 0;
+export const semEscala = (escalados, ocupados) => escalados === 0 && ocupados > 0;
 
 /** Texto do selo, considerando o caso sem escala. */
-export const rotuloStatus = (d, faltam, curto = false) =>
-  semEscala(d) ? 'Sem escala' : statusMeta(d.abaixo_da_meta, faltam, curto);
+export const rotuloStatus = (sem, abaixo, faltam, curto = false) =>
+  sem ? 'Sem escala' : statusMeta(abaixo, faltam, curto);
 
 /** Percentual só quando é número finito; senão "—". Não recalcula nada. */
 export const pctOuTraco = (f) => (Number.isFinite(f) ? pct(f) : '—');
 
+/** Decimal com uma casa só quando é número finito; senão "—". */
+export const dec1OuTraco = (n) => (Number.isFinite(n) ? dec1(n) : '—');
+
+/** Valor ausente nunca vira "undefined" na tela. */
+export const ouTraco = (v) => (v == null || v === '' ? '—' : v);
+
 /** Rótulo acessível da barra: "Terça: 68,4%, abaixo da meta". */
-export const ariaOcupacao = (rotulo, d) =>
-  `${rotulo}: ${pctOuTraco(d.percentual)}, ${semEscala(d) ? 'sem escala' : d.abaixo_da_meta ? 'abaixo da meta' : 'meta atingida'}`;
+export const ariaOcupacao = (rotulo, percentual, sem, abaixo) =>
+  `${rotulo}: ${pctOuTraco(percentual)}, ${sem ? 'sem escala' : abaixo ? 'abaixo da meta' : 'meta atingida'}`;
 
 /** Prefere `exibicao` do resumo quando existir. */
 export function exibir(bloco, rotulo, fallback) {

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:blocks": "node scripts/check-blocks.mjs"
   },
   "dependencies": {
     "@fontsource/nunito": "^5.1.0",

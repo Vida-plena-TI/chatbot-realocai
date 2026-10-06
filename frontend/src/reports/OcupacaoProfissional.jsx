@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import s from './reports.module.css';
 import { Meter, StatusBadge } from './parts';
-import { ariaOcupacao, diaLongo, exibir, pctOuTraco, rotuloDia, rotuloStatus, semEscala } from './format';
+import { ariaOcupacao, diaLongo, exibir, ouTraco, pctOuTraco, rotuloDia, rotuloStatus, semEscala } from './format';
 
 /** @param {{bloco: import('./types').BlocoOcupacaoProfissional}} props */
 export function OcupacaoProfissional({ bloco }) {
@@ -10,14 +10,15 @@ export function OcupacaoProfissional({ bloco }) {
   const meta = bloco.meta;
   const [abertos, setAbertos] = useState({});
   const toggle = (d) => setAbertos((a) => ({ ...a, [d]: !a[d] }));
-  const aria = ariaOcupacao;
+  const sem = (d) => semEscala(d.escalados, d.ocupados);
+  const aria = (rot, d) => ariaOcupacao(rot, d.percentual, sem(d), d.abaixo_da_meta);
 
   const Salas = ({ d }) => (
     <div className={s.salas}>
       {d.por_sala_posto.length ? (
         d.por_sala_posto.map((p) => (
-          <span key={`${p.sala}-${p.posto}`} className={s.sala}>
-            <span>{p.sala} · posto {p.posto}</span>
+          <span key={`${p.sala_id}-${p.posto}`} className={s.sala}>
+            <span>{ouTraco(p.sala_nome)} · posto {ouTraco(p.posto)}</span>
             <strong>{p.ocupados} de {p.escalados}</strong>
           </span>
         ))
@@ -31,17 +32,17 @@ export function OcupacaoProfissional({ bloco }) {
     <>
       <div className={s.pad}>
         <div className={s.hero}>
-          <div className={s.heroPct}>{exibir(bloco, 'Semana', pctOuTraco(semana.percentual))}</div>
+          <div className={s.heroPct}>{exibir(bloco, 'Ocupação da semana', pctOuTraco(semana.percentual))}</div>
           <div className={s.heroSide}>
-            <StatusBadge value={semana.percentual} meta={meta} below={semana.abaixo_da_meta} neutro={semEscala(semana)}>
-              {rotuloStatus(semana, semana.slots_para_meta)}
+            <StatusBadge value={semana.percentual} meta={meta} below={semana.abaixo_da_meta} neutro={sem(semana)}>
+              {rotuloStatus(sem(semana), semana.abaixo_da_meta, semana.slots_para_meta)}
             </StatusBadge>
             <span className={s.heroLine}>
               {semana.ocupados} de {semana.escalados} slots ocupados · {semana.livres} livres
             </span>
           </div>
         </div>
-        <Meter large showMetaLabel value={semana.percentual} meta={meta} neutro={semEscala(semana)} label={`${aria('Semana', semana)}.${meta != null ? ` Meta ${Math.round(meta * 100)}%.` : ''}`} />
+        <Meter large showMetaLabel value={semana.percentual} meta={meta} neutro={sem(semana)} label={`${aria('Semana', semana)}.${meta != null ? ` Meta ${Math.round(meta * 100)}%.` : ''}`} />
       </div>
 
       <div className={`${s.tableWrap} ${s.wideOnly}`}>
@@ -65,7 +66,7 @@ export function OcupacaoProfissional({ bloco }) {
                   <th scope="row">{rotuloDia(d.data)}</th>
                   <td>
                     <div className={s.barCell}>
-                      <Meter value={d.percentual} meta={meta} neutro={semEscala(d)} label={aria(diaLongo(d.data), d)} />
+                      <Meter value={d.percentual} meta={meta} neutro={sem(d)} label={aria(diaLongo(d.data), d)} />
                       <strong>{pctOuTraco(d.percentual)}</strong>
                     </div>
                   </td>
@@ -73,8 +74,8 @@ export function OcupacaoProfissional({ bloco }) {
                   <td className={`${s.num} ${s.muted}`}>{d.manha.ocupados}/{d.manha.escalados}</td>
                   <td className={`${s.num} ${s.muted}`}>{d.tarde.ocupados}/{d.tarde.escalados}</td>
                   <td>
-                    <StatusBadge value={d.percentual} meta={meta} below={d.abaixo_da_meta} neutro={semEscala(d)}>
-                      {rotuloStatus(d, d.slots_para_meta)}
+                    <StatusBadge value={d.percentual} meta={meta} below={d.abaixo_da_meta} neutro={sem(d)}>
+                      {rotuloStatus(sem(d), d.abaixo_da_meta, d.slots_para_meta)}
                     </StatusBadge>
                   </td>
                   <td className={s.num}>
@@ -109,15 +110,15 @@ export function OcupacaoProfissional({ bloco }) {
               <strong className={s.grow}>{rotuloDia(d.data)}</strong>
               <span className={s.dayPct}>{pctOuTraco(d.percentual)}</span>
             </div>
-            <Meter value={d.percentual} meta={meta} neutro={semEscala(d)} label={aria(diaLongo(d.data), d)} />
+            <Meter value={d.percentual} meta={meta} neutro={sem(d)} label={aria(diaLongo(d.data), d)} />
             <div className={s.dayMeta}>
               <b>{d.ocupados} de {d.escalados}</b>
               <span>Manhã {d.manha.ocupados}/{d.manha.escalados}</span>
               <span>Tarde {d.tarde.ocupados}/{d.tarde.escalados}</span>
             </div>
             <div className={`${s.row} ${s.spread}`}>
-              <StatusBadge value={d.percentual} meta={meta} below={d.abaixo_da_meta} neutro={semEscala(d)}>
-                {rotuloStatus(d, d.slots_para_meta)}
+              <StatusBadge value={d.percentual} meta={meta} below={d.abaixo_da_meta} neutro={sem(d)}>
+                {rotuloStatus(sem(d), d.abaixo_da_meta, d.slots_para_meta)}
               </StatusBadge>
               <button type="button" className={s.linkBtn} aria-expanded={!!abertos[d.data]} onClick={() => toggle(d.data)}>
                 Por sala
@@ -133,7 +134,7 @@ export function OcupacaoProfissional({ bloco }) {
         <div className={s.noAgenda}>
           <span>Sem agenda</span>
           {semAgenda.map((d) => (
-            <span key={d}>{rotuloDia(d)}</span>
+            <span key={d.data}>{rotuloDia(d.data)}</span>
           ))}
         </div>
       )}
