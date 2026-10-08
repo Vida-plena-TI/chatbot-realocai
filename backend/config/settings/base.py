@@ -8,6 +8,8 @@ from pathlib import Path
 
 import environ
 
+from config.env_check import load_dotenv
+
 # backend/
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # repository root (monorepo)
@@ -21,7 +23,7 @@ env = environ.Env(
 )
 
 # The .env file is optional: in production variables come from the environment.
-environ.Env.read_env(REPO_DIR / ".env")
+load_dotenv()
 
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env("DEBUG")
@@ -64,6 +66,9 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
+
+# Path of the Django admin (with trailing slash, without leading slash).
+ADMIN_URL = env("ADMIN_URL", default="admin/")
 
 TEMPLATES = [
     {
@@ -126,6 +131,11 @@ SESSION_COOKIE_SAMESITE = "Lax"
 # JavaScript has to read the token, so the CSRF cookie cannot be HttpOnly.
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = "Lax"
+# Parent domain for csrftoken when the SPA runs on a sibling subdomain of the API (it must
+# read the cookie from document.cookie). Empty = host-only cookie (same origin, dev).
+CSRF_COOKIE_DOMAIN = env("CSRF_COOKIE_DOMAIN", default="") or None
+# Keep empty: the session cookie stays host-only, sent to the API host alone.
+SESSION_COOKIE_DOMAIN = env("SESSION_COOKIE_DOMAIN", default="") or None
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
 # JSON {"detail"} instead of the HTML page, for views protected by Django itself (login).
 CSRF_FAILURE_VIEW = "core.exceptions.csrf_failure"
@@ -182,6 +192,8 @@ MESSAGE_MAX_LENGTH = env.int("MESSAGE_MAX_LENGTH", default=2000)
 
 # Largest request body (bytes) accepted by POST /api/reports/export/.
 REPORTS_EXPORT_MAX_BYTES = env.int("REPORTS_EXPORT_MAX_BYTES", default=2 * 1024 * 1024)
+# Django's own body cap stays above the export limit, so the view answers 413 first.
+DATA_UPLOAD_MAX_MEMORY_SIZE = REPORTS_EXPORT_MAX_BYTES + 512 * 1024
 
 # Message contents are health data: the admin shows only metadata (seq, role, date,
 # size) unless this is explicitly enabled.
@@ -192,11 +204,19 @@ ADMIN_SHOW_MESSAGE_CONTENT = env.bool("ADMIN_SHOW_MESSAGE_CONTENT", default=Fals
 OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
 OPENAI_EXTRACTION_MODEL = env("OPENAI_EXTRACTION_MODEL", default="gpt-4o-mini")
 
-# Logging: never log request bodies (they may contain patient data).
+# Logging: stdout only; never log request bodies (they may contain patient data). The
+# filter drops exception messages from tracebacks (a database error can echo row values).
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "filters": {"redact_exceptions": {"()": "core.log_filters.RedactExceptionMessages"}},
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "filters": ["redact_exceptions"],
+        }
+    },
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", default="INFO")},
     "loggers": {
         # Keep HTTP client internals (URLs, connection details) out of the logs.

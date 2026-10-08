@@ -1,0 +1,25 @@
+# Build context: backend/. Only what the image needs.
+.env
+.env.*
+**/.env
+**/.env.*
+.git
+.venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+staticfiles
+media
+*.sqlite3
+*.sqlite3-journal
+*.log
+node_modules
+Dockerfile
+.dockerignore
+# Tests are not shipped
+**/tests
+conftest.py
