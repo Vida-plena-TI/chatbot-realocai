@@ -224,6 +224,11 @@ uv run ruff format --check .   # verificação de formatação
 uv run python manage.py check --deploy --settings=config.settings.prod
 ```
 
+> `config.settings.prod` valida o ambiente antes de carregar (`config/env_check.py`): com o
+> `.env` de desenvolvimento (`DEBUG=true`, origens `http://`...), o `check --deploy` para e
+> lista o que não serve para produção. Rode-o com variáveis de produção (valores falsos
+> bastam) ou use `uv run python -m config.env_check` para ver só a validação.
+
 ## Settings
 
 | Módulo                  | Uso                                             |
@@ -233,18 +238,15 @@ uv run python manage.py check --deploy --settings=config.settings.prod
 
 ### Deploy
 
-Cada mensagem segura um worker enquanto o RealocAI responde (até
-`REALOCAI_TIMEOUT_SECONDS`, padrão 90 s) e depois a extração de memórias (até 20 s). Use
-workers **gthread**, para que uma resposta lenta não bloqueie as demais requisições, e um
-`--timeout` maior que `REALOCAI_TIMEOUT_SECONDS` (ex.: 120):
+A produção roda no **Easypanel**, com dois Apps (backend em `backend/Dockerfile`, frontend
+em `frontend/Dockerfile`). O passo a passo de cada aba, a tabela de variáveis (inclusive
+`CSRF_COOKIE_DOMAIN`, `ADMIN_URL`, `GUNICORN_*` e os build args `VITE_*`), DNS, rollback,
+backup e checklist LGPD estão em **[`docs/deploy-easypanel.md`](docs/deploy-easypanel.md)**.
 
-```bash
-cd backend
-uv run python manage.py migrate --settings=config.settings.prod
-uv run python manage.py collectstatic --noinput --settings=config.settings.prod
-uv run gunicorn config.wsgi:application --bind 0.0.0.0:8000 \
-  --worker-class gthread --workers 2 --threads 4 --timeout 120
-```
+Resumo: o container do backend valida o ambiente, roda `migrate` e `createcachetable` e
+sobe o gunicorn (`gunicorn.conf.py`: **gthread**, 2 workers × 4 threads e `timeout` de
+240 s, maior que 2 × (`REALOCAI_TIMEOUT_SECONDS` + 5)). Os estáticos são servidos pelo whitenoise e o
+throttle usa cache no banco (compartilhado entre os workers).
 
 > Com 2 × 4 threads, até 8 mensagens são atendidas ao mesmo tempo; cada thread usa uma
 > conexão com o Supabase (Session pooler), então confira o limite de conexões do plano.

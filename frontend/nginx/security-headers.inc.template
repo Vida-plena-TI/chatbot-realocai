@@ -1,0 +1,15 @@
+# Included in every location: nginx drops inherited add_header directives in a location
+# that declares its own. Named ".inc" so the "conf.d/*.conf" glob of nginx.conf skips it.
+# Rendered by envsubst (API_ORIGIN).
+#
+# CSP notes:
+# - style-src 'unsafe-inline': React style attributes and the PDF print iframe, which
+#   writes the app styles as inline <style> into a same-origin about:blank document.
+# - font-src/img-src data:: Vite may inline small assets as data: URLs.
+# - connect-src: the API lives on a sibling subdomain.
+add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${API_ORIGIN}; frame-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "DENY" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+add_header Cross-Origin-Opener-Policy "same-origin" always;
