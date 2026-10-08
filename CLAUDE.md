@@ -19,6 +19,7 @@ segurança e privacidade têm prioridade sobre conveniência.
 │   │                   integração com o RealocAI e extração de memórias (services/)
 │   └── reports/        Exportação de blocos de relatório em Excel (/api/reports/export/)
 ├── frontend/           React 18 + Vite 5 (SPA do chat; ver [Frontend](#frontend))
+├── docs/               deploy-easypanel.md (deploy de produção)
 ├── .env.example        Todas as variáveis de ambiente documentadas
 └── CLAUDE.md
 ```
@@ -33,7 +34,8 @@ uv run python manage.py makemigrations    # gera migrations
 uv run pytest                             # testes
 uv run ruff check .                       # lint
 uv run ruff format .                      # formatação
-uv run python manage.py check --deploy --settings=config.settings.prod
+uv run python manage.py check --deploy --settings=config.settings.prod  # exige env de produção
+uv run python -m config.env_check         # só a validação do ambiente de produção
 ```
 
 - API: `/api/health/`, `/api/auth/...`, schema OpenAPI em `/api/schema/`, Swagger em
@@ -43,6 +45,26 @@ uv run python manage.py check --deploy --settings=config.settings.prod
   porta **8001** (a 8000 é do `runserver`). Ver [Integração com o RealocAI](#integração-com-o-realocai).
 - Banco: PostgreSQL gerenciado no **Supabase**, via *Session pooler* (porta 5432) com
   `sslmode=require`. Não usar o Transaction pooler (6543). Não há Docker no projeto.
+
+## Deploy
+
+Produção no Easypanel (dois Apps do mesmo repo: `backend/Dockerfile` e
+`frontend/Dockerfile`); guia completo em [`docs/deploy-easypanel.md`](docs/deploy-easypanel.md).
+
+- A imagem do backend fixa `DJANGO_SETTINGS_MODULE=config.settings.prod`; o entrypoint
+  roda `config.env_check` (lista todas as variáveis faltantes/inválidas, só nomes, e
+  aborta), `migrate`, `createcachetable` e o gunicorn (`gunicorn.conf.py`).
+- Em prod: whitenoise, `DatabaseCache` (throttle compartilhado entre workers), HSTS
+  inicial de 3600 s. Logs só em stdout, com a mensagem das exceções omitida nos
+  tracebacks (`core.log_filters`).
+- Variáveis novas: `CSRF_COOKIE_DOMAIN` (`.vidaplenamulti.com.br` em produção, front e API
+  em subdomínios irmãos), `SESSION_COOKIE_DOMAIN` (manter vazio), `ADMIN_URL` (padrão
+  `admin/`), `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `PORT`, `GUNICORN_WORKERS`,
+  `GUNICORN_THREADS`, `GUNICORN_TIMEOUT` (240), `GUNICORN_GRACEFUL_TIMEOUT`,
+  `GUNICORN_KEEPALIVE`, `GUNICORN_LOG_LEVEL`. No front, `VITE_API_BASE_URL` e
+  `VITE_USE_MOCK` viram build args (o build falha com mock ou sem `https://`).
+- Ao adicionar uma variável obrigatória em produção, inclua-a em `config/env_check.py` e
+  nos testes `core/tests/test_env_check.py`.
 
 ## Frontend
 
@@ -283,8 +305,8 @@ Variáveis (ver `.env.example`):
 - `REALOCAI_API_KEY` — enviada no header `X-API-Key`. Segredo: nunca logar nem commitar.
 - `REALOCAI_TIMEOUT_SECONDS` — timeout de **leitura**, padrão 90 (a conexão tem 5 s fixos,
   `CONNECT_TIMEOUT_SECONDS`). Sem retentativa além do 404. Em produção: gunicorn com
-  workers **gthread** (ex.: 2 workers × 4 threads) e `--timeout` maior que este valor
-  (ex.: 120). Ver "Deploy" no README.
+  workers **gthread** (2 × 4) e `GUNICORN_TIMEOUT` (padrão 240) maior que
+  2 × (este valor + 5); `config.env_check` recusa combinações incoerentes.
 - `REALOCAI_USE_FAKE` — padrão `False`. Com `True`, `send_chat_message` usa
   `chat/services/realocai_fake.py` (respostas fixas + blocos de exemplo copiados dos
   exemplos reais, em `chat/services/fake_blocos/`), sem rede nem chave. Só dev/demo.
