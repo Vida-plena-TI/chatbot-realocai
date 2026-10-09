@@ -8,7 +8,7 @@ ARG NGINX_IMAGE=nginxinc/nginx-unprivileged:1.30.5-alpine
 # --- build -------------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS build
 
-# Origin of the Django API, e.g. https://api-chatbot.vidaplenamulti.com.br
+# Origin of the Django API, e.g. https://api-chat.vidaplenamulti.com.br
 ARG VITE_API_BASE_URL=""
 ARG VITE_USE_MOCK="false"
 

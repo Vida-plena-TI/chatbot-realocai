@@ -22,9 +22,9 @@ def valid_env(**overrides):
         "SECRET_KEY": SECRET,
         "DEBUG": "false",
         "DATABASE_URL": "postgres://app:fake-password@db.internal:5432/app",
-        "ALLOWED_HOSTS": "api-chatbot.vidaplenamulti.com.br",
-        "CSRF_TRUSTED_ORIGINS": "https://chatbot.vidaplenamulti.com.br",
-        "CORS_ALLOWED_ORIGINS": "https://chatbot.vidaplenamulti.com.br",
+        "ALLOWED_HOSTS": "api-chat.vidaplenamulti.com.br",
+        "CSRF_TRUSTED_ORIGINS": "https://chat.vidaplenamulti.com.br",
+        "CORS_ALLOWED_ORIGINS": "https://chat.vidaplenamulti.com.br",
         "CSRF_COOKIE_DOMAIN": ".vidaplenamulti.com.br",
         "SESSION_COOKIE_DOMAIN": "",
         "NUM_PROXIES": "1",
@@ -101,9 +101,9 @@ def test_rejects_debug(value):
         ),
         ("ALLOWED_HOSTS", "*", "ALLOWED_HOSTS: item 1 must be a hostname"),
         ("ALLOWED_HOSTS", "https://api.example.org", "ALLOWED_HOSTS: item 1 must be a hostname"),
-        ("CSRF_TRUSTED_ORIGINS", "chatbot.vidaplenamulti.com.br", "CSRF_TRUSTED_ORIGINS: item 1"),
-        ("CSRF_TRUSTED_ORIGINS", "http://chatbot.vidaplenamulti.com.br", "must use https://"),
-        ("CORS_ALLOWED_ORIGINS", "https://chatbot.vidaplenamulti.com.br/app", "origin only"),
+        ("CSRF_TRUSTED_ORIGINS", "chat.vidaplenamulti.com.br", "CSRF_TRUSTED_ORIGINS: item 1"),
+        ("CSRF_TRUSTED_ORIGINS", "http://chat.vidaplenamulti.com.br", "must use https://"),
+        ("CORS_ALLOWED_ORIGINS", "https://chat.vidaplenamulti.com.br/app", "origin only"),
         ("CSRF_COOKIE_DOMAIN", "https://vidaplenamulti.com.br", "CSRF_COOKIE_DOMAIN: must be"),
         ("REALOCAI_BASE_URL", "http://realocai.vidaplenamulti.com.br", "REALOCAI_BASE_URL"),
         ("REALOCAI_API_KEY", "change-me", "REALOCAI_API_KEY: still has an example value"),
@@ -177,9 +177,9 @@ def test_prod_settings_from_env():
     assert result.returncode == 0, result.stderr
     settings = json.loads(result.stdout)
     assert settings["DEBUG"] is False
-    assert settings["ALLOWED_HOSTS"] == ["api-chatbot.vidaplenamulti.com.br"]
-    assert settings["CSRF_TRUSTED_ORIGINS"] == ["https://chatbot.vidaplenamulti.com.br"]
-    assert settings["CORS_ALLOWED_ORIGINS"] == ["https://chatbot.vidaplenamulti.com.br"]
+    assert settings["ALLOWED_HOSTS"] == ["api-chat.vidaplenamulti.com.br"]
+    assert settings["CSRF_TRUSTED_ORIGINS"] == ["https://chat.vidaplenamulti.com.br"]
+    assert settings["CORS_ALLOWED_ORIGINS"] == ["https://chat.vidaplenamulti.com.br"]
     assert settings["CORS_ALLOW_CREDENTIALS"] is True
     # csrftoken readable by the SPA on the sibling subdomain; sessionid host-only.
     assert settings["CSRF_COOKIE_DOMAIN"] == ".vidaplenamulti.com.br"
