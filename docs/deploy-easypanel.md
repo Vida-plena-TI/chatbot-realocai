@@ -11,7 +11,7 @@ repositório: os valores reais só existem na aba **Environment** de cada App.
 
 ```
 navegador
-  │ https://chatbot.vidaplenamulti.com.br       https://api-chatbot.vidaplenamulti.com.br
+  │ https://chat.vidaplenamulti.com.br       https://api-chat.vidaplenamulti.com.br
   ▼                                              ▼
 Traefik (Easypanel, TLS Let's Encrypt, redireciona HTTP -> HTTPS)
   │                                              │
@@ -57,10 +57,10 @@ IP da VPS:
 
 | Tipo | Nome | Valor | Proxy |
 |---|---|---|---|
-| A | `chatbot` | IP da VPS | **DNS only** (sem proxy da Cloudflare) |
-| A | `api-chatbot` | IP da VPS | **DNS only** |
+| A | `chat` | IP da VPS | **DNS only** (sem proxy da Cloudflare) |
+| A | `api-chat` | IP da VPS | **DNS only** |
 
-Espere a propagação (`dig +short chatbot.vidaplenamulti.com.br` devolve o IP) antes de
+Espere a propagação (`dig +short chat.vidaplenamulti.com.br` devolve o IP) antes de
 ligar os domínios no Easypanel: o Let's Encrypt precisa resolver o nome para emitir o
 certificado.
 
@@ -94,9 +94,9 @@ Invalid production environment (3 problem(s)):
 |---|---|---|---|
 | `SECRET_KEY` | **Sim** | `<gerar: 50+ caracteres aleatórios>` | Gere com `python -c "import secrets; print(secrets.token_urlsafe(64))"`. Placeholders como `change-me` e chaves `django-insecure-...` são recusados. Trocar a chave derruba todas as sessões. |
 | `DATABASE_URL` | **Sim** | `postgres://postgres.<ref>:<senha>@aws-0-sa-east-1.pooler.supabase.com:5432/postgres` | Supabase > Connect > **Session pooler**. Senha com `@ : / # ?` precisa de URL-encode. Nunca o Transaction pooler (6543). |
-| `ALLOWED_HOSTS` | **Sim** | `api-chatbot.vidaplenamulti.com.br` | Sem esquema e sem `*`. |
-| `CSRF_TRUSTED_ORIGINS` | **Sim** | `https://chatbot.vidaplenamulti.com.br` | Origem do front, com `https://`. |
-| `CORS_ALLOWED_ORIGINS` | **Sim** (neste desenho) | `https://chatbot.vidaplenamulti.com.br` | Só a origem do front. Nunca inclua `painel.`, `realocai.` etc. |
+| `ALLOWED_HOSTS` | **Sim** | `api-chat.vidaplenamulti.com.br` | Sem esquema e sem `*`. |
+| `CSRF_TRUSTED_ORIGINS` | **Sim** | `https://chat.vidaplenamulti.com.br` | Origem do front, com `https://`. |
+| `CORS_ALLOWED_ORIGINS` | **Sim** (neste desenho) | `https://chat.vidaplenamulti.com.br` | Só a origem do front. Nunca inclua `painel.`, `realocai.` etc. |
 | `CSRF_COOKIE_DOMAIN` | **Sim** (neste desenho) | `.vidaplenamulti.com.br` | O front precisa ler o `csrftoken`. Validado: a origem do CORS tem de estar sob esse domínio. |
 | `SESSION_COOKIE_DOMAIN` | Não | *(vazio)* | **Deixe vazio**: `sessionid` só no host da API. |
 | `NUM_PROXIES` | **Sim** | `1` | Só o Traefik. Com o proxy da Cloudflare: `2`. |
@@ -143,7 +143,7 @@ coloque segredos nelas. Mudar o valor exige **novo build** (Deploy).
 
 | Nome | Obrigatória? | Valor | Observação |
 |---|---|---|---|
-| `VITE_API_BASE_URL` | **Sim** | `https://api-chatbot.vidaplenamulti.com.br` | Sem `/` no final. O build **falha** se estiver vazia ou sem `https://`. |
+| `VITE_API_BASE_URL` | **Sim** | `https://api-chat.vidaplenamulti.com.br` | Sem `/` no final. O build **falha** se estiver vazia ou sem `https://`. |
 | `VITE_USE_MOCK` | Não | `false` | O build **falha** com qualquer valor diferente de `false`. |
 | `PORT` | Não (runtime) | `8080` | Porta do nginx. Se mudar, mude também a porta em Domains. |
 
@@ -180,9 +180,9 @@ Ordem: **DNS → Supabase → backend → frontend → testes pós-deploy**.
   ```
   SECRET_KEY=<gerar>
   DATABASE_URL=<Session pooler do projeto de produção>
-  ALLOWED_HOSTS=api-chatbot.vidaplenamulti.com.br
-  CSRF_TRUSTED_ORIGINS=https://chatbot.vidaplenamulti.com.br
-  CORS_ALLOWED_ORIGINS=https://chatbot.vidaplenamulti.com.br
+  ALLOWED_HOSTS=api-chat.vidaplenamulti.com.br
+  CSRF_TRUSTED_ORIGINS=https://chat.vidaplenamulti.com.br
+  CORS_ALLOWED_ORIGINS=https://chat.vidaplenamulti.com.br
   CSRF_COOKIE_DOMAIN=.vidaplenamulti.com.br
   SESSION_COOKIE_DOMAIN=
   NUM_PROXIES=1
@@ -194,7 +194,7 @@ Ordem: **DNS → Supabase → backend → frontend → testes pós-deploy**.
   OPENAI_API_KEY=<chave ou vazio>
   ```
 
-- **Domains**: host `api-chatbot.vidaplenamulti.com.br`, HTTPS ligado, path `/`, **porta
+- **Domains**: host `api-chat.vidaplenamulti.com.br`, HTTPS ligado, path `/`, **porta
   `8000`**.
 - **Mounts/Volumes**: nenhum.
 - **Réplicas**: 1. As migrações rodam no início do container. Com mais de uma réplica,
@@ -204,7 +204,7 @@ Ordem: **DNS → Supabase → backend → frontend → testes pós-deploy**.
   `Using worker: gthread`. O status fica *healthy* em até ~1 min.
 - **Primeiro acesso ao admin**: no Console do App (shell do container), rode
   `python manage.py createsuperuser`. Não há autocadastro: as contas dos usuários são
-  criadas no admin (`https://api-chatbot.vidaplenamulti.com.br/<ADMIN_URL>`).
+  criadas no admin (`https://api-chat.vidaplenamulti.com.br/<ADMIN_URL>`).
 
 ### 2. App `chatbot-frontend`
 
@@ -213,11 +213,11 @@ Ordem: **DNS → Supabase → backend → frontend → testes pós-deploy**.
 - **Environment** (viram build args):
 
   ```
-  VITE_API_BASE_URL=https://api-chatbot.vidaplenamulti.com.br
+  VITE_API_BASE_URL=https://api-chat.vidaplenamulti.com.br
   VITE_USE_MOCK=false
   ```
 
-- **Domains**: host `chatbot.vidaplenamulti.com.br`, HTTPS ligado, path `/`, **porta
+- **Domains**: host `chat.vidaplenamulti.com.br`, HTTPS ligado, path `/`, **porta
   `8080`**.
 - **Mounts/Volumes**: nenhum.
 - **Deploy**. O log de build mostra `npm ci`, `check:blocks` e `vite build`. Na execução,
@@ -239,17 +239,17 @@ reivindicação presa expira sozinha).
 
 Faça na ordem, com um usuário de teste e **dados fictícios**:
 
-1. **Health**: `curl -s https://api-chatbot.vidaplenamulti.com.br/api/health/` → `{"status":"ok"}`
-   e `curl -s https://chatbot.vidaplenamulti.com.br/healthz` → `ok`.
-2. **Headers**: `curl -sI https://chatbot.vidaplenamulti.com.br/` mostra
+1. **Health**: `curl -s https://api-chat.vidaplenamulti.com.br/api/health/` → `{"status":"ok"}`
+   e `curl -s https://chat.vidaplenamulti.com.br/healthz` → `ok`.
+2. **Headers**: `curl -sI https://chat.vidaplenamulti.com.br/` mostra
    `Content-Security-Policy`, `X-Frame-Options: DENY`, `Cache-Control: no-cache`.
-   `curl -sI https://api-chatbot.vidaplenamulti.com.br/api/health/` mostra
+   `curl -sI https://api-chat.vidaplenamulti.com.br/api/health/` mostra
    `Strict-Transport-Security: max-age=3600`.
-3. **Login + CSRF entre subdomínios**: abra `https://chatbot.vidaplenamulti.com.br`, faça
+3. **Login + CSRF entre subdomínios**: abra `https://chat.vidaplenamulti.com.br`, faça
    login. No DevTools (Application → Cookies), confira:
    - `csrftoken` com Domain `.vidaplenamulti.com.br`, Secure, SameSite=Lax, **sem**
      HttpOnly;
-   - `sessionid` com Domain `api-chatbot.vidaplenamulti.com.br` (host-only), HttpOnly,
+   - `sessionid` com Domain `api-chat.vidaplenamulti.com.br` (host-only), HttpOnly,
      Secure.
 
    Crie, renomeie e arquive uma conversa (POST/PATCH com `X-CSRFToken`). Nenhum 403.
@@ -291,7 +291,7 @@ middlewares `buffering` (`maxRequestBodyBytes`) na configuração estática e di
 
 ## Cookies entre subdomínios
 
-- `chatbot.*` e `api-chatbot.*` são o **mesmo site** (mesmo domínio registrável), então
+- `chat.*` e `api-chat.*` são o **mesmo site** (mesmo domínio registrável), então
   cookies SameSite=Lax vão nas chamadas `fetch` com `credentials: 'include'`, e o CORS
   libera só a origem do front, com credenciais.
 - O `csrftoken` com `Domain=.vidaplenamulti.com.br` também é enviado a `painel.`,
@@ -309,7 +309,7 @@ middlewares `buffering` (`maxRequestBodyBytes`) na configuração estática e di
 ## HSTS: como subir o valor
 
 O backend começa com `SECURE_HSTS_SECONDS=3600` (1 h). O header só vale para
-`api-chatbot.*`; com `SECURE_HSTS_INCLUDE_SUBDOMAINS=false`, nada além desse host. Depois
+`api-chat.*`; com `SECURE_HSTS_INCLUDE_SUBDOMAINS=false`, nada além desse host. Depois
 de confirmar HTTPS estável, suba aos poucos, um Deploy por vez: `86400` (1 dia) →
 `2592000` (30 dias) → `31536000` (1 ano). Só ligue `SECURE_HSTS_PRELOAD` se **todos** os
 subdomínios de `vidaplenamulti.com.br` tiverem HTTPS permanente: o preload é difícil de
@@ -389,7 +389,7 @@ docker run --rm chatbot-backend
 
 # Frontend: build com a URL da API (falha sem ela ou com mock)
 docker build -t chatbot-frontend \
-  --build-arg VITE_API_BASE_URL=https://api-chatbot.vidaplenamulti.com.br ./frontend
+  --build-arg VITE_API_BASE_URL=https://api-chat.vidaplenamulti.com.br ./frontend
 docker run --rm -p 8080:8080 chatbot-frontend    # http://localhost:8080/healthz
 ```
 
