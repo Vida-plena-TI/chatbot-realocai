@@ -1,7 +1,11 @@
 .scroll {
+  /* Containing block for absolutely positioned descendants (e.g. .sr-only table
+     captions): without it they escape the scroller and stretch the document. */
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .thread {
   max-width: 860px;
