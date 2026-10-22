@@ -274,16 +274,21 @@ Gera o arquivo **só a partir do corpo** (não lê o banco: nada de outro usuár
   "Formato não suportado." (o PDF v1 é impressão do navegador, feita no front).
 - Corpo limitado por `REPORTS_EXPORT_MAX_BYTES` (padrão 2 MB) → 413. Acima de 2,5 MB o
   limite do próprio Django (`DATA_UPLOAD_MAX_MEMORY_SIZE`) age antes.
-- Serializer estrito (`reports/serializers.py`): 1 a 10 blocos; `tipo` em
-  `^[a-z0-9_]{1,50}$`; `titulo`, `periodo{inicio,fim}` (ISO), `meta` (número ou null; sem
-  checar intervalo), `parcial` (bool), `avisos`, `resumo`, `tabelas` (`nome`,
-  `colunas[chave, rotulo, formato]`, `linhas` de valores simples). `dados` e chaves
-  desconhecidas são ignorados. Tipos estritos ("0.8" não é número).
+- Validação só do envelope (`reports/serializers.py`): 1 a 10 blocos; cada um com `versao`
+  (inteiro), `tipo` (texto, sem lista fechada na validação), `titulo` e `tabelas` (lista,
+  opcional). Tipo fora de `EXPORTED_TIPOS` (os 8 do contrato) ou `versao` ≠ 1 é aceito e
+  **ignorado** (sem aba e sem linha no Resumo); se nenhum bloco sobra → 400 "Nenhum dos
+  blocos enviados pode ser exportado.". Nos blocos exportados, `tabelas` é estrito
+  (`nome`, `colunas[chave, rotulo, formato]`, `linhas` de valores simples; formato
+  desconhecido vira `texto`); `periodo`, `meta`, `parcial` e `avisos` são opcionais e,
+  malformados, deixam a célula vazia. `resumo`, `dados` e chaves desconhecidas são
+  ignorados. Tipos estritos ("0.8" não é número).
 - Planilha (`reports/excel.py`) segue a "Especificação do Excel" de
   `frontend/docs/relatorios.md` (referência: `gerarExcel` em `localExport.js`): aba
   "Resumo" (Relatório, Período, Meta `0.0%` — vazia se null, Gerado em = data local do
   servidor `dd/mm/yyyy`, Avisos = avisos + "Dados parciais" com " | "); uma aba por tabela
-  (nome sem `\ / ? * [ ] :`, ≤ 31, sufixo " (n)" com vários blocos, repetidos numerados);
+  (qualquer tipo; nome sem `\ / ? * [ ] :`, ≤ 31, nunca vazio, sufixo " (n)" com vários
+  blocos, repetidos numerados; colunas e linhas na ordem recebida, nunca reordenadas);
   cabeçalho negrito em `#E6F3EF`; 1ª linha congelada; larguras 10/12/22–40; vazio = célula
   vazia; booleanos em colunas de texto viram "Sim"/"Não".
 - **Injeção de fórmula:** todo texto é gravado como célula de texto (`data_type "s"`);

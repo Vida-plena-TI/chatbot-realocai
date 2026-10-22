@@ -163,67 +163,111 @@ def test_rejects_body_that_is_not_an_object(api, body):
     assert set(response.json()) == {"detail"}
 
 
+TABELA_TEXTO = {"nome": "T", "colunas": [{"chave": "a", "rotulo": "A", "formato": "texto"}]}
+
+
 @pytest.mark.parametrize(
     "change",
     [
-        {"tipo": "Ocupação"},
+        {"versao": "1"},
+        {"versao": True},
+        {"versao": 1.0},
+        {"tipo": ""},
         {"tipo": "a" * 51},
-        {"tipo": "../etc"},
         {"tipo": 3},
         {"titulo": 42},
-        {"meta": "0.8"},
-        {"meta": True},
-        {"parcial": "false"},
-        {"parcial": 0},
-        {"periodo": {"inicio": "05/10/2026", "fim": "2026-10-10"}},
-        {"periodo": {"inicio": "2026-02-30", "fim": "2026-10-10"}},
-        {"avisos": "um aviso"},
-        {"avisos": [1]},
-        {"resumo": [{"rotulo": "x", "valor": {"obj": 1}, "formato": "texto"}]},
+        {"titulo": None},
         {"tabelas": "nada"},
+        {"tabelas": {"nome": "T"}},
         {"tabelas": [{"nome": "T", "colunas": [], "linhas": []}]},
-        {
-            "tabelas": [
-                {
-                    "nome": "T",
-                    "colunas": [{"chave": "a", "rotulo": "A", "formato": "moeda"}],
-                    "linhas": [],
-                }
-            ]
-        },  # noqa: E501
-        {
-            "tabelas": [
-                {
-                    "nome": "T",
-                    "colunas": [{"chave": "a", "rotulo": "A", "formato": "texto"}],
-                    "linhas": [{"a": [1]}],
-                }
-            ]
-        },  # noqa: E501
-        {
-            "tabelas": [
-                {
-                    "nome": "T",
-                    "colunas": [{"chave": "a", "rotulo": "A", "formato": "texto"}],
-                    "linhas": ["x"],
-                }
-            ]
-        },  # noqa: E501
+        {"tabelas": [dict(TABELA_TEXTO, linhas=[{"a": [1]}])]},
+        {"tabelas": [dict(TABELA_TEXTO, linhas=["x"])]},
+        {"tabelas": [dict(TABELA_TEXTO, linhas=[{"a": "x" * 1001}])]},
+        {"tabelas": [{"nome": "T", "linhas": []}]},
     ],
 )
-def test_rejects_invalid_fields(api, change):
+def test_rejects_invalid_envelope_or_tables(api, change):
     response = export(api, [minimal_block(**change)])
 
     assert response.status_code == 400
     assert set(response.json()) == {"detail"}
 
 
-@pytest.mark.parametrize("field", ["tipo", "titulo", "periodo", "meta", "parcial", "tabelas"])
-def test_rejects_missing_fields(api, field):
+@pytest.mark.parametrize("field", ["versao", "tipo", "titulo"])
+def test_rejects_missing_envelope_fields(api, field):
     bloco = minimal_block()
     del bloco[field]
 
     assert export(api, [bloco]).status_code == 400
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"meta": "0.8"},
+        {"meta": True},
+        {"meta": float("nan")},
+        {"parcial": "true"},
+        {"parcial": 1},
+        {"periodo": {"inicio": "05/10/2026", "fim": "2026-10-10"}},
+        {"periodo": {"inicio": "2026-02-30", "fim": "2026-10-10"}},
+        {"periodo": "2026-10-05"},
+        {"avisos": "um aviso"},
+        {"resumo": [{"rotulo": "x", "valor": {"obj": 1}, "formato": "texto"}]},
+        {"resumo": "nada"},
+        {"dias_nao_lidos": "nada"},
+    ],
+)
+def test_malformed_optional_fields_leave_the_cell_empty(api, change):
+    bloco = minimal_block(**change)
+    if "meta" in change and change["meta"] != change["meta"]:  # NaN is not valid JSON
+        bloco["meta"] = "NaN"
+
+    summary = open_xlsx(export(api, [bloco]))["Resumo"]
+
+    field = next(iter(change))
+    expected = {"meta": ("C2", None), "periodo": ("B2", None), "parcial": ("E2", None)}
+    if field in expected:
+        cell, value = expected[field]
+        assert summary[cell].value == value
+    assert summary["A2"].value == "Ocupação fictícia"
+
+
+@pytest.mark.parametrize("field", ["periodo", "meta", "parcial", "avisos", "resumo"])
+def test_missing_optional_fields_are_accepted(api, field):
+    bloco = minimal_block(avisos=["Aviso"])
+    del bloco[field]
+
+    workbook = open_xlsx(export(api, [bloco]))
+
+    assert workbook.sheetnames == ["Resumo", "Por dia"]
+
+
+def test_only_text_notices_are_kept(api):
+    bloco = minimal_block(avisos=["Aviso 1", 2, None, "Aviso 2"])
+
+    assert open_xlsx(export(api, [bloco]))["Resumo"]["E2"].value == "Aviso 1 | Aviso 2"
+
+
+def test_block_without_tables_only_gets_a_summary_row(api):
+    bloco = minimal_block()
+    del bloco["tabelas"]
+
+    workbook = open_xlsx(export(api, [bloco, minimal_block(tabelas=[])]))
+
+    assert workbook.sheetnames == ["Resumo"]
+    assert workbook["Resumo"].max_row == 3
+
+
+def test_unknown_column_format_is_exported_as_text(api):
+    bloco = minimal_block()
+    bloco["tabelas"][0]["colunas"][2]["formato"] = "moeda"
+    bloco["tabelas"][0]["colunas"][3]["formato"] = None
+
+    sheet = open_xlsx(export(api, [bloco]))["Por dia"]
+
+    assert (sheet["C2"].value, sheet["C2"].data_type) == ("0.75", "s")
+    assert (sheet["D2"].value, sheet["D2"].data_type) == ("3", "s")
 
 
 def test_meta_may_be_null_and_percentages_above_one_pass(api):
@@ -237,7 +281,7 @@ def test_meta_may_be_null_and_percentages_above_one_pass(api):
 
 
 def test_dados_and_unknown_keys_are_ignored(api):
-    bloco = minimal_block(dados="não validado", extra={"x": 1}, versao=99)
+    bloco = minimal_block(dados="não validado", extra={"x": 1})
 
     assert export(api, [bloco]).status_code == 200
 
