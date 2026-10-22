@@ -2,9 +2,13 @@
 SPA's docs/relatorios.md (reference implementation: gerarExcel in localExport.js).
 
 - "Resumo" sheet: one row per block (Relatório, Período, Meta, Gerado em, Avisos);
-- one sheet per item of `tabelas`, columns in `colunas` order;
+- one sheet per item of `tabelas`, for any block type, columns in `colunas` order and
+  rows in the order the agent sent them (never sorted here); a block without tables
+  only gets its "Resumo" row;
 - bold header on #E6F3EF, first row frozen, widths by format/content;
-- values are written as they came: never recalculated.
+- values are written as they came: never recalculated. "percentual" is a fraction
+  (0.25) shown as 0.0%, "data" an ISO date shown as dd/mm/yyyy, booleans are "Sim"/"Não"
+  and times ("08:00", in "texto" columns) stay text.
 
 Formula injection: every string is stored as a text cell (data_type "s"), so a value
 such as "=cmd|..." is never evaluated by Excel.
@@ -56,14 +60,19 @@ _WEEKDAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domin
 def export_filename(blocos, today):
     """realocai-<tipo>-<AAAA-MM-DD>.xlsx, or realocai-relatorios-... for several blocks.
 
-    `tipo` was validated against ^[a-z0-9_]{1,50}$, so the name is plain ASCII.
+    Only blocks of serializers.EXPORTED_TIPOS get here, so the name is plain ASCII.
     """
     tipo = blocos[0]["tipo"] if len(blocos) == 1 else "relatorios"
     return f"realocai-{tipo}-{today.isoformat()}.xlsx"
 
 
 def format_period(periodo):
-    """Same text as periodo() in format.js: "28/09 a 03/10/2026" or "Segunda, 28/09/2026"."""
+    """Same text as periodo() in format.js: "28/09 a 03/10/2026" or "Segunda, 28/09/2026".
+
+    None (period missing or malformed) leaves the cell empty.
+    """
+    if periodo is None:
+        return None
     inicio = datetime.date.fromisoformat(periodo["inicio"])
     fim = datetime.date.fromisoformat(periodo["fim"])
     if inicio == fim:

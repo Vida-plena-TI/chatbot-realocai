@@ -112,7 +112,7 @@ Invalid production environment (3 problem(s)):
 | `CONN_MAX_AGE` | Não | `60` | Segundos de reuso da conexão. |
 | `LOG_LEVEL` | Não | `INFO` | `DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`. |
 | `MESSAGE_MAX_LENGTH` | Não | `2000` | |
-| `REPORTS_EXPORT_MAX_BYTES` | Não | `2097152` | Limite do corpo da exportação Excel (o limite do Django acompanha automaticamente). |
+| `REPORTS_EXPORT_MAX_BYTES` | Não | `5242880` | Limite do corpo da exportação Excel, 5 MB (o limite do Django acompanha automaticamente). Se estiver definida com o antigo `2097152`, remova ou atualize. |
 | `ADMIN_SHOW_MESSAGE_CONTENT` | Não | `false` | Manter `false` (LGPD). |
 | `ADMIN_URL` | Não | `admin/` | Caminho do Django admin (ex.: `gestao-vp/`). Sem `/` no início, com `/` no fim. |
 | `SECURE_SSL_REDIRECT` | Não | `true` | |
@@ -284,7 +284,7 @@ middlewares `buffering` (`maxRequestBodyBytes`) na configuração estática e di
   v3 (60 s) vale para **ler a requisição** do cliente, não para a resposta. Se houver
   valores customizados, eles precisam ser maiores que 240 s.
 - **Tamanho do corpo**: o Traefik não limita o corpo por padrão (só com o middleware
-  `buffering`). A exportação aceita até `REPORTS_EXPORT_MAX_BYTES` (2 MB): acima disso a
+  `buffering`). A exportação aceita até `REPORTS_EXPORT_MAX_BYTES` (5 MB): acima disso a
   própria API responde 413. O gunicorn não limita o corpo, e o
   `DATA_UPLOAD_MAX_MEMORY_SIZE` do Django fica 512 KB acima do limite da exportação.
 - Confirme na prática com o teste 5 acima.

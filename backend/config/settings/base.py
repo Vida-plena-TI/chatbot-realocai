@@ -191,7 +191,7 @@ REALOCAI_INJECT_MEMORIES = env.bool("REALOCAI_INJECT_MEMORIES", default=False)
 MESSAGE_MAX_LENGTH = env.int("MESSAGE_MAX_LENGTH", default=2000)
 
 # Largest request body (bytes) accepted by POST /api/reports/export/.
-REPORTS_EXPORT_MAX_BYTES = env.int("REPORTS_EXPORT_MAX_BYTES", default=2 * 1024 * 1024)
+REPORTS_EXPORT_MAX_BYTES = env.int("REPORTS_EXPORT_MAX_BYTES", default=5 * 1024 * 1024)
 # Django's own body cap stays above the export limit, so the view answers 413 first.
 DATA_UPLOAD_MAX_MEMORY_SIZE = REPORTS_EXPORT_MAX_BYTES + 512 * 1024
 

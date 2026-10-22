@@ -272,18 +272,24 @@ Gera o arquivo **só a partir do corpo** (não lê o banco: nada de outro usuár
 
 - `formato`: só `"excel"` (.xlsx, openpyxl). Qualquer outro, inclusive `"pdf"`, → 400
   "Formato não suportado." (o PDF v1 é impressão do navegador, feita no front).
-- Corpo limitado por `REPORTS_EXPORT_MAX_BYTES` (padrão 2 MB) → 413. Acima de 2,5 MB o
-  limite do próprio Django (`DATA_UPLOAD_MAX_MEMORY_SIZE`) age antes.
-- Serializer estrito (`reports/serializers.py`): 1 a 10 blocos; `tipo` em
-  `^[a-z0-9_]{1,50}$`; `titulo`, `periodo{inicio,fim}` (ISO), `meta` (número ou null; sem
-  checar intervalo), `parcial` (bool), `avisos`, `resumo`, `tabelas` (`nome`,
-  `colunas[chave, rotulo, formato]`, `linhas` de valores simples). `dados` e chaves
-  desconhecidas são ignorados. Tipos estritos ("0.8" não é número).
+- Corpo limitado por `REPORTS_EXPORT_MAX_BYTES` (padrão 5 MB) → 413 com mensagem fixa (sem
+  eco do corpo). `DATA_UPLOAD_MAX_MEMORY_SIZE` fica 512 KB acima, então a view responde antes.
+- Validação só do envelope (`reports/serializers.py`): 1 a 10 blocos; cada um com `versao`
+  (inteiro), `tipo` (texto, sem lista fechada na validação), `titulo` e `tabelas` (lista,
+  opcional). Tipo fora de `EXPORTED_TIPOS` (os 8 do contrato) ou `versao` ≠ 1 é aceito e
+  **ignorado** (sem aba e sem linha no Resumo); com algum pulado, log INFO só com a
+  contagem (`skipped_unknown_blocks=<n>`); se nenhum sobra → 400 "Nenhum bloco
+  exportável.". Nos blocos exportados, `tabelas` é estrito
+  (`nome`, `colunas[chave, rotulo, formato]`, `linhas` de valores simples; formato
+  desconhecido vira `texto`); `periodo`, `meta`, `parcial` e `avisos` são opcionais e,
+  malformados, deixam a célula vazia. `resumo`, `dados` e chaves desconhecidas são
+  ignorados. Tipos estritos ("0.8" não é número).
 - Planilha (`reports/excel.py`) segue a "Especificação do Excel" de
   `frontend/docs/relatorios.md` (referência: `gerarExcel` em `localExport.js`): aba
   "Resumo" (Relatório, Período, Meta `0.0%` — vazia se null, Gerado em = data local do
   servidor `dd/mm/yyyy`, Avisos = avisos + "Dados parciais" com " | "); uma aba por tabela
-  (nome sem `\ / ? * [ ] :`, ≤ 31, sufixo " (n)" com vários blocos, repetidos numerados);
+  (qualquer tipo; nome sem `\ / ? * [ ] :`, ≤ 31, nunca vazio, sufixo " (n)" com vários
+  blocos, repetidos numerados; colunas e linhas na ordem recebida, nunca reordenadas);
   cabeçalho negrito em `#E6F3EF`; 1ª linha congelada; larguras 10/12/22–40; vazio = célula
   vazia; booleanos em colunas de texto viram "Sim"/"Não".
 - **Injeção de fórmula:** todo texto é gravado como célula de texto (`data_type "s"`);
@@ -351,7 +357,8 @@ Módulos:
   blocos_descartados)` ou `ChatFailure(kind, status_code)`, com `kind` em
   `ChatErrorKind`: `expired` (404), `invalid` (422), `upstream_error` (5xx, status
   inesperado ou resposta malformada), `network_error` (timeout/conexão), `config_error`
-  (401 ou settings ausentes). Não levanta exceção para erros HTTP e não loga.
+  (401 ou settings ausentes). Não levanta exceção para erros HTTP e não loga. **Nunca lê o
+  corpo de erro** (o 422 do FastAPI ecoa a requisição em `input`): só o status segue adiante.
   `validate_blocos`: blocos são JSON **opaco**; só se valida o envelope (lista de até 10
   objetos, cada um com `tipo` e `versao`). Inválido → `blocos=[]`,
   `blocos_descartados=True` (o agente loga WARNING; o turno nunca falha por isso). Nunca
@@ -458,5 +465,5 @@ memórias injetadas não contêm dados de pacientes.
 
 Ainda não implementado: endpoints REST para `Memory`, uso de `Memory.last_used_at`,
 endpoints auxiliares do RealocAI (`/agenda/disponibilidade`, `/agenda/ocupacao`,
-`/relatorio/enviar`), streaming, PDF gerado no servidor, throttle na exportação e
+`/relatorios/catalogo`, `/relatorios/gerar`), streaming, PDF gerado no servidor, throttle na exportação e
 agendamento da retenção.
