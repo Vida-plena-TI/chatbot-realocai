@@ -8,6 +8,7 @@ import { OcupacaoProfissional } from './OcupacaoProfissional';
 import { PacientesPorProfissional } from './PacientesPorProfissional';
 import { OcupacaoAgregada } from './OcupacaoAgregada';
 import { Disponibilidade } from './Disponibilidade';
+import { Convenio } from './Convenio';
 import { IconButton } from '../components/ui/IconButton';
 import { duracao, MINUTOS_POR_SLOT, periodo, rotuloDia, rotuloTipo } from './format';
 
@@ -16,6 +17,7 @@ const CORPOS = {
   pacientes_por_profissional: PacientesPorProfissional,
   ocupacao_agregada: OcupacaoAgregada,
   disponibilidade: Disponibilidade,
+  convenio: Convenio,
 };
 
 /** Só os tipos conhecidos são desenhados; os demais são ignorados sem erro (contrato aditivo). */
@@ -30,10 +32,12 @@ const CABECALHOS_NOVOS = {
     titulo: b.titulo,
     sub: b.dados.minutos_por_janela > MINUTOS_POR_SLOT ? `Atendimentos de ${duracao(b.dados.minutos_por_janela)} que cabem em cada faixa livre` : 'Faixas livres por profissional, sala e posto',
   }),
+  convenio: (b) => ({ titulo: b.titulo, sub: 'Somente contagens, sem dados de pacientes' }),
 };
 
 const VAZIOS_NOVOS = {
   disponibilidade: (d) => !d.faixas?.length && !d.por_dia?.length,
+  convenio: (d) => !d.por_convenio?.length && !d.aguardando?.length,
 };
 
 const TEXTO_VAZIO = {
