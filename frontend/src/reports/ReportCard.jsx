@@ -11,6 +11,7 @@ import { Disponibilidade } from './Disponibilidade';
 import { Convenio } from './Convenio';
 import { AgendaPaciente } from './AgendaPaciente';
 import { QualidadeAgenda } from './QualidadeAgenda';
+import { TabelaGenerica } from './TabelaGenerica';
 import { IconButton } from '../components/ui/IconButton';
 import { duracao, MINUTOS_POR_SLOT, periodo, rotuloDia, rotuloTipo } from './format';
 
@@ -22,6 +23,7 @@ const CORPOS = {
   convenio: Convenio,
   agenda_paciente: AgendaPaciente,
   qualidade_agenda: QualidadeAgenda,
+  tabela_generica: TabelaGenerica,
 };
 
 /** Só os tipos conhecidos são desenhados; os demais são ignorados sem erro (contrato aditivo). */
@@ -42,6 +44,7 @@ const CABECALHOS_NOVOS = {
     sub: [b.dados.paciente?.convenio && `Convênio ${b.dados.paciente.convenio}`, periodo(b.periodo)].filter(Boolean).join(' · '),
   }),
   qualidade_agenda: (b) => ({ titulo: b.titulo, sub: `Contagens em slots; 1 slot = ${MINUTOS_POR_SLOT} min` }),
+  tabela_generica: (b) => ({ titulo: b.titulo, sub: `${periodo(b.periodo)}${metaSub(b)}` }),
 };
 
 const VAZIOS_NOVOS = {
@@ -49,11 +52,13 @@ const VAZIOS_NOVOS = {
   convenio: (d) => !d.por_convenio?.length && !d.aguardando?.length,
   agenda_paciente: (d) => !d.dias?.length,
   qualidade_agenda: (d) => !d.por_profissional?.length,
+  tabela_generica: (d) => !d.linhas?.length,
 };
 
 const TEXTO_VAZIO = {
   disponibilidade: 'Nenhuma vaga livre no período.',
   agenda_paciente: 'Nenhuma sessão no período.',
+  tabela_generica: 'Nenhum resultado para este recorte.',
 };
 
 /** Erro ao desenhar um bloco fica no cartão; não derruba a conversa. Não registra dados. */
