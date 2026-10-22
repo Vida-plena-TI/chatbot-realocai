@@ -272,8 +272,8 @@ Gera o arquivo **só a partir do corpo** (não lê o banco: nada de outro usuár
 
 - `formato`: só `"excel"` (.xlsx, openpyxl). Qualquer outro, inclusive `"pdf"`, → 400
   "Formato não suportado." (o PDF v1 é impressão do navegador, feita no front).
-- Corpo limitado por `REPORTS_EXPORT_MAX_BYTES` (padrão 2 MB) → 413. Acima de 2,5 MB o
-  limite do próprio Django (`DATA_UPLOAD_MAX_MEMORY_SIZE`) age antes.
+- Corpo limitado por `REPORTS_EXPORT_MAX_BYTES` (padrão 5 MB) → 413 com mensagem fixa (sem
+  eco do corpo). `DATA_UPLOAD_MAX_MEMORY_SIZE` fica 512 KB acima, então a view responde antes.
 - Validação só do envelope (`reports/serializers.py`): 1 a 10 blocos; cada um com `versao`
   (inteiro), `tipo` (texto, sem lista fechada na validação), `titulo` e `tabelas` (lista,
   opcional). Tipo fora de `EXPORTED_TIPOS` (os 8 do contrato) ou `versao` ≠ 1 é aceito e

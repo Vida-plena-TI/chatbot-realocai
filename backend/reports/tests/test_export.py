@@ -296,6 +296,55 @@ def test_body_above_the_limit_is_413(api, settings):
     assert set(response.json()) == {"detail"}
 
 
+MARKER = "Paciente Ficticio Sigma"
+
+
+def sized_body(size):
+    """A valid export body of about `size` bytes: tables of 5000 rows (the per-table cap)."""
+    linha = {"nome": MARKER + " " + "x" * 200, "qtd": 1}
+    colunas = [
+        {"chave": "nome", "rotulo": "Nome", "formato": "texto"},
+        {"chave": "qtd", "rotulo": "Qtd", "formato": "inteiro"},
+    ]
+    row_size = len(json.dumps(linha, ensure_ascii=False).encode()) + 2
+    tabelas = []
+    remaining = size // row_size
+    while remaining > 0:
+        count = min(remaining, 5000)
+        tabelas.append({"nome": "Tabela", "colunas": colunas, "linhas": [linha] * count})
+        remaining -= count
+    body = {"formato": "excel", "blocos": [minimal_block(tipo="tabela_generica", tabelas=tabelas)]}
+    return json.dumps(body, ensure_ascii=False).encode()
+
+
+def test_default_limit_is_5_mb(settings):
+    # Test settings come from the same base.py; an explicit env value would override it.
+    assert settings.REPORTS_EXPORT_MAX_BYTES >= 5 * 1024 * 1024
+    assert settings.DATA_UPLOAD_MAX_MEMORY_SIZE > settings.REPORTS_EXPORT_MAX_BYTES
+
+
+def test_3_mb_body_is_exported(api):
+    body = sized_body(3 * 1024 * 1024)
+    assert len(body) >= 3 * 1024 * 1024
+
+    response = api.post(URL, body, content_type="application/json")
+
+    workbook = open_xlsx(response)
+    assert sum(sheet.max_row - 1 for sheet in workbook.worksheets[1:]) > 10000
+
+
+@pytest.mark.parametrize("extra", [1, 1024 * 1024], ids=["just-above", "above-django-cap"])
+def test_body_above_5_mb_is_413_without_echo(api, settings, extra):
+    body = sized_body(settings.REPORTS_EXPORT_MAX_BYTES + extra)
+    assert len(body) > settings.REPORTS_EXPORT_MAX_BYTES
+
+    response = api.post(URL, body, content_type="application/json")
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "Os relatórios enviados são grandes demais para exportar."}
+    assert MARKER.encode() not in response.content
+
+
 # --- Spreadsheet content (real examples from RealocAI) ----------------------------------
 
 

@@ -192,7 +192,10 @@ def test_prod_settings_from_env():
     assert settings["SECURE_PROXY_SSL_HEADER"] == ["HTTP_X_FORWARDED_PROTO", "https"]
     assert settings["SECURE_HSTS_SECONDS"] == 3600
     assert settings["SECURE_HSTS_INCLUDE_SUBDOMAINS"] is False
-    assert settings["DATA_UPLOAD_MAX_MEMORY_SIZE"] > settings["REPORTS_EXPORT_MAX_BYTES"]
+    assert settings["REPORTS_EXPORT_MAX_BYTES"] == 5 * 1024 * 1024
+    assert (
+        settings["DATA_UPLOAD_MAX_MEMORY_SIZE"] == settings["REPORTS_EXPORT_MAX_BYTES"] + 512 * 1024
+    )
     assert settings["ADMIN_URL"] == "admin/"
     assert settings["CACHE_BACKEND"] == "django.core.cache.backends.db.DatabaseCache"
     assert settings["WHITENOISE"] is True
