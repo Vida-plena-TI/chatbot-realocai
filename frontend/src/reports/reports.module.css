@@ -1296,6 +1296,20 @@
 .printDoc .dense thead {
   display: table-header-group;
 }
+/* Título da especialidade sai junto com a primeira faixa (tbody próprio), nunca sozinho. */
+.printDoc .specHead {
+  break-inside: avoid;
+}
+/* Faixas livres são listas longas (~200 linhas): linhas mais baixas no PDF. */
+.printDoc .dispTable th,
+.printDoc .dispTable td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.printDoc .dispTable tr.specRow th {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
 /* O Chrome repetiria o tfoot em toda página: o total sai uma vez, no fim da tabela. */
 .printDoc .dense tfoot {
   display: table-row-group;
