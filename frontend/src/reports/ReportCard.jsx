@@ -7,6 +7,7 @@ import { ExportBar } from './ExportBar';
 import { OcupacaoProfissional } from './OcupacaoProfissional';
 import { PacientesPorProfissional } from './PacientesPorProfissional';
 import { OcupacaoAgregada } from './OcupacaoAgregada';
+import { Disponibilidade } from './Disponibilidade';
 import { IconButton } from '../components/ui/IconButton';
 import { duracao, MINUTOS_POR_SLOT, periodo, rotuloDia, rotuloTipo } from './format';
 
@@ -14,6 +15,7 @@ const CORPOS = {
   ocupacao_profissional: OcupacaoProfissional,
   pacientes_por_profissional: PacientesPorProfissional,
   ocupacao_agregada: OcupacaoAgregada,
+  disponibilidade: Disponibilidade,
 };
 
 /** Só os tipos conhecidos são desenhados; os demais são ignorados sem erro (contrato aditivo). */
@@ -24,12 +26,18 @@ const metaSub = (b) => (b.meta != null ? ` · meta ${Math.round(b.meta * 100)}%`
 
 // Tipos novos: o `titulo` do agente já é a frase do relatório.
 const CABECALHOS_NOVOS = {
+  disponibilidade: (b) => ({
+    titulo: b.titulo,
+    sub: b.dados.minutos_por_janela > MINUTOS_POR_SLOT ? `Atendimentos de ${duracao(b.dados.minutos_por_janela)} que cabem em cada faixa livre` : 'Faixas livres por profissional, sala e posto',
+  }),
 };
 
 const VAZIOS_NOVOS = {
+  disponibilidade: (d) => !d.faixas?.length && !d.por_dia?.length,
 };
 
 const TEXTO_VAZIO = {
+  disponibilidade: 'Nenhuma vaga livre no período.',
 };
 
 /** Erro ao desenhar um bloco fica no cartão; não derruba a conversa. Não registra dados. */
