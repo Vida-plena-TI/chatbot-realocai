@@ -1221,3 +1221,38 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* PDF dos tipos novos: tabelas inteiras (sem cortar colunas), linhas e dias sem quebra */
+.printDoc .dense {
+  font-size: 12px;
+}
+.printDoc .dense th,
+.printDoc .dense td {
+  padding: 6px 6px;
+}
+.printDoc .dense tbody th {
+  white-space: normal;
+}
+.printDoc .stat,
+.printDoc .dispDay,
+.printDoc .tlDay,
+.printDoc .tlItem,
+.printDoc .plainList li,
+.printDoc .totalRow,
+.printDoc .legendNote {
+  break-inside: avoid;
+}
+.printDoc .blockTitle,
+.printDoc .groupRow {
+  break-after: avoid;
+}
+.printDoc .dense thead {
+  display: table-header-group;
+}
+/* O Chrome repetiria o tfoot em toda página: o total sai uma vez, no fim da tabela. */
+.printDoc .dense tfoot {
+  display: table-row-group;
+}
+.printDoc .tlDays {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}

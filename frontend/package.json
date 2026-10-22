@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check:blocks": "node scripts/check-blocks.mjs"
+    "check:blocks": "node scripts/check-blocks.mjs",
+    "check:render": "node scripts/check-render.mjs",
+    "sync:contrato": "node scripts/sync-contrato.mjs"
   },
   "dependencies": {
     "@fontsource/nunito": "^5.1.0",

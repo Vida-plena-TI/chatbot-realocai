@@ -18,10 +18,12 @@ Mockups para revisão: `Relatorios realocAI.dc.html`, no projeto de design. O c�
 | `ReportGroup.jsx` | Abas, Exportar todos, modal |
 | `ReportCard.jsx` | Cabeçalho, avisos, estados (esqueleto, erro, vazio, parcial), exportação |
 | `OcupacaoProfissional.jsx`, `PacientesPorProfissional.jsx`, `OcupacaoAgregada.jsx` | Corpo de cada tipo |
+| `Disponibilidade.jsx`, `Convenio.jsx`, `AgendaPaciente.jsx`, `QualidadeAgenda.jsx`, `TabelaGenerica.jsx` | Corpo dos tipos novos (ver [Tipos novos](#tipos-novos)) |
+| `contrato/` | Cópia do schema e dos 8 exemplos reais dos tipos novos (dados fictícios), com origem e commit do agente no cabeçalho |
 | `ExportBar.jsx` | "Deseja exportar este relatório?" com os estados ocioso, gerando, concluído e erro |
 | `PrintReport.jsx` + `print.css` | Documento de impressão do PDF: cabeçalho de registro + os mesmos `ReportCard` (`impressao`), A4 paisagem |
 | `localExport.js` | PDF pela impressão do navegador num iframe (mock e API real) e planilha Excel do mock |
-| `sampleBlocks.js` | Dados fictícios dos três tipos |
+| `sampleBlocks.js` | Dados fictícios dos três tipos antigos, os 8 exemplos reais dos novos e variantes (parcial, sem meta, tabela longa) |
 
 No mock, experimente:
 - "ocupação da Helena"
@@ -30,6 +32,38 @@ No mock, experimente:
 - "quantos pacientes hoje"
 - "relatório completo" (traz os 3 blocos, em abas)
 - "ocupação parcial" (estado âmbar; exportar em Excel simula o erro)
+- "horários vagos", "janelas de 1h30", "disponibilidade parcial"
+- "sessões por convênio", "agenda do paciente", "buracos na agenda"
+- "ranking de ocupação", "capacidade por especialidade", "relatório personalizado", "tabela sem meta", "tabela longa"
+- "relatórios novos" (os 8 exemplos novos em abas) e "bloco desconhecido" (um tipo futuro, que deve sumir)
+- "demorado" (resposta em ~25 s, mostra o aviso de demora), "falha" (502) e "sem conexão" (queda de rede)
+
+## Tipos novos
+
+Aditivos na versão 1 do contrato. A fonte da verdade é o repositório do agente
+(`docs/exemplos-blocos/`, branch `feature/relatorios-gerais`); `npm run sync:contrato` copia
+schema e exemplos para `src/reports/contrato/` sem alterar aquele repositório, e
+`npm run sync:contrato -- --check` confere se a cópia está em dia.
+
+- **Tipo desconhecido é ignorado** (`blocoSuportado` em `ReportCard.jsx`): sem cartão, sem aba e
+  fora do "Exportar todos". Um erro ao desenhar um bloco fica no próprio cartão.
+- **Comuns:** cartões do `resumo` mostram `exibicao`; aviso âmbar de parcial lista `dias_nao_lidos`;
+  `meta: null` não desenha marca nem selo de meta; booleanos viram "Sim"/"Não".
+- **`disponibilidade`:** resumo por dia (manhã/tarde) e faixas livres por dia, com profissional,
+  sala e posto (a partir de 1). Com `minutos_por_janela` > 30, mostra quantos atendimentos cabem.
+- **`convenio`:** só contagens, barras de uma cor (sem meta) e a lista de aguardando autorização.
+- **`agenda_paciente`:** linha do tempo por dia com sessões e intervalos (com a pausa). É o único bloco
+  com nome de paciente: o nome só aparece no corpo do cartão e no PDF. Nunca em console, storage,
+  URL, título de aba ou de documento (o PDF se chama `realocai-agenda_paciente-<data>`).
+- **`qualidade_agenda`:** valores em slots; a tela converte em minutos (1 slot = 30 min,
+  `MINUTOS_POR_SLOT`). Detalhe por dia recolhido no chat e aberto no PDF.
+- **`tabela_generica`:** só `dados.colunas`/`linhas`/`total`, na ordem do agente. Colunas fora de
+  `total` são as dimensões. Com meta, percentuais ganham barra e `abaixo_da_meta` vira selo.
+  `linhas_omitidas` > 0 mostra "+N linhas não exibidas".
+- **Listas longas:** no chat, as primeiras linhas e "Mostrar todas"; no PDF, tudo.
+- **Verificação:** `npm run check:blocks` valida as fixtures contra o schema copiado;
+  `npm run check:render` renderiza os cartões no Node (SSR do Vite) e confere tipo desconhecido,
+  `meta: null`, `parcial`, "+N linhas" e console vazio.
 
 ## Regras visuais
 
@@ -43,6 +77,7 @@ No mock, experimente:
 - **Sempre tema claro:** o `<html>` do iframe tem `data-theme="light"`; o tema escuro do chat não vaza.
 - **A4 paisagem**, margem de 10 mm: a área útil (277 mm ≈ 1047 px) ativa o layout largo de tabela (> 600 px), como no Expandir. `print-color-adjust: exact` mantém barras, selos e fundos.
 - **Ocupação agregada:** sem as abas Especialidade/Sala, os dois agrupamentos saem um depois do outro. Detalhes recolhidos (salas por dia) não entram.
+- **Tipos novos:** tabelas inteiras (fonte menor, texto quebra em vez de cortar coluna), `thead` repetido, linhas, dias da agenda e cartões sem quebra no meio; sem "Mostrar todas".
 - Cada bloco começa numa página nova, com o cabeçalho de registro (logo, "Vida Plena · Espaço Multidisciplinar", "Gerado em dd/mm/aaaa às hh:mm"). O texto de destaque da mensagem do assistente (sem o bloco de proposta; nunca a pergunta do usuário) vem uma vez, antes do primeiro bloco. Esse texto fica no navegador: não vai para o backend.
 - Bloco maior que uma página continua na seguinte: quebra só entre linhas de tabela (`break-inside: avoid`), com o `thead` repetido.
 - O `<title>` do documento é `realocai-<tipo>-<AAAA-MM-DD>` (ou `realocai-relatorios-…`), que os navegadores sugerem como nome do PDF.

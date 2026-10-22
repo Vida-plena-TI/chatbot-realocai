@@ -1,5 +1,14 @@
-// Blocos de exemplo (dados fictícios). Só nomes fictícios de profissionais; nunca pacientes.
-// Mesma FORMA dos exemplos reais do RealocAI (ver types.js); `npm run check:blocks` confere.
+// Blocos de exemplo (dados fictícios). Só nomes fictícios de profissionais; o único paciente é o
+// fictício do exemplo real de agenda_paciente. Mesma FORMA dos exemplos reais do RealocAI (ver
+// types.js); `npm run check:blocks` confere contra o schema copiado em contrato/.
+import disponibilidadeVagas from './contrato/exemplos/disponibilidade_vagas.js';
+import disponibilidadeJanelas from './contrato/exemplos/disponibilidade_janelas.js';
+import convenio from './contrato/exemplos/convenio.js';
+import agendaPaciente from './contrato/exemplos/agenda_paciente.js';
+import qualidadeAgenda from './contrato/exemplos/qualidade_agenda.js';
+import tabelaGenericaRanking from './contrato/exemplos/tabela_generica_ranking.js';
+import tabelaGenericaCapacidade from './contrato/exemplos/tabela_generica_capacidade.js';
+import tabelaGenericaPersonalizado from './contrato/exemplos/tabela_generica_personalizado.js';
 
 const SEMANA = ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10'];
 const NOMES = ['segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
@@ -218,4 +227,112 @@ export const ocupacaoParcial = {
   parcial: true,
   dias_nao_lidos: ['2026-10-09'],
   dados: { ...ocupacaoProfissional.dados, dias: ocupacaoProfissional.dados.dias.slice(0, 2) },
+};
+
+// --- Tipos novos: os 8 exemplos reais do agente, sem alteração -------------------------------
+export {
+  disponibilidadeVagas,
+  disponibilidadeJanelas,
+  convenio,
+  agendaPaciente,
+  qualidadeAgenda,
+  tabelaGenericaRanking,
+  tabelaGenericaCapacidade,
+  tabelaGenericaPersonalizado,
+};
+
+/** Variante parcial: a quarta-feira não pôde ser lida. */
+export const disponibilidadeParcial = {
+  ...disponibilidadeVagas,
+  parcial: true,
+  dias_nao_lidos: ['2026-09-30'],
+  dados: {
+    ...disponibilidadeVagas.dados,
+    faixas: disponibilidadeVagas.dados.faixas.filter((f) => f.data !== '2026-09-30'),
+    por_dia: disponibilidadeVagas.dados.por_dia.filter((d) => d.data !== '2026-09-30'),
+  },
+};
+
+/** Variante sem meta (ocupação não pedida): `meta: null` e sem as colunas de ocupação. */
+const semOcupacao = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'ocupacao' && k !== 'abaixo_da_meta'));
+const colsSemMeta = tabelaGenericaPersonalizado.dados.colunas.filter((c) => c.chave !== 'ocupacao' && c.chave !== 'abaixo_da_meta');
+const linhasSemMeta = tabelaGenericaPersonalizado.dados.linhas.map(semOcupacao);
+export const tabelaGenericaSemMeta = {
+  ...tabelaGenericaPersonalizado,
+  titulo: 'Vagas livres e pacientes distintos por dia e especialidade (tarde) de 28/09/2026 a 03/10/2026',
+  meta: null,
+  resumo: tabelaGenericaPersonalizado.resumo.filter((r) => r.formato !== 'percentual'),
+  dados: {
+    ...tabelaGenericaPersonalizado.dados,
+    metricas: ['vagas_livres', 'pacientes_distintos'],
+    colunas: colsSemMeta,
+    linhas: linhasSemMeta,
+    total: semOcupacao(tabelaGenericaPersonalizado.dados.total),
+  },
+  tabelas: [
+    { nome: 'Resultado', colunas: colsSemMeta, linhas: linhasSemMeta },
+    { nome: 'Total', colunas: colsSemMeta.slice(3), linhas: [semOcupacao(tabelaGenericaPersonalizado.dados.total)] },
+  ],
+};
+
+// Tabela longa (60 linhas exibidas + 14 omitidas) para conferir a quebra de página do PDF.
+const SEMANA_LONGA = [
+  ['2026-09-28', 'segunda-feira'], ['2026-09-29', 'terça-feira'], ['2026-09-30', 'quarta-feira'],
+  ['2026-10-01', 'quinta-feira'], ['2026-10-02', 'sexta-feira'], ['2026-10-03', 'sábado'],
+];
+const PROFS_LONGA = ['Ana Lima', 'Beto Reis', 'Cau Melo', 'Diva Rocha', 'Edu Faria', 'Fê Nunes', 'Gil Prado', 'Hana Luz', 'Ivo Sales', 'Júlia Paz'];
+const colsLonga = [
+  { chave: 'data', rotulo: 'Data', formato: 'data' },
+  { chave: 'dia_semana', rotulo: 'Dia da semana', formato: 'texto' },
+  { chave: 'profissional', rotulo: 'Profissional', formato: 'texto' },
+  { chave: 'sala', rotulo: 'Sala', formato: 'texto' },
+  { chave: 'ocupacao', rotulo: 'Ocupação', formato: 'percentual' },
+  { chave: 'slots_ocupados', rotulo: 'Slots ocupados', formato: 'inteiro' },
+  { chave: 'slots_escalados', rotulo: 'Slots escalados', formato: 'inteiro' },
+  { chave: 'vagas_livres', rotulo: 'Vagas livres', formato: 'inteiro' },
+  { chave: 'abaixo_da_meta', rotulo: 'Abaixo da meta', formato: 'texto' },
+];
+const linhasLonga = SEMANA_LONGA.flatMap(([data, dia_semana], d) =>
+  PROFS_LONGA.map((profissional, p) => {
+    const slots_escalados = 10;
+    const slots_ocupados = (d * 3 + p * 7) % 11;
+    const ocupacao = slots_ocupados / slots_escalados;
+    return { data, dia_semana, profissional, sala: `Sala ${(p % 6) + 1}`, ocupacao, slots_ocupados, slots_escalados, vagas_livres: Math.max(0, slots_escalados - slots_ocupados), abaixo_da_meta: ocupacao < 0.8 };
+  }),
+);
+const somaLonga = (k) => linhasLonga.reduce((a, l) => a + l[k], 0);
+const totalLonga = {
+  ocupacao: somaLonga('slots_ocupados') / somaLonga('slots_escalados'),
+  slots_ocupados: somaLonga('slots_ocupados'),
+  slots_escalados: somaLonga('slots_escalados'),
+  vagas_livres: somaLonga('vagas_livres'),
+  abaixo_da_meta: true,
+};
+export const tabelaGenericaLonga = {
+  versao: 1,
+  tipo: 'tabela_generica',
+  titulo: 'Ocupação por dia, profissional e sala de 28/09/2026 a 03/10/2026',
+  periodo: { inicio: '2026-09-28', fim: '2026-10-03' },
+  meta: 0.8,
+  parcial: false,
+  dias_nao_lidos: [],
+  avisos: ['Exemplo fictício longo, para conferir a quebra de página.'],
+  resumo: [
+    { rotulo: 'Ocupação (total)', valor: totalLonga.ocupacao, formato: 'percentual', exibicao: `${(Math.round(totalLonga.ocupacao * 1000) / 10).toFixed(1).replace('.', ',')}%` },
+    { rotulo: 'Slots ocupados (total)', valor: totalLonga.slots_ocupados, formato: 'inteiro', exibicao: String(totalLonga.slots_ocupados) },
+  ],
+  dados: {
+    tipo: 'tabela_generica',
+    relatorio: 'personalizado',
+    dimensoes: ['dia', 'profissional', 'sala'],
+    metricas: ['ocupacao', 'slots_ocupados', 'slots_escalados', 'vagas_livres'],
+    colunas: colsLonga,
+    linhas: linhasLonga,
+    total: totalLonga,
+    linhas_omitidas: 14,
+  },
+  tabelas: [
+    { nome: 'Resultado', colunas: colsLonga, linhas: linhasLonga },
+    { nome: 'Total', colunas: colsLonga.slice(4), linhas: [totalLonga] },
+  ],
 };
