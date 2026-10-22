@@ -25,20 +25,6 @@ def load(name):
     return json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
 
 
-@pytest.fixture
-def user(db):
-    return get_user_model().objects.create_user(
-        email="profissional@exemplo.com", password="senha-forte-123"
-    )
-
-
-@pytest.fixture
-def api(user):
-    client = APIClient()
-    client.force_login(user)
-    return client
-
-
 def export(client, blocos, formato="excel"):
     return client.post(URL, {"formato": formato, "blocos": blocos}, format="json")
 
