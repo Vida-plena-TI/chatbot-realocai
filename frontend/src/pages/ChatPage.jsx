@@ -17,9 +17,22 @@ import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { DECISION, titleFrom } from '../utils/content';
 import { formatToday } from '../utils/formatDate';
 
+// Falha real (rede, agente, proxy) é diferente de resposta lenta: a lenta não vira erro, o
+// TypingIndicator avisa e o cliente continua esperando o backend.
 function sendErrorCopy(e) {
   if (e?.status === 400) return { title: e.detail || 'A mensagem não pôde ser enviada.' };
   if (e?.status === 404) return { title: 'Esta conversa não existe mais.' };
+  if (e?.status === 0) {
+    return navigator.onLine === false
+      ? { title: 'Sem conexão com a internet.', detail: 'A mensagem não foi enviada. Verifique a rede e reenvie.' }
+      : { title: 'Sem conexão com o servidor.', detail: 'A conexão caiu antes da resposta. Verifique a rede e reenvie.' };
+  }
+  if (e?.status === 502) return { title: 'O agente não respondeu a tempo.', detail: 'Nada foi gravado. Você pode reenviar a mesma mensagem.' };
+  if (e?.status === 503 || e?.status === 504) {
+    return { title: 'O servidor demorou demais para responder.', detail: 'Nada foi alterado na agenda. Tente reenviar em instantes.' };
+  }
+  if (e?.status === 409) return { title: e.detail || 'Já há uma mensagem sendo processada nesta conversa.', detail: 'Aguarde a resposta anterior antes de reenviar.' };
+  if (e?.status === 429) return { title: e.detail || 'Muitas mensagens em pouco tempo.', detail: 'Aguarde um minuto e reenvie.' };
   return {
     title: 'Não foi possível processar sua mensagem. Tente novamente.',
     detail: e?.status === 0 ? e.message : e?.detail,

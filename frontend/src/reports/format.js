@@ -64,8 +64,14 @@ export function exibir(bloco, rotulo, fallback) {
   return item?.exibicao ?? fallback;
 }
 
+/** true/false → "Sim"/"Não" (o agente manda booleanos em colunas de formato "texto"). */
+export const simNao = (v) => (v ? 'Sim' : 'Não');
+
+/** Valor de célula pelo `formato` da coluna do contrato. Vazio vira "—"; nunca recalcula. */
 export function formatarValor(valor, formato) {
   if (valor == null || valor === '') return '—';
+  if (typeof valor === 'boolean') return simNao(valor);
+  if (typeof valor !== 'number' && ['percentual', 'inteiro', 'decimal'].includes(formato)) return String(valor);
   if (formato === 'percentual') return pct(valor);
   if (formato === 'inteiro') return int(valor);
   if (formato === 'decimal') return dec1(valor);
@@ -73,15 +79,58 @@ export function formatarValor(valor, formato) {
   return String(valor);
 }
 
+/** Cada slot da grade tem 30 minutos (contrato do RealocAI). */
+export const MINUTOS_POR_SLOT = 30;
+export const slotsEmMinutos = (slots) => slots * MINUTOS_POR_SLOT;
+
+/** 30 → "30 min", 60 → "1 h", 90 → "1 h 30" (mesma grafia dos títulos do agente). */
+export function duracao(min) {
+  if (!Number.isFinite(min)) return '—';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (!h) return `${m} min`;
+  return m ? `${h} h ${String(m).padStart(2, '0')}` : `${h} h`;
+}
+
+/** Duração de N slots: "4 slots · 2 h". */
+export const slotsDuracao = (slots) =>
+  Number.isFinite(slots) ? `${int(slots)} ${slots === 1 ? 'slot' : 'slots'} · ${duracao(slotsEmMinutos(slots))}` : '—';
+
+/** "manha" → "Manhã". */
+export const rotuloTurno = (p) => ({ manha: 'Manhã', tarde: 'Tarde' })[p] || ouTraco(p);
+
+/** "Segunda, 28/09/2026". */
+export const diaCompleto = (iso) => `${diaLongo(iso)}, ${ddmmaaaa(iso)}`;
+
+/**
+ * Especialidade de `dados.*.profissional` vem como identificador ("terapia_ocupacional"); nas
+ * tabelas e nos tipos novos já vem rotulada. Só ajusta a grafia do identificador, sem traduzir.
+ */
+export function rotuloEspecialidade(v) {
+  if (v == null || v === '') return '—';
+  if (!/^[a-z0-9_]+$/.test(v)) return v;
+  return v
+    .split('_')
+    .map((w, i) => (i && ['de', 'da', 'do', 'e'].includes(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
+}
+
 const TIPOS = {
   ocupacao_profissional: 'Ocupação da profissional',
   pacientes_por_profissional: 'Pacientes por profissional',
   ocupacao_agregada: 'Ocupação agregada',
+  disponibilidade: 'Disponibilidade',
+  convenio: 'Convênios',
+  agenda_paciente: 'Agenda do paciente',
+  qualidade_agenda: 'Qualidade da agenda',
+  tabela_generica: 'Relatório',
 };
 export const rotuloTipo = (tipo) => TIPOS[tipo] || 'Relatório';
 
+// A aba nunca mostra o nome do paciente: em agenda_paciente fica só o tipo.
 export function tituloAba(b) {
   if (b.tipo === 'ocupacao_profissional') return `Ocupação · ${b.dados.profissional.nome}`;
+  if (b.tipo === 'disponibilidade') return b.dados?.minutos_por_janela > MINUTOS_POR_SLOT ? `Janelas de ${duracao(b.dados.minutos_por_janela)}` : 'Vagas livres';
   return rotuloTipo(b.tipo);
 }
 
@@ -92,4 +141,5 @@ export function nomeArquivo(blocos, formato) {
 }
 
 /** Heurística para mostrar o esqueleto do relatório enquanto o agente responde. */
-export const pareceRelatorio = (texto = '') => /ocupa|pacientes por|quantos pacientes|relat[óo]rio/i.test(texto);
+export const pareceRelatorio = (texto = '') =>
+  /ocupa|pacientes por|quantos pacientes|relat[óo]rio|vagas?\b|hor[áa]rios? (vagos|livres)|janelas?|disponibilidade|conv[êe]nio|autoriza[çc]|agenda d[aoe]|buracos?|fragmenta|ranking|capacidade/i.test(texto);

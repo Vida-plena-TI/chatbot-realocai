@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ArrowDown, CalendarX, Check, Info, TriangleAlert } from 'lucide-react';
 import s from './reports.module.css';
 import { faixa } from './format';
@@ -39,4 +40,46 @@ export function Notice({ children, warn = false }) {
       <span>{children}</span>
     </div>
   );
+}
+
+/** Cartões do `resumo` do bloco: mostram `exibicao`, já formatada pelo agente. */
+export function ResumoCards({ resumo }) {
+  if (!resumo?.length) return null;
+  return (
+    <dl className={s.stats}>
+      {resumo.map((r) => (
+        <div key={r.rotulo} className={s.stat}>
+          <dt>{r.rotulo}</dt>
+          <dd>{r.exibicao ?? '—'}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** "+N linhas" quando o agente cortou o resultado (`linhas_omitidas`). */
+export function MaisLinhas({ n }) {
+  if (!(n > 0)) return null;
+  return (
+    <p className={s.moreRows}>
+      +{n} {n === 1 ? 'linha não exibida' : 'linhas não exibidas'} (limite do relatório)
+    </p>
+  );
+}
+
+/**
+ * Lista longa no chat: mostra as primeiras `limite` e um botão para ver todas.
+ * Na impressão (PDF) mostra sempre tudo.
+ */
+export function useLimite(lista, limite, impressao) {
+  const [todas, setTodas] = useState(false);
+  const cortar = !impressao && !todas && lista.length > limite + 2;
+  return {
+    visiveis: cortar ? lista.slice(0, limite) : lista,
+    botao: cortar ? (
+      <button type="button" className={s.showAll} onClick={() => setTodas(true)}>
+        Mostrar todas ({lista.length})
+      </button>
+    ) : null,
+  };
 }

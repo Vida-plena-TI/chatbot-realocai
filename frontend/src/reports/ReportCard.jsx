@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Component, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CircleAlert, Maximize2, RotateCw, X } from 'lucide-react';
 import s from './reports.module.css';
@@ -7,16 +7,83 @@ import { ExportBar } from './ExportBar';
 import { OcupacaoProfissional } from './OcupacaoProfissional';
 import { PacientesPorProfissional } from './PacientesPorProfissional';
 import { OcupacaoAgregada } from './OcupacaoAgregada';
+import { Disponibilidade } from './Disponibilidade';
+import { Convenio } from './Convenio';
+import { AgendaPaciente } from './AgendaPaciente';
+import { QualidadeAgenda } from './QualidadeAgenda';
+import { TabelaGenerica } from './TabelaGenerica';
 import { IconButton } from '../components/ui/IconButton';
-import { periodo, rotuloDia, rotuloTipo } from './format';
+import { duracao, MINUTOS_POR_SLOT, periodo, rotuloDia, rotuloTipo } from './format';
 
 const CORPOS = {
   ocupacao_profissional: OcupacaoProfissional,
   pacientes_por_profissional: PacientesPorProfissional,
   ocupacao_agregada: OcupacaoAgregada,
+  disponibilidade: Disponibilidade,
+  convenio: Convenio,
+  agenda_paciente: AgendaPaciente,
+  qualidade_agenda: QualidadeAgenda,
+  tabela_generica: TabelaGenerica,
 };
 
+/** Só os tipos conhecidos são desenhados; os demais são ignorados sem erro (contrato aditivo). */
+export const blocoSuportado = (b) =>
+  Boolean(b && typeof b === 'object' && Object.hasOwn(CORPOS, b.tipo) && b.dados && typeof b.dados === 'object');
+
+const metaSub = (b) => (b.meta != null ? ` · meta ${Math.round(b.meta * 100)}%` : '');
+
+// Tipos novos: o `titulo` do agente já é a frase do relatório.
+const CABECALHOS_NOVOS = {
+  disponibilidade: (b) => ({
+    titulo: b.titulo,
+    sub: b.dados.minutos_por_janela > MINUTOS_POR_SLOT ? `Atendimentos de ${duracao(b.dados.minutos_por_janela)} que cabem em cada faixa livre` : 'Faixas livres por profissional, sala e posto',
+  }),
+  convenio: (b) => ({ titulo: b.titulo, sub: 'Somente contagens, sem dados de pacientes' }),
+  agenda_paciente: (b) => ({
+    titulo: b.dados.paciente?.nome || 'Paciente',
+    sub: [b.dados.paciente?.convenio && `Convênio ${b.dados.paciente.convenio}`, periodo(b.periodo)].filter(Boolean).join(' · '),
+  }),
+  qualidade_agenda: (b) => ({ titulo: b.titulo, sub: `Contagens em slots; 1 slot = ${MINUTOS_POR_SLOT} min` }),
+  tabela_generica: (b) => ({ titulo: b.titulo, sub: `${periodo(b.periodo)}${metaSub(b)}` }),
+};
+
+const VAZIOS_NOVOS = {
+  disponibilidade: (d) => !d.faixas?.length && !d.por_dia?.length,
+  convenio: (d) => !d.por_convenio?.length && !d.aguardando?.length,
+  agenda_paciente: (d) => !d.dias?.length,
+  qualidade_agenda: (d) => !d.por_profissional?.length,
+  tabela_generica: (d) => !d.linhas?.length,
+};
+
+const TEXTO_VAZIO = {
+  disponibilidade: 'Nenhuma vaga livre no período.',
+  agenda_paciente: 'Nenhuma sessão no período.',
+  tabela_generica: 'Nenhum resultado para este recorte.',
+};
+
+/** Erro ao desenhar um bloco fica no cartão; não derruba a conversa. Não registra dados. */
+class CorpoSeguro extends Component {
+  state = { erro: false };
+  static getDerivedStateFromError() {
+    return { erro: true };
+  }
+  render() {
+    if (this.state.erro) {
+      return (
+        <div className={s.stateBox}>
+          <div>
+            <strong>Não foi possível mostrar este relatório.</strong>
+            <span>Os dados chegaram num formato inesperado. A exportação continua disponível.</span>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function cabecalho(b) {
+  if (CABECALHOS_NOVOS[b.tipo]) return CABECALHOS_NOVOS[b.tipo](b);
   if (b.tipo === 'ocupacao_profissional') {
     const p = b.dados.profissional;
     return { titulo: p.nome, sub: [p.especialidade, periodo(b.periodo)].filter(Boolean).join(' · ') };
@@ -30,6 +97,7 @@ function cabecalho(b) {
 
 function vazio(b) {
   const d = b.dados || {};
+  if (VAZIOS_NOVOS[b.tipo]) return VAZIOS_NOVOS[b.tipo](d);
   if (b.tipo === 'ocupacao_profissional') return !d.dias?.length;
   if (b.tipo === 'pacientes_por_profissional') return !d.profissionais?.length;
   return !d.por_especialidade?.length && !d.por_sala?.length;
@@ -111,9 +179,11 @@ export function ReportCard({ bloco, texto, exportavel = true, expandido = false,
       {!Corpo ? (
         <div className={s.stateBox}><div><strong>Tipo de relatório não suportado.</strong><span>{bloco.tipo}</span></div></div>
       ) : semDados ? (
-        <div className={s.stateBox}><div><strong>Nenhum atendimento no período.</strong><span>{periodo(bloco.periodo)}</span></div></div>
+        <div className={s.stateBox}><div><strong>{TEXTO_VAZIO[bloco.tipo] || 'Nenhum atendimento no período.'}</strong><span>{periodo(bloco.periodo)}</span></div></div>
       ) : (
-        <Corpo bloco={bloco} impressao={impressao} />
+        <CorpoSeguro>
+          <Corpo bloco={bloco} impressao={impressao} />
+        </CorpoSeguro>
       )}
 
       {bloco.avisos?.map((a) => (

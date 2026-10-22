@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from 'react';
 import s from './reports.module.css';
-import { ReportCard, ReportModal, useExpand } from './ReportCard';
+import { blocoSuportado, ReportCard, ReportModal, useExpand } from './ReportCard';
 import { ExportBar } from './ExportBar';
 import { tituloAba } from './format';
 
@@ -8,10 +8,11 @@ const MAX_BLOCOS = 10;
 
 /**
  * Um turno pode trazer até 10 blocos. 1 bloco: cartão direto. 2 ou mais: abas + "Exportar todos".
+ * Blocos de tipo desconhecido (agente mais novo que a tela) são ignorados: sem aba nem exportação.
  * @param {{blocos: import('./types').Bloco[], texto?: string}} props `texto`: destaque da mensagem, para o PDF
  */
 export function ReportGroup({ blocos, texto }) {
-  const lista = blocos.slice(0, MAX_BLOCOS);
+  const lista = (Array.isArray(blocos) ? blocos : []).filter(blocoSuportado).slice(0, MAX_BLOCOS);
   const [ativo, setAtivo] = useState(0);
   const { aberto, abrir, fechar } = useExpand();
   const id = useId();
