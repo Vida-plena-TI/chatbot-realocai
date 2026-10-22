@@ -102,13 +102,20 @@ export const rotuloTurno = (p) => ({ manha: 'Manhã', tarde: 'Tarde' })[p] || ou
 /** "Segunda, 28/09/2026". */
 export const diaCompleto = (iso) => `${diaLongo(iso)}, ${ddmmaaaa(iso)}`;
 
+/** "terapia_ocupacional" (identificador) em vez do rótulo "Terapia Ocupacional". */
+export const ehIdentificador = (v) => typeof v === 'string' && /^[a-z0-9_]+$/.test(v);
+
+/** Chave para agrupar: sem acento, minúscula, "_" igual a espaço ("Nutrição" = "nutricao"). */
+export const chaveEspecialidade = (v) =>
+  v == null ? '' : String(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[\s_]+/g, ' ').trim();
+
 /**
  * Especialidade de `dados.*.profissional` vem como identificador ("terapia_ocupacional"); nas
  * tabelas e nos tipos novos já vem rotulada. Só ajusta a grafia do identificador, sem traduzir.
  */
 export function rotuloEspecialidade(v) {
   if (v == null || v === '') return '—';
-  if (!/^[a-z0-9_]+$/.test(v)) return v;
+  if (!ehIdentificador(v)) return v;
   return v
     .split('_')
     .map((w, i) => (i && ['de', 'da', 'do', 'e'].includes(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
