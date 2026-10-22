@@ -9,6 +9,7 @@ import { PacientesPorProfissional } from './PacientesPorProfissional';
 import { OcupacaoAgregada } from './OcupacaoAgregada';
 import { Disponibilidade } from './Disponibilidade';
 import { Convenio } from './Convenio';
+import { AgendaPaciente } from './AgendaPaciente';
 import { IconButton } from '../components/ui/IconButton';
 import { duracao, MINUTOS_POR_SLOT, periodo, rotuloDia, rotuloTipo } from './format';
 
@@ -18,6 +19,7 @@ const CORPOS = {
   ocupacao_agregada: OcupacaoAgregada,
   disponibilidade: Disponibilidade,
   convenio: Convenio,
+  agenda_paciente: AgendaPaciente,
 };
 
 /** Só os tipos conhecidos são desenhados; os demais são ignorados sem erro (contrato aditivo). */
@@ -33,15 +35,21 @@ const CABECALHOS_NOVOS = {
     sub: b.dados.minutos_por_janela > MINUTOS_POR_SLOT ? `Atendimentos de ${duracao(b.dados.minutos_por_janela)} que cabem em cada faixa livre` : 'Faixas livres por profissional, sala e posto',
   }),
   convenio: (b) => ({ titulo: b.titulo, sub: 'Somente contagens, sem dados de pacientes' }),
+  agenda_paciente: (b) => ({
+    titulo: b.dados.paciente?.nome || 'Paciente',
+    sub: [b.dados.paciente?.convenio && `Convênio ${b.dados.paciente.convenio}`, periodo(b.periodo)].filter(Boolean).join(' · '),
+  }),
 };
 
 const VAZIOS_NOVOS = {
   disponibilidade: (d) => !d.faixas?.length && !d.por_dia?.length,
   convenio: (d) => !d.por_convenio?.length && !d.aguardando?.length,
+  agenda_paciente: (d) => !d.dias?.length,
 };
 
 const TEXTO_VAZIO = {
   disponibilidade: 'Nenhuma vaga livre no período.',
+  agenda_paciente: 'Nenhuma sessão no período.',
 };
 
 /** Erro ao desenhar um bloco fica no cartão; não derruba a conversa. Não registra dados. */
