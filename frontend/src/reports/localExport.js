@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { PrintReport } from './PrintReport';
 import printCss from './print.css?raw';
-import { nomeArquivo, periodo } from './format';
+import { nomeArquivo, periodo, simNao } from './format';
 
 const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -72,6 +72,8 @@ const LARGURA = { percentual: 70, inteiro: 70, decimal: 70, data: 80, texto: 160
 
 function celula(valor, formato) {
   if (valor == null || valor === '') return '<Cell ss:StyleID="txt"/>';
+  // Booleano do JSON vira "Sim"/"Não" em qualquer formato; a string "true" fica como veio.
+  if (typeof valor === 'boolean') return `<Cell ss:StyleID="txt"><Data ss:Type="String">${simNao(valor)}</Data></Cell>`;
   if (formato === 'data') return `<Cell ss:StyleID="date"><Data ss:Type="DateTime">${valor}T00:00:00.000</Data></Cell>`;
   if (['percentual', 'inteiro', 'decimal'].includes(formato) && typeof valor === 'number') {
     return `<Cell ss:StyleID="${ESTILO[formato]}"><Data ss:Type="Number">${valor}</Data></Cell>`;

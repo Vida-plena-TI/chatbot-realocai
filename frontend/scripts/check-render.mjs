@@ -5,6 +5,8 @@
 //   - "+N linhas" quando linhas_omitidas > 0; resumo mostra `exibicao`;
 //   - disponibilidade por dia e especialidade: nenhuma faixa perdida ou duplicada, soma de vagas
 //     preservada, especialidade única no dia, subtotal = soma, mesma ordem em todos os dias;
+//   - sala em ordem natural dentro do grupo ("Sala 2" antes de "Sala 10");
+//   - booleano do JSON vira "Sim"/"Não" (tela, PDF e Excel local); a string "true" fica como veio;
 //   - nada vai para o console durante a renderização (LGPD: o nome do paciente nunca é logado).
 //
 // Uso: npm run check:render   (exit code 1 se alguma verificação falhar)
@@ -25,7 +27,8 @@ try {
   const { PrintReport } = await server.ssrLoadModule('/src/reports/PrintReport.jsx');
   const amostras = await server.ssrLoadModule('/src/reports/sampleBlocks.js');
   const { agruparFaixas, subtotal } = await server.ssrLoadModule('/src/reports/Disponibilidade.jsx');
-  const { diaCompleto: diaCompletoSsr } = await server.ssrLoadModule('/src/reports/format.js');
+  const { diaCompleto: diaCompletoSsr, formatarValor } = await server.ssrLoadModule('/src/reports/format.js');
+  const { gerarExcel } = await server.ssrLoadModule('/src/reports/localExport.js');
 
   // Captura todo o console durante as renderizações.
   const saida = [];
@@ -71,6 +74,22 @@ try {
     ),
     antigos: render([amostras.ocupacaoProfissional, amostras.pacientesSemana, amostras.ocupacaoAgregada]),
   };
+  // Fictícios: mesmo dia, especialidade, início e profissional; só a sala desempata.
+  const faixaSala = (sala, posto = 1) => ({
+    ...amostras.disponibilidadeVagas.dados.faixas[0],
+    profissional: { id: 'p-ficticio', nome: 'Ana Lima', especialidade: 'psicologia' },
+    data: '2026-09-28', inicio: '07:00', fim: '08:00', slots: 2, sala_id: `s-${sala}-${posto}`, sala_nome: `Sala ${sala}`, posto,
+  });
+  const faixasSalas = [faixaSala(10), faixaSala(2, 2), faixaSala(1), faixaSala(2, 1)];
+  const blocoSalas = { ...amostras.disponibilidadeVagas, dados: { ...amostras.disponibilidadeVagas.dados, faixas: faixasSalas } };
+  r.salasPdf = render([blocoSalas], PrintReport);
+  r.salasTela = render([blocoSalas]);
+  const colunasBool = [{ chave: 'nome', rotulo: 'Nome', formato: 'texto' }, { chave: 'flag', rotulo: 'Flag', formato: 'texto' }];
+  const blocoBool = {
+    ...amostras.tabelaGenericaSemMeta,
+    tabelas: [{ nome: 'Flags', colunas: colunasBool, linhas: [{ nome: 'A', flag: true }, { nome: 'B', flag: false }, { nome: 'C', flag: 'true' }, { nome: 'D', flag: null }] }],
+  };
+  r.boolTela = render([{ ...blocoBool, dados: { ...blocoBool.dados, colunas: colunasBool, linhas: blocoBool.tabelas[0].linhas } }]);
   Object.assign(console, originais);
 
   const erros = Object.entries({ ...r, ...r.novos }).filter(([, h]) => typeof h === 'string' && h.startsWith('ERRO'));
@@ -94,6 +113,21 @@ try {
   ok(texto(r.qualidadePdf).includes('Seg 28/09') && !r.qualidadePdf.includes('aria-expanded'), 'qualidade no PDF: detalhe por dia aberto, sem botões');
   ok(texto(r.agenda).includes('Intervalo de 4 h, inclui 1 h de pausa') && texto(r.agenda).includes('Terça, 29/09/2026'), 'agenda: linha do tempo com sessões e intervalos');
   ok(texto(r.antigos).includes('81,5%') && abas(r.antigos) === 3, 'tipos antigos continuam em abas, como antes');
+
+  const salas = (html) => [...texto(html).matchAll(/Sala (\d+) · posto (\d+)/g)].map((m) => `${m[1]}/${m[2]}`).join(',');
+  const ordemSalas = agruparFaixas(faixasSalas)[0].grupos[0].faixas.map((f) => `${f.sala_nome.slice(5)}/${f.posto}`).join(',');
+  ok(ordemSalas === '1/1,2/1,2/2,10/1', `sala em ordem natural no grupo, posto desempata (${ordemSalas})`);
+  // A tela tem a versão larga e a compacta: a mesma sequência aparece uma vez por versão.
+  const soOrdem = (html) => [...new Set(salas(html).match(/(?:[^,]+,){3}[^,]+/g))].join(';');
+  ok(soOrdem(r.salasPdf) === '1/1,2/1,2/2,10/1' && soOrdem(r.salasTela) === '1/1,2/1,2/2,10/1', 'sala em ordem natural no PDF e na tela');
+
+  ok(formatarValor(true, 'texto') === 'Sim' && formatarValor(false, 'texto') === 'Não' && formatarValor(true, 'inteiro') === 'Sim', 'booleano vira "Sim"/"Não" em qualquer formato');
+  ok(formatarValor('true', 'texto') === 'true' && formatarValor('false', 'texto') === 'false' && formatarValor(null, 'texto') === '—', 'string "true"/"false" fica como veio; null vira "—"');
+  const celulasBool = [...texto(r.boolTela).matchAll(/\b([ABCD]) (Sim|Não|true|—)(?= )/g)].map((m) => `${m[1]}=${m[2]}`).join(',');
+  ok(celulasBool === 'A=Sim,B=Não,C=true,D=—', `tabela genérica na tela: booleano como "Sim"/"Não" (${celulasBool})`);
+  const xls = await gerarExcel([blocoBool]).text();
+  const flags = [...xls.split('ss:Name="Flags"')[1].matchAll(/<Row>(.*?)<\/Row>/gs)].slice(1).map((m) => m[1].match(/<Cell[^>]*?(?:\/>|>.*?<\/Cell>)/g)[1].match(/>([^<]*)<\/Data>/)?.[1] ?? '');
+  ok(flags.join(',') === 'Sim,Não,true,', `Excel local: booleano como "Sim"/"Não", string intacta, null vazio (${flags.join(',')})`);
 
   // --- Disponibilidade por dia e especialidade: nada se perde nem se duplica -----------------
   // Lê as tabelas por dia do HTML (PDF e tela) e confere com o dado original.
