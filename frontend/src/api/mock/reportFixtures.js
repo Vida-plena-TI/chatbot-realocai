@@ -3,6 +3,7 @@ import {
   convenio,
   disponibilidadeJanelas,
   disponibilidadeParcial,
+  disponibilidadeSintetica,
   disponibilidadeVagas,
   ocupacaoAgregada,
   ocupacaoProfissional,
@@ -24,6 +25,7 @@ const blocoDesconhecido = { ...ocupacaoAgregada, tipo: 'tipo_futuro', titulo: 'R
 const NOVOS = [
   [/relat[óo]rios novos|todos os novos/, 'Separei os oito relatórios novos em abas.', [disponibilidadeVagas, disponibilidadeJanelas, convenio, agendaPaciente, qualidadeAgenda, tabelaGenericaRanking, tabelaGenericaCapacidade, tabelaGenericaPersonalizado]],
   [/bloco desconhecido|tipo futuro/, 'Psicomotricidade (54,1%) e Sala 7 (50,0%) estão mais longe da meta de 80%.', [blocoDesconhecido, ocupacaoAgregada]],
+  [/vagas? fict[íi]cias|semana cheia|disponibilidade sint[ée]tica/, 'Há bastante vaga livre na semana (exemplo sintético).', [disponibilidadeSintetica]],
   [/vagas? parcia|disponibilidade parcial/, 'Não consegui ler a quarta-feira. As vagas abaixo consideram os outros dias.', [disponibilidadeParcial]],
   [/janelas?|1 ?h ?30/, 'Cabem 33 atendimentos de 1 h 30 na semana. A tarde de segunda tem 3 janelas.', [disponibilidadeJanelas]],
   [/vagas?|hor[áa]rios? (vagos|livres)|disponibilidade/, 'Há 130 vagas livres de segunda a sexta, 65 horas no total.', [disponibilidadeVagas]],

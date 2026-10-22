@@ -3,6 +3,8 @@
 //   - tipo desconhecido é ignorado sem erro (sozinho: nada; junto com outro: sem aba extra);
 //   - meta null e parcial true não quebram, e o aviso lista os dias não lidos;
 //   - "+N linhas" quando linhas_omitidas > 0; resumo mostra `exibicao`;
+//   - disponibilidade por dia e especialidade: nenhuma faixa perdida ou duplicada, soma de vagas
+//     preservada, especialidade única no dia, subtotal = soma, mesma ordem em todos os dias;
 //   - nada vai para o console durante a renderização (LGPD: o nome do paciente nunca é logado).
 //
 // Uso: npm run check:render   (exit code 1 se alguma verificação falhar)
@@ -22,6 +24,8 @@ try {
   const { ReportGroup } = await server.ssrLoadModule('/src/reports/ReportGroup.jsx');
   const { PrintReport } = await server.ssrLoadModule('/src/reports/PrintReport.jsx');
   const amostras = await server.ssrLoadModule('/src/reports/sampleBlocks.js');
+  const { agruparFaixas, subtotal } = await server.ssrLoadModule('/src/reports/Disponibilidade.jsx');
+  const { diaCompleto: diaCompletoSsr } = await server.ssrLoadModule('/src/reports/format.js');
 
   // Captura todo o console durante as renderizações.
   const saida = [];
@@ -52,6 +56,12 @@ try {
     longa: render([amostras.tabelaGenericaLonga]),
     longaPdf: render([amostras.tabelaGenericaLonga], PrintReport),
     janelas: render([amostras.disponibilidadeJanelas]),
+    disp: Object.fromEntries(
+      ['disponibilidadeSintetica', 'disponibilidadeVagas', 'disponibilidadeJanelas', 'disponibilidadeParcial'].map((k) => [
+        k,
+        { pdf: render([amostras[k]], PrintReport), tela: render([amostras[k]]) },
+      ]),
+    ),
     qualidade: render([amostras.qualidadeAgenda]),
     qualidadePdf: render([amostras.qualidadeAgenda], PrintReport),
     agenda: render([amostras.agendaPaciente]),
@@ -84,6 +94,67 @@ try {
   ok(texto(r.qualidadePdf).includes('Seg 28/09') && !r.qualidadePdf.includes('aria-expanded'), 'qualidade no PDF: detalhe por dia aberto, sem botões');
   ok(texto(r.agenda).includes('Intervalo de 4 h, inclui 1 h de pausa') && texto(r.agenda).includes('Terça, 29/09/2026'), 'agenda: linha do tempo com sessões e intervalos');
   ok(texto(r.antigos).includes('81,5%') && abas(r.antigos) === 3, 'tipos antigos continuam em abas, como antes');
+
+  // --- Disponibilidade por dia e especialidade: nada se perde nem se duplica -----------------
+  // Lê as tabelas por dia do HTML (PDF e tela) e confere com o dado original.
+  const tabelasDisp = (html) =>
+    html
+      .split('<table')
+      .slice(1)
+      .filter((t) => t.includes('dispDayRow'))
+      .map((t) => {
+        const dia = texto(t.match(/dispDayRow[^>]*>\s*<th[^>]*>(.*?)<\/th>/)?.[1] ?? '').trim();
+        const grupos = [];
+        const corpos = [...t.matchAll(/<tbody[^>]*>(.*?)<\/tbody>/g)].map((m) => m[1]).join('');
+        for (const [, cls = '', corpo] of corpos.matchAll(/<tr(?: class="([^"]*)")?>(.*?)<\/tr>/g)) {
+          if (cls.includes('specRow')) {
+            const [, rotulo, sub] = corpo.match(/<th[^>]*>(.*?)<span>(.*?)<\/span>/);
+            grupos.push({ rotulo: texto(rotulo).trim(), sub: texto(sub).trim(), linhas: [] });
+          } else {
+            grupos.at(-1).linhas.push(Number(texto(corpo).match(/(\d+) vagas? \(/)[1]));
+          }
+        }
+        return { dia, grupos };
+      });
+  const soma = (l) => l.reduce((a, n) => a + n, 0);
+  const ordemRef = (rotulos) =>
+    [...new Set(rotulos)].sort((a, b) =>
+      a === 'Sem especialidade' ? 1 : b === 'Sem especialidade' ? -1 : a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }),
+    );
+
+  for (const nomeBloco of ['disponibilidadeSintetica', 'disponibilidadeVagas', 'disponibilidadeJanelas', 'disponibilidadeParcial']) {
+    const bloco = amostras[nomeBloco];
+    const { faixas } = bloco.dados;
+    const slotsOrig = soma(faixas.map((f) => f.slots));
+    const agrupado = agruparFaixas(faixas);
+    const todasAgrupadas = agrupado.flatMap((d) => d.grupos.flatMap((g) => g.faixas));
+    ok(todasAgrupadas.length === faixas.length && new Set(todasAgrupadas).size === faixas.length && faixas.every((f) => todasAgrupadas.includes(f)),
+      `${nomeBloco}: agrupar não perde nem duplica faixas (${faixas.length})`);
+
+    const pdf = tabelasDisp(r.disp[nomeBloco].pdf);
+    const linhasPdf = pdf.flatMap((d) => d.grupos.flatMap((g) => g.linhas));
+    ok(pdf.length === new Set(faixas.map((f) => f.data)).size, `${nomeBloco}: uma tabela por dia no PDF (${pdf.length})`);
+    ok(linhasPdf.length === faixas.length, `${nomeBloco}: (a) PDF com todas as faixas (${linhasPdf.length} de ${faixas.length})`);
+    ok(soma(linhasPdf) === slotsOrig, `${nomeBloco}: (b) soma de vagas no PDF igual ao dado (${soma(linhasPdf)} de ${slotsOrig})`);
+    ok(pdf.every((d) => new Set(d.grupos.map((g) => g.rotulo)).size === d.grupos.length), `${nomeBloco}: (c) nenhuma especialidade repetida no mesmo dia`);
+    ok(pdf.every((d) => d.grupos.every((g) => g.sub === subtotal(soma(g.linhas)))) && agrupado.every((d) => d.grupos.every((g) => g.slots === soma(g.faixas.map((f) => f.slots)))),
+      `${nomeBloco}: (d) subtotal de cada grupo = soma das suas faixas`);
+    const ref = ordemRef(pdf.flatMap((d) => d.grupos.map((g) => g.rotulo)));
+    ok(pdf.every((d) => d.grupos.every((g, i) => !i || ref.indexOf(d.grupos[i - 1].rotulo) < ref.indexOf(g.rotulo))),
+      `${nomeBloco}: (e) ordem dos grupos igual em todos os dias (alfabética, "Sem especialidade" por último)`);
+    ok(agrupado.every((d) => d.grupos.every((g) => g.faixas.every((f, i) => !i || g.faixas[i - 1].inicio <= f.inicio))), `${nomeBloco}: faixas do grupo por horário de início`);
+
+    // Tela: o limite mostra só grupos inteiros.
+    const tela = tabelasDisp(r.disp[nomeBloco].tela);
+    const tamanhos = new Map(agrupado.flatMap((d) => d.grupos.map((g) => [`${d.data}|${g.rotulo}`, g.faixas.length])));
+    const diaIso = new Map(agrupado.map((d) => [texto(diaCompletoSsr(d.data)), d.data]));
+    ok(tela.every((d) => d.grupos.every((g) => g.linhas.length === tamanhos.get(`${diaIso.get(d.dia)}|${g.rotulo}`))), `${nomeBloco}: na tela, só grupos inteiros`);
+  }
+  const sint = tabelasDisp(r.disp.disponibilidadeSintetica.pdf);
+  const rotulosSint = new Set(sint.flatMap((d) => d.grupos.map((g) => g.rotulo)));
+  ok(rotulosSint.size === 10 && rotulosSint.has('Sem especialidade') && !rotulosSint.has('terapia_ocupacional'), 'sintética: 9 especialidades + "Sem especialidade"; identificador no mesmo grupo do rótulo');
+  ok(texto(r.disp.disponibilidadeSintetica.tela).includes(`Mostrar todas (${amostras.disponibilidadeSintetica.dados.faixas.length})`), 'sintética na tela: botão "Mostrar todas" continua');
+  ok(!/Especialidade<\/th>|Turno<\/th>/.test(r.disp.disponibilidadeSintetica.pdf), 'lista de faixas sem as colunas Especialidade e Turno');
 
   const nome = amostras.agendaPaciente.dados.paciente.nome;
   ok(!saida.length, `console vazio durante a renderização${saida.length ? `: ${saida.length} linha(s)` : ''}`);
