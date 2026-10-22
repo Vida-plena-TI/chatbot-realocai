@@ -62,7 +62,7 @@ class ConversationViewSet(
     # Only applied to sending messages (see get_throttles): ScopedRateThrottle keys on
     # the user id for authenticated requests.
     throttle_scope = "chat_messages"
-    # PATCH only: PUT would require resending every writable field.
+    # PATCH only: PUT would require sending every writable field again.
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
@@ -157,7 +157,7 @@ class ConversationViewSet(
         except ConversationBusyError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
         except AgentUnavailableError as exc:
-            # Nothing was stored: the client can resend the same text.
+            # Nothing was stored: the client can send the same text again.
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response(ExchangeSerializer(exchange).data, status=status.HTTP_201_CREATED)

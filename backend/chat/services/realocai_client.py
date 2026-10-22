@@ -111,6 +111,8 @@ def _send_http(conversa_id, mensagem):
         return ChatFailure(ChatErrorKind.NETWORK)
 
     if response.status_code != 200:
+        # The error body is never read: a 422 from FastAPI echoes the request (health
+        # data) under "input". Only the status code goes on.
         kind = _STATUS_TO_KIND.get(response.status_code, ChatErrorKind.UPSTREAM)
         return ChatFailure(kind, response.status_code)
 

@@ -356,7 +356,8 @@ Módulos:
   blocos_descartados)` ou `ChatFailure(kind, status_code)`, com `kind` em
   `ChatErrorKind`: `expired` (404), `invalid` (422), `upstream_error` (5xx, status
   inesperado ou resposta malformada), `network_error` (timeout/conexão), `config_error`
-  (401 ou settings ausentes). Não levanta exceção para erros HTTP e não loga.
+  (401 ou settings ausentes). Não levanta exceção para erros HTTP e não loga. **Nunca lê o
+  corpo de erro** (o 422 do FastAPI ecoa a requisição em `input`): só o status segue adiante.
   `validate_blocos`: blocos são JSON **opaco**; só se valida o envelope (lista de até 10
   objetos, cada um com `tipo` e `versao`). Inválido → `blocos=[]`,
   `blocos_descartados=True` (o agente loga WARNING; o turno nunca falha por isso). Nunca
@@ -463,5 +464,5 @@ memórias injetadas não contêm dados de pacientes.
 
 Ainda não implementado: endpoints REST para `Memory`, uso de `Memory.last_used_at`,
 endpoints auxiliares do RealocAI (`/agenda/disponibilidade`, `/agenda/ocupacao`,
-`/relatorio/enviar`), streaming, PDF gerado no servidor, throttle na exportação e
+`/relatorios/catalogo`, `/relatorios/gerar`), streaming, PDF gerado no servidor, throttle na exportação e
 agendamento da retenção.
