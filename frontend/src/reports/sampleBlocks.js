@@ -336,3 +336,83 @@ export const tabelaGenericaLonga = {
     { nome: 'Total', colunas: colsLonga.slice(4), linhas: [totalLonga] },
   ],
 };
+
+// --- Disponibilidade SINTÉTICA (dados fictícios) ---------------------------------------------
+// ~200 faixas, segunda a sábado (sábado só de manhã), 9 especialidades, faixas de 30 a 180 min,
+// uma faixa sem especialidade e uma com a especialidade em identificador. Na ordem do agente:
+// por dia e horário, com as especialidades intercaladas.
+const SEMANA_SINT = [
+  ['2026-10-05', 'segunda-feira'], ['2026-10-06', 'terça-feira'], ['2026-10-07', 'quarta-feira'],
+  ['2026-10-08', 'quinta-feira'], ['2026-10-09', 'sexta-feira'], ['2026-10-10', 'sábado'],
+];
+const ESPECIALIDADES_SINT = [
+  'Fonoaudiologia', 'Psicologia', 'Psicopedagogia', 'Terapia Alimentar', 'Terapia Ocupacional',
+  'Psicomotricidade', 'Musicoterapia', 'Fisioterapia', 'Nutrição',
+];
+const PROFS_SINT = ESPECIALIDADES_SINT.flatMap((esp, i) =>
+  [0, 1].map((k) => {
+    const letra = String.fromCharCode(65 + i * 2 + k);
+    return { id: `profissional-ficticio-${letra.toLowerCase()}`, nome: `Profissional ${letra}`, especialidade: esp, sala: (i % 6) + 1, posto: k + 1 };
+  }),
+);
+const hhmm = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+const faixasSint = SEMANA_SINT.flatMap(([data, dia_semana], d) =>
+  ['manha', 'tarde']
+    .filter((periodo) => !(d === 5 && periodo === 'tarde'))
+    .flatMap((periodo, t) =>
+      PROFS_SINT.map((p, i) => {
+        const slots = [1, 2, 1, 3, 2, 1, 4, 2, 6][(d * 7 + t * 5 + i * 3) % 9]; // 30 a 180 min
+        const base = periodo === 'manha' ? 7 * 60 : 13 * 60;
+        const inicio = base + ((d + i * 2 + t) % (10 - slots)) * 30;
+        return {
+          data, dia_semana, periodo,
+          profissional: { id: p.id, nome: p.nome, especialidade: p.especialidade },
+          sala_id: `sala-${p.sala}`, sala_nome: `Sala ${p.sala}`, posto: p.posto,
+          inicio: hhmm(inicio), fim: hhmm(inicio + slots * 30), slots, cabem: slots,
+        };
+      }),
+    ),
+);
+// Casos de borda: uma faixa sem especialidade e uma com identificador no lugar do rótulo.
+faixasSint[3] = { ...faixasSint[3], profissional: { ...faixasSint[3].profissional, especialidade: null } };
+faixasSint[40] = { ...faixasSint[40], profissional: { ...faixasSint[40].profissional, especialidade: 'terapia_ocupacional' } };
+faixasSint.sort((a, b) => a.data.localeCompare(b.data) || a.inicio.localeCompare(b.inicio));
+
+const porDiaSint = SEMANA_SINT.flatMap(([data, dia_semana]) =>
+  ['manha', 'tarde'].flatMap((periodo) => {
+    const lista = faixasSint.filter((f) => f.data === data && f.periodo === periodo);
+    if (!lista.length) return [];
+    const vagas_livres = lista.reduce((a, f) => a + f.slots, 0);
+    return [{ data, dia_semana, periodo, vagas_livres, horas_livres: vagas_livres / 2, janelas: null }];
+  }),
+);
+const vagasSint = faixasSint.reduce((a, f) => a + f.slots, 0);
+const colsDisp = disponibilidadeVagas.tabelas[0].colunas;
+const turno = { manha: 'Manhã', tarde: 'Tarde' };
+export const disponibilidadeSintetica = {
+  ...disponibilidadeVagas,
+  titulo: 'Vagas livres de 05/10/2026 a 10/10/2026',
+  periodo: { inicio: '2026-10-05', fim: '2026-10-10' },
+  avisos: ['Exemplo SINTÉTICO com nomes fictícios, para testar a leitura de relatórios longos.'],
+  resumo: [
+    { rotulo: 'Vagas livres', valor: vagasSint, formato: 'inteiro', exibicao: String(vagasSint) },
+    { rotulo: 'Horas livres', valor: vagasSint / 2, formato: 'decimal', exibicao: `${(vagasSint / 2).toFixed(1).replace('.', ',')} h` },
+  ],
+  dados: { tipo: 'disponibilidade', minutos_por_janela: 30, faixas: faixasSint, por_dia: porDiaSint },
+  tabelas: [
+    {
+      nome: 'Vagas',
+      colunas: colsDisp,
+      linhas: faixasSint.map((f) => ({
+        data: f.data, dia_semana: f.dia_semana, periodo: turno[f.periodo], profissional: f.profissional.nome,
+        especialidade: f.profissional.especialidade, sala: f.sala_nome, posto: f.posto, inicio: f.inicio, fim: f.fim,
+        slots: f.slots, cabem: f.cabem,
+      })),
+    },
+    {
+      nome: 'Resumo por dia',
+      colunas: disponibilidadeVagas.tabelas[1].colunas,
+      linhas: porDiaSint.map((d) => ({ data: d.data, dia_semana: d.dia_semana, periodo: turno[d.periodo], vagas_livres: d.vagas_livres, horas_livres: d.horas_livres, janelas: null })),
+    },
+  ],
+};
