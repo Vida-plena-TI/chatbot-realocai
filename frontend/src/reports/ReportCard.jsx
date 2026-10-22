@@ -10,6 +10,7 @@ import { OcupacaoAgregada } from './OcupacaoAgregada';
 import { Disponibilidade } from './Disponibilidade';
 import { Convenio } from './Convenio';
 import { AgendaPaciente } from './AgendaPaciente';
+import { QualidadeAgenda } from './QualidadeAgenda';
 import { IconButton } from '../components/ui/IconButton';
 import { duracao, MINUTOS_POR_SLOT, periodo, rotuloDia, rotuloTipo } from './format';
 
@@ -20,6 +21,7 @@ const CORPOS = {
   disponibilidade: Disponibilidade,
   convenio: Convenio,
   agenda_paciente: AgendaPaciente,
+  qualidade_agenda: QualidadeAgenda,
 };
 
 /** Só os tipos conhecidos são desenhados; os demais são ignorados sem erro (contrato aditivo). */
@@ -39,12 +41,14 @@ const CABECALHOS_NOVOS = {
     titulo: b.dados.paciente?.nome || 'Paciente',
     sub: [b.dados.paciente?.convenio && `Convênio ${b.dados.paciente.convenio}`, periodo(b.periodo)].filter(Boolean).join(' · '),
   }),
+  qualidade_agenda: (b) => ({ titulo: b.titulo, sub: `Contagens em slots; 1 slot = ${MINUTOS_POR_SLOT} min` }),
 };
 
 const VAZIOS_NOVOS = {
   disponibilidade: (d) => !d.faixas?.length && !d.por_dia?.length,
   convenio: (d) => !d.por_convenio?.length && !d.aguardando?.length,
   agenda_paciente: (d) => !d.dias?.length,
+  qualidade_agenda: (d) => !d.por_profissional?.length,
 };
 
 const TEXTO_VAZIO = {
