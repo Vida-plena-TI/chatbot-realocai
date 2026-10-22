@@ -152,9 +152,12 @@ export const mockApi = {
       throw new ApiError(400, 'A mensagem não pode ficar vazia.');
     }
     // A resposta real pode levar vários segundos e chega inteira (sem streaming).
-    await wait(1500, 4000);
+    // Para ver o aviso de demora: inclua "demorado" na mensagem (responde em ~25 s).
+    await (/demorad/i.test(text) ? wait(25000, 26000) : wait(1500, 4000));
     // Para testar o estado de erro: inclua a palavra "erro" ou "falha" na mensagem.
     if (/\b(erro|falha)\b/i.test(text)) throw new ApiError(502, 'O agente não respondeu a tempo.');
+    // Queda de conexão (fetch rejeitado): inclua "sem conexão".
+    if (/sem conex[ãa]o/i.test(text)) throw new ApiError(0, 'Sem conexão com o servidor.');
 
     const user_message = addMessage(c, 'user', text);
     const rel = gerarRelatorio(text);
