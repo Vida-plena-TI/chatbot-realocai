@@ -428,6 +428,22 @@ def test_booleans_in_text_columns_become_sim_nao(api):
     assert sheet["E2"].value == "Sim"
 
 
+def test_json_booleans_become_sim_nao_but_strings_and_none_do_not(api):
+    bloco = minimal_block()
+    bloco["tabelas"][0]["linhas"] = [
+        {"data": True, "nome": True, "pct": False, "qtd": True, "media": False},
+        {"data": None, "nome": "true", "pct": None, "qtd": None, "media": None},
+        {"data": None, "nome": "false", "pct": None, "qtd": None, "media": None},
+        {"data": None, "nome": None, "pct": None, "qtd": None, "media": None},
+    ]
+
+    sheet = open_xlsx(export(api, [bloco]))["Por dia"]
+
+    assert [c.value for c in sheet[2]] == ["Sim", "Sim", "Não", "Sim", "Não"]
+    assert all(c.data_type == "s" for c in sheet[2])
+    assert [sheet["B3"].value, sheet["B4"].value, sheet["B5"].value] == ["true", "false", None]
+
+
 def test_single_day_period_and_null_meta(api):
     bloco = minimal_block(periodo={"inicio": "2026-09-28", "fim": "2026-09-28"}, meta=None)
 
