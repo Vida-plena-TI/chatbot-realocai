@@ -105,3 +105,61 @@ def test_malformed_json_logs_no_content(api, caplog):
 
     assert response.status_code == 400
     assert PATIENT not in all_log_text(caplog)
+
+
+# --- Count of skipped unknown blocks ------------------------------------------------------
+
+
+def unknown_blocks():
+    """Two blocks the export skips: an unknown type and a known type of a future versao."""
+    renamed = load_example("agenda_paciente") | {"tipo": "agenda_paciente_futura"}
+    future = load_example("convenio") | {"versao": 2}
+    return [renamed, future]
+
+
+def skipped_logs(caplog):
+    return [r.getMessage() for r in caplog.records if r.name == "reports.serializers"]
+
+
+def assert_no_block_content(caplog, blocos):
+    logged = all_log_text(caplog)
+    for value in ("agenda_paciente_futura", "convenio", *sensitive_values(blocos)):
+        assert value not in logged
+    assert_nothing_leaked(caplog, blocos)
+
+
+def test_skipped_unknown_blocks_are_counted_without_content(api, caplog):
+    blocos = [*unknown_blocks(), load_example("qualidade_agenda")]
+
+    with capture_all_logs(caplog):
+        response = export(api, blocos)
+
+    assert response.status_code == 200
+    assert skipped_logs(caplog) == ["skipped_unknown_blocks=2"]
+    record = next(r for r in caplog.records if r.name == "reports.serializers")
+    assert record.levelname == "INFO"
+    assert_no_block_content(caplog, blocos)
+
+
+def test_no_skipped_count_when_every_block_is_known(api, caplog):
+    blocos = [load_example(name) for name in ("agenda_paciente", "convenio")]
+
+    with capture_all_logs(caplog):
+        response = export(api, blocos)
+
+    assert response.status_code == 200
+    assert skipped_logs(caplog) == []
+    assert "skipped_unknown_blocks" not in all_log_text(caplog)
+
+
+def test_only_unknown_blocks_is_400_and_logs_only_the_count(api, caplog):
+    blocos = unknown_blocks()
+
+    with capture_all_logs(caplog):
+        response = export(api, blocos)
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Nenhum bloco exportável."}
+    assert skipped_logs(caplog) == ["skipped_unknown_blocks=2"]
+    assert_captured_request_log(caplog)
+    assert_no_block_content(caplog, blocos)

@@ -150,7 +150,7 @@ def test_only_unknown_types_is_a_clear_400(api):
     response = export(api, [unknown_block(), unknown_block(tipo="outro")])
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "Nenhum dos blocos enviados pode ser exportado."}
+    assert response.json() == {"detail": "Nenhum bloco exportável."}
 
 
 def test_unknown_type_still_needs_tables_as_a_list(api):

@@ -11,6 +11,7 @@ for instance, is exported as it came.
 """
 
 import datetime
+import logging
 import re
 
 from rest_framework import serializers
@@ -46,7 +47,9 @@ MAX_LINHAS = 5000
 MAX_CHAVES_POR_LINHA = 100
 
 BLOCOS_COUNT = f"Envie de 1 a {MAX_BLOCOS} blocos."
-NOTHING_TO_EXPORT = "Nenhum dos blocos enviados pode ser exportado."
+NOTHING_TO_EXPORT = "Nenhum bloco exportável."
+
+logger = logging.getLogger(__name__)
 
 
 def _is_number(value):
@@ -233,6 +236,10 @@ class ExportSerializer(serializers.Serializer):
     def validate_blocos(self, blocos):
         """Keep only the blocks the spreadsheet exports, in the order received."""
         exportados = [bloco for bloco in blocos if bloco["exportado"]]
+        skipped = len(blocos) - len(exportados)
+        if skipped:
+            # Only the count: the type, title or any other block content is health data.
+            logger.info("skipped_unknown_blocks=%d", skipped)
         if not exportados:
             raise serializers.ValidationError(NOTHING_TO_EXPORT)
         return exportados

@@ -277,8 +277,9 @@ Gera o arquivo **só a partir do corpo** (não lê o banco: nada de outro usuár
 - Validação só do envelope (`reports/serializers.py`): 1 a 10 blocos; cada um com `versao`
   (inteiro), `tipo` (texto, sem lista fechada na validação), `titulo` e `tabelas` (lista,
   opcional). Tipo fora de `EXPORTED_TIPOS` (os 8 do contrato) ou `versao` ≠ 1 é aceito e
-  **ignorado** (sem aba e sem linha no Resumo); se nenhum bloco sobra → 400 "Nenhum dos
-  blocos enviados pode ser exportado.". Nos blocos exportados, `tabelas` é estrito
+  **ignorado** (sem aba e sem linha no Resumo); com algum pulado, log INFO só com a
+  contagem (`skipped_unknown_blocks=<n>`); se nenhum sobra → 400 "Nenhum bloco
+  exportável.". Nos blocos exportados, `tabelas` é estrito
   (`nome`, `colunas[chave, rotulo, formato]`, `linhas` de valores simples; formato
   desconhecido vira `texto`); `periodo`, `meta`, `parcial` e `avisos` são opcionais e,
   malformados, deixam a célula vazia. `resumo`, `dados` e chaves desconhecidas são
