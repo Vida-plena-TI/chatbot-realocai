@@ -78,6 +78,11 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   a mensagem do assistente pode trazer `blocos` (1 a 10), desenhados como cartões (abas
   com 2 ou mais). A tela só formata, nunca recalcula números. `meta` pode ser `null`
   (pacientes por profissional não tem meta): sem marca de meta, no chat e no PDF.
+  `periodo` pode ser `null` (sempre presente; o plano semanal não tem datas): cabeçalho sem
+  período nem separador solto, célula "Período" vazia no Excel. Cada cartão e cada grupo
+  têm um error boundary (`Seguro` em `ReportCard.jsx`): bloco que quebra vira um cartão
+  "não foi possível exibir", sem conteúdo do bloco nem log. `check:render` cobre isso com
+  DOM (`scripts/check-render-dom.mjs`, DOM mínimo em `scripts/lib/mini-dom.mjs`).
 - Os blocos (componentes, `src/reports/types.js` e fixtures) seguem os nomes de campo dos
   exemplos reais do RealocAI, sem camada de adaptação; `npm run check:blocks` valida as
   fixtures de `sampleBlocks.js` contra os campos obrigatórios do contrato real.
