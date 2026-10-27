@@ -7,6 +7,8 @@
 //     preservada, especialidade única no dia, subtotal = soma, mesma ordem em todos os dias;
 //   - sala em ordem natural dentro do grupo ("Sala 2" antes de "Sala 10");
 //   - booleano do JSON vira "Sim"/"Não" (tela, PDF e Excel local); a string "true" fica como veio;
+//   - plano semanal (tabela_generica): linhas na ordem do agente na tela, no PDF e no Excel local,
+//     "Não coube" com "—", posto null como "—" (vazio no Excel), aviso na tela, no PDF e no Resumo;
 //   - nada vai para o console durante a renderização (LGPD: o nome do paciente nunca é logado).
 //
 // Uso: npm run check:render   (exit code 1 se alguma verificação falhar)
@@ -90,6 +92,8 @@ try {
     tabelas: [{ nome: 'Flags', colunas: colunasBool, linhas: [{ nome: 'A', flag: true }, { nome: 'B', flag: false }, { nome: 'C', flag: 'true' }, { nome: 'D', flag: null }] }],
   };
   r.boolTela = render([{ ...blocoBool, dados: { ...blocoBool.dados, colunas: colunasBool, linhas: blocoBool.tabelas[0].linhas } }]);
+  r.planoTela = render([amostras.tabelaGenericaPlanoSemanal]);
+  r.planoPdf = render([amostras.tabelaGenericaPlanoSemanal], PrintReport);
   Object.assign(console, originais);
 
   const erros = Object.entries({ ...r, ...r.novos }).filter(([, h]) => typeof h === 'string' && h.startsWith('ERRO'));
@@ -128,6 +132,40 @@ try {
   const xls = await gerarExcel([blocoBool]).text();
   const flags = [...xls.split('ss:Name="Flags"')[1].matchAll(/<Row>(.*?)<\/Row>/gs)].slice(1).map((m) => m[1].match(/<Cell[^>]*?(?:\/>|>.*?<\/Cell>)/g)[1].match(/>([^<]*)<\/Data>/)?.[1] ?? '');
   ok(flags.join(',') === 'Sim,Não,true,', `Excel local: booleano como "Sim"/"Não", string intacta, null vazio (${flags.join(',')})`);
+
+  // --- Plano semanal: linhas na ordem do agente, "Não coube" com "—" e posto null ----------
+  const plano = amostras.tabelaGenericaPlanoSemanal;
+  const chaves = plano.dados.colunas.map((c) => c.chave);
+  const seq = (linhas) => linhas.map((l) => `${l.dia}|${l.situacao}|${l.especialidade}|${l.horario}`).join(';');
+  const esperado = plano.dados.linhas.map((l) => chaves.map((k) => (l[k] == null ? '—' : String(l[k]))));
+  // A fixture só pega uma ordenação se a sequência dela for diferente da ordenada.
+  const ordenada = (k) => seq([...plano.dados.linhas].sort((a, b) => a[k].localeCompare(b[k], 'pt-BR')));
+  ok(['dia', 'horario', 'situacao', 'sala'].every((k) => ordenada(k) !== seq(plano.dados.linhas)), 'plano: fixture fora de ordem por dia, horário, situação e sala (o teste detecta ordenação)');
+  // Células da tabela larga (a do <caption>), linha a linha.
+  const celulasTabela = (html) =>
+    [...(html.split('<table').find((t) => t.includes('<caption'))?.match(/<tbody>(.*?)<\/tbody>/)?.[1] ?? '').matchAll(/<tr>(.*?)<\/tr>/g)].map(([, tr]) =>
+      [...tr.matchAll(/<t[hd][^>]*>(.*?)<\/t[hd]>/g)].map((m) => texto(m[1]).trim()),
+    );
+  for (const [onde, html] of [['na tela', r.planoTela], ['no PDF', r.planoPdf]]) {
+    const linhas = celulasTabela(html);
+    ok(JSON.stringify(linhas) === JSON.stringify(esperado), `plano ${onde}: todas as linhas, na ordem recebida, com os valores como vieram (${linhas.length} de ${esperado.length})`);
+    ok(linhas.filter((l) => l[1] === 'Não coube').every((l) => l.slice(3).every((v) => v === '—')), `plano ${onde}: "Não coube" com horário, profissional, sala e posto "—"`);
+    ok(!/\b(null|NaN|undefined)\b/.test(texto(html)), `plano ${onde}: nenhum "null", "NaN" ou "undefined"`);
+    ok(texto(html).includes(plano.avisos[0]), `plano ${onde}: aviso de feriados e exceções aparece`);
+    ok(!html.includes('meterMark') && !/meta \d+%|Meta atingida|Abaixo da meta/i.test(texto(html)), `plano ${onde}: meta null, sem barra nem selo de meta`);
+  }
+  // Versão compacta (celular): um cartão por linha, na mesma ordem.
+  const cartoes = [...r.planoTela.matchAll(/class="[^"]*dayCard[^"]*"><strong>(.*?)<\/strong>/g)].map((m) => texto(m[1]).trim());
+  ok(JSON.stringify(cartoes) === JSON.stringify(esperado.map((l) => l.slice(0, 6).join(' · '))), `plano na tela compacta: cartões na ordem recebida (${cartoes.length})`);
+  ok(texto(r.planoTela).includes('2 de 3 especialidades') && texto(r.planoTela).includes('Não couberam'), 'plano: resumo por dia mostra `exibicao`');
+
+  const xlsPlano = await gerarExcel([plano]).text();
+  const linhasXls = [...xlsPlano.split('ss:Name="Plano"')[1].split('</Worksheet>')[0].matchAll(/<Row>(.*?)<\/Row>/gs)]
+    .slice(1)
+    .map((m) => m[1].match(/<Cell[^>]*?(?:\/>|>.*?<\/Cell>)/g).map((c) => c.match(/>([^<]*)<\/Data>/)?.[1] ?? ''));
+  const esperadoXls = plano.tabelas[0].linhas.map((l) => chaves.map((k) => (l[k] == null ? '' : String(l[k]))));
+  ok(JSON.stringify(linhasXls) === JSON.stringify(esperadoXls), `Excel local do plano: linhas na ordem recebida, posto null vazio, "—" como texto (${linhasXls.length})`);
+  ok(xlsPlano.split('ss:Name="Resumo"')[1].split('</Worksheet>')[0].includes(plano.avisos[0]), 'Excel local do plano: aviso na aba Resumo');
 
   // --- Disponibilidade por dia e especialidade: nada se perde nem se duplica -----------------
   // Lê as tabelas por dia do HTML (PDF e tela) e confere com o dado original.
