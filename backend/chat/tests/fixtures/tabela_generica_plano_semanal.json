@@ -2,10 +2,7 @@
   "versao": 1,
   "tipo": "tabela_generica",
   "titulo": "Plano semanal: quarta e quinta, das 10:00 às 12:00 (sessões de 30 min)",
-  "periodo": {
-    "inicio": "2026-09-28",
-    "fim": "2026-10-03"
-  },
+  "periodo": null,
   "meta": null,
   "parcial": false,
   "dias_nao_lidos": [],

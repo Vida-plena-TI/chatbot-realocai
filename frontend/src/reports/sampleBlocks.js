@@ -422,7 +422,9 @@ export const disponibilidadeSintetica = {
 // por horário e, para cada especialidade que não coube, a linha "Não coube" (horario,
 // profissional e sala "—", posto null) e as alternativas, com o `dia` em que acontecem (a
 // quinta dentro do grupo da quarta e vice-versa). Ordenar por dia ou horário muda a sequência.
-// Cópia de backend/chat/tests/fixtures/tabela_generica_plano_semanal.json (check:blocks confere).
+// periodo null como no agente: o plano usa a grade semanal, sem datas.
+// Cópia de backend/chat/tests/fixtures/tabela_generica_plano_semanal.json (check:blocks confere a
+// cópia e a forma do exemplo oficial, contrato/exemplos/tabela_generica_plano_semanal.js).
 const colsPlano = [
   { chave: 'dia', rotulo: 'Dia', formato: 'texto' },
   { chave: 'situacao', rotulo: 'Situação', formato: 'texto' },
@@ -449,7 +451,7 @@ export const tabelaGenericaPlanoSemanal = {
   versao: 1,
   tipo: 'tabela_generica',
   titulo: 'Plano semanal: quarta e quinta, das 10:00 às 12:00 (sessões de 30 min)',
-  periodo: { inicio: '2026-09-28', fim: '2026-10-03' },
+  periodo: null,
   meta: null,
   parcial: false,
   dias_nao_lidos: [],

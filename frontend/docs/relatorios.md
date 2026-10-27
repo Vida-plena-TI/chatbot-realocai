@@ -92,7 +92,7 @@ Nome do arquivo: `realocai-<tipo>-<AAAA-MM-DD>.xlsx`. Com vários blocos: `realo
 | Coluna | Tipo | Formato |
 | --- | --- | --- |
 | Relatório | texto (`titulo`) | — |
-| Período | texto ("05/10 a 10/10/2026") | — |
+| Período | texto ("05/10 a 10/10/2026"); vazio com `periodo` null (plano semanal) | — |
 | Meta | número (0.8) | `0,0%` |
 | Gerado em | data real | `dd/mm/aaaa` |
 | Avisos | texto (avisos + "Dados parciais", separados por " \| ") | — |

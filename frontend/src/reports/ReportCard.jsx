@@ -30,7 +30,9 @@ const CORPOS = {
 export const blocoSuportado = (b) =>
   Boolean(b && typeof b === 'object' && Object.hasOwn(CORPOS, b.tipo) && b.dados && typeof b.dados === 'object');
 
-const metaSub = (b) => (b.meta != null ? ` · meta ${Math.round(b.meta * 100)}%` : '');
+const metaTexto = (b) => (b.meta != null ? `meta ${Math.round(b.meta * 100)}%` : '');
+/** Partes do subtítulo separadas por " · "; partes vazias (ex.: período null) somem com o separador. */
+const juntar = (...partes) => partes.filter(Boolean).join(' · ');
 
 // Tipos novos: o `titulo` do agente já é a frase do relatório.
 const CABECALHOS_NOVOS = {
@@ -41,10 +43,10 @@ const CABECALHOS_NOVOS = {
   convenio: (b) => ({ titulo: b.titulo, sub: 'Somente contagens, sem dados de pacientes' }),
   agenda_paciente: (b) => ({
     titulo: b.dados.paciente?.nome || 'Paciente',
-    sub: [b.dados.paciente?.convenio && `Convênio ${b.dados.paciente.convenio}`, periodo(b.periodo)].filter(Boolean).join(' · '),
+    sub: juntar(b.dados.paciente?.convenio && `Convênio ${b.dados.paciente.convenio}`, periodo(b.periodo)),
   }),
   qualidade_agenda: (b) => ({ titulo: b.titulo, sub: `Contagens em slots; 1 slot = ${MINUTOS_POR_SLOT} min` }),
-  tabela_generica: (b) => ({ titulo: b.titulo, sub: `${periodo(b.periodo)}${metaSub(b)}` }),
+  tabela_generica: (b) => ({ titulo: b.titulo, sub: juntar(periodo(b.periodo), metaTexto(b)) }),
 };
 
 const VAZIOS_NOVOS = {
@@ -61,38 +63,53 @@ const TEXTO_VAZIO = {
   tabela_generica: 'Nenhum resultado para este recorte.',
 };
 
-/** Erro ao desenhar um bloco fica no cartão; não derruba a conversa. Não registra dados. */
-class CorpoSeguro extends Component {
+/**
+ * Error boundary: um erro ao desenhar fica contido e vira `fallback`; não derruba a conversa.
+ * Não registra nada (nem o bloco nem a exceção) e o fallback não mostra conteúdo do bloco.
+ */
+export class Seguro extends Component {
   state = { erro: false };
   static getDerivedStateFromError() {
     return { erro: true };
   }
   render() {
-    if (this.state.erro) {
-      return (
-        <div className={s.stateBox}>
-          <div>
-            <strong>Não foi possível mostrar este relatório.</strong>
-            <span>Os dados chegaram num formato inesperado. A exportação continua disponível.</span>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
+    return this.state.erro ? this.props.fallback : this.props.children;
   }
 }
+
+const FALHA_CORPO = (
+  <div className={s.stateBox}>
+    <div>
+      <strong>Não foi possível mostrar este relatório.</strong>
+      <span>Os dados chegaram num formato inesperado. A exportação continua disponível.</span>
+    </div>
+  </div>
+);
+
+/** Cartão discreto quando nem o cabeçalho do bloco pôde ser desenhado. */
+export const CARTAO_INDISPONIVEL = (
+  <section className={s.card} aria-label="Relatório indisponível">
+    <div className={s.stateBox}>
+      <div>
+        <strong>Não foi possível exibir este relatório.</strong>
+        <span>Os dados chegaram num formato inesperado.</span>
+      </div>
+    </div>
+  </section>
+);
+
+const CorpoSeguro = ({ children }) => <Seguro fallback={FALHA_CORPO}>{children}</Seguro>;
 
 function cabecalho(b) {
   if (CABECALHOS_NOVOS[b.tipo]) return CABECALHOS_NOVOS[b.tipo](b);
   if (b.tipo === 'ocupacao_profissional') {
     const p = b.dados.profissional;
-    return { titulo: p.nome, sub: [p.especialidade, periodo(b.periodo)].filter(Boolean).join(' · ') };
+    return { titulo: p.nome, sub: juntar(p.especialidade, periodo(b.periodo)) };
   }
   if (b.tipo === 'pacientes_por_profissional') {
     return { titulo: b.dados.escopo === 'dia' ? 'Pacientes do dia' : 'Semana por especialidade', sub: periodo(b.periodo) };
   }
-  const meta = b.meta != null ? ` · meta ${Math.round(b.meta * 100)}%` : '';
-  return { titulo: 'Por especialidade e por sala', sub: `${periodo(b.periodo)}${meta}` };
+  return { titulo: 'Por especialidade e por sala', sub: juntar(periodo(b.periodo), metaTexto(b)) };
 }
 
 function vazio(b) {
@@ -142,7 +159,15 @@ export function ReportError({ onRetry }) {
  * `impressao`: versão do PDF, sem exportação nem controles. `texto`: destaque da mensagem, vai para o PDF.
  * @param {{bloco: import('./types').Bloco, texto?: string, exportavel?: boolean, expandido?: boolean, impressao?: boolean, onExpand?: () => void}} props
  */
-export function ReportCard({ bloco, texto, exportavel = true, expandido = false, impressao = false, onExpand }) {
+export function ReportCard(props) {
+  return (
+    <Seguro fallback={CARTAO_INDISPONIVEL}>
+      <Cartao {...props} />
+    </Seguro>
+  );
+}
+
+function Cartao({ bloco, texto, exportavel = true, expandido = false, impressao = false, onExpand }) {
   const Corpo = CORPOS[bloco.tipo];
   const h = cabecalho(bloco);
   const semDados = vazio(bloco);
@@ -153,7 +178,7 @@ export function ReportCard({ bloco, texto, exportavel = true, expandido = false,
         <div className={s.headText}>
           <span className={s.kicker}>{rotuloTipo(bloco.tipo)}</span>
           <h3 className={s.title}>{h.titulo}</h3>
-          <span className={s.sub}>{h.sub}</span>
+          {h.sub && <span className={s.sub}>{h.sub}</span>}
         </div>
         {!expandido && !impressao && onExpand && (
           <button type="button" className={s.expandBtn} aria-label="Expandir relatório" title="Expandir" onClick={onExpand}>
@@ -179,7 +204,7 @@ export function ReportCard({ bloco, texto, exportavel = true, expandido = false,
       {!Corpo ? (
         <div className={s.stateBox}><div><strong>Tipo de relatório não suportado.</strong><span>{bloco.tipo}</span></div></div>
       ) : semDados ? (
-        <div className={s.stateBox}><div><strong>{TEXTO_VAZIO[bloco.tipo] || 'Nenhum atendimento no período.'}</strong><span>{periodo(bloco.periodo)}</span></div></div>
+        <div className={s.stateBox}><div><strong>{TEXTO_VAZIO[bloco.tipo] || 'Nenhum atendimento no período.'}</strong>{periodo(bloco.periodo) && <span>{periodo(bloco.periodo)}</span>}</div></div>
       ) : (
         <CorpoSeguro>
           <Corpo bloco={bloco} impressao={impressao} />

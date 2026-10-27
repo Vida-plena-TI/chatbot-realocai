@@ -1,5 +1,5 @@
 {
-  "$comment": "Cópia sem alteração de docs/exemplos-blocos/bloco_relatorio.schema.json em Vida-plena-TI/reallocaai-agente @ 9298478c0b0583956ee23308b32f251b4d924f23 (main). Atualize com scripts/sync-contrato.mjs.",
+  "$comment": "Cópia sem alteração de docs/exemplos-blocos/bloco_relatorio.schema.json em Vida-plena-TI/reallocaai-agente @ b55bf3ac0c3a3594bae39224274d39fdcf7ad95e (main). Atualize com scripts/sync-contrato.mjs.",
   "$defs": {
     "AguardandoProfissionalDia": {
       "additionalProperties": false,
@@ -1363,7 +1363,14 @@
       "type": "string"
     },
     "periodo": {
-      "$ref": "#/$defs/PeriodoRelatorio"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PeriodoRelatorio"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "meta": {
       "anyOf": [

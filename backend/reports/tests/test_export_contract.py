@@ -28,6 +28,7 @@ NEW_TYPES = {
         "tabela_generica_ranking",
         "tabela_generica_capacidade",
         "tabela_generica_personalizado",
+        "tabela_generica_plano_semanal",  # periodo null
     ],
 }
 ALL_EXAMPLES = [name for names in NEW_TYPES.values() for name in names]

@@ -21,7 +21,10 @@ export const diaCurto = (iso) => WD[toDate(iso).getDay()];
 export const diaLongo = (iso) => WDL[toDate(iso).getDay()];
 export const rotuloDia = (iso) => `${diaCurto(iso)} ${ddmm(iso)}`;
 
-export function periodo({ inicio, fim }) {
+/** Texto do período; null ou ausente (ex.: plano semanal, sem datas) vira "". */
+export function periodo(p) {
+  if (!p?.inicio || !p?.fim) return '';
+  const { inicio, fim } = p;
   if (inicio === fim) return `${diaLongo(inicio)}, ${ddmmaaaa(inicio)}`;
   return `${ddmm(inicio)} a ${ddmmaaaa(fim)}`;
 }
@@ -136,7 +139,7 @@ export const rotuloTipo = (tipo) => TIPOS[tipo] || 'Relatório';
 
 // A aba nunca mostra o nome do paciente: em agenda_paciente fica só o tipo.
 export function tituloAba(b) {
-  if (b.tipo === 'ocupacao_profissional') return `Ocupação · ${b.dados.profissional.nome}`;
+  if (b.tipo === 'ocupacao_profissional') return b.dados?.profissional?.nome ? `Ocupação · ${b.dados.profissional.nome}` : rotuloTipo(b.tipo);
   if (b.tipo === 'disponibilidade') return b.dados?.minutos_por_janela > MINUTOS_POR_SLOT ? `Janelas de ${duracao(b.dados.minutos_por_janela)}` : 'Vagas livres';
   return rotuloTipo(b.tipo);
 }
