@@ -10,7 +10,8 @@
     "check:blocks": "node scripts/check-blocks.mjs",
     "check:render": "node scripts/check-render.mjs",
     "sync:contrato": "node scripts/sync-contrato.mjs",
-    "check:fixtures": "node scripts/check-fixtures.mjs"
+    "check:fixtures": "node scripts/check-fixtures.mjs",
+    "check:docker-context": "node scripts/check-docker-context.mjs"
   },
   "dependencies": {
     "@fontsource/nunito": "^5.1.0",
