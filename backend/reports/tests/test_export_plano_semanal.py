@@ -5,7 +5,7 @@ import pytest
 
 from core.tests.logs import all_log_text, capture_all_logs
 
-from .test_export import export, load, open_xlsx, rows
+from .test_export import export, load, minimal_block, open_xlsx, rows
 from .test_export_contract import ALL_EXAMPLES, assert_valid_sheet_names, load_example
 from .test_logs import assert_nothing_leaked
 
@@ -114,3 +114,40 @@ def test_plan_export_logs_no_block_content(api, caplog):
     for value in ("plano_semanal", "Não coube", "Alternativa", "Ana Lima", "Sala 10"):
         assert value not in logged
     assert not [r for r in caplog.records if r.name.startswith("reports")]
+
+
+def test_official_plan_example_has_a_null_periodo():
+    # The agent sends periodo: null (always present) in the plan; our fixture matches it.
+    assert load_example(PLANO)["periodo"] is None
+    assert "periodo" in plano() and plano()["periodo"] is None
+
+
+@pytest.mark.parametrize("name", [*ALL_EXAMPLES, "minimal"])
+def test_null_periodo_is_accepted_and_leaves_the_period_cell_empty(api, caplog, name):
+    bloco = minimal_block() if name == "minimal" else load_example(name)
+    bloco["periodo"] = None
+
+    with capture_all_logs(caplog):
+        response = export(api, [bloco])
+
+    assert response.status_code == 200
+    summary = open_xlsx(response)["Resumo"]
+    assert summary["A2"].value == bloco["titulo"]
+    assert summary["B2"].value is None
+    assert_nothing_leaked(caplog, [bloco])
+
+
+def test_null_and_filled_periodo_side_by_side(api, caplog):
+    antigo = minimal_block()  # periodo 2026-10-05 to 2026-10-10, as before the change
+    blocos = [plano(), antigo, load_example("tabela_generica_ranking")]
+
+    with capture_all_logs(caplog):
+        response = export(api, blocos)
+
+    summary = open_xlsx(response)["Resumo"]
+    assert [summary[f"B{row}"].value for row in (2, 3, 4)] == [
+        None,
+        "05/10 a 10/10/2026",
+        "28/09 a 03/10/2026",
+    ]
+    assert_nothing_leaked(caplog, blocos)
