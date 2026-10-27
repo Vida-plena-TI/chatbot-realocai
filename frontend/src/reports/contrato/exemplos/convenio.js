@@ -1,5 +1,5 @@
 // Exemplo real de bloco do RealocAI, copiado sem alteração. Dados FICTÍCIOS.
-// Origem: Vida-plena-TI/reallocaai-agente @ 5ce822b4647836bcb47c6ccbd66c5c2e0f4d7268 (feature/relatorios-gerais)
+// Origem: Vida-plena-TI/reallocaai-agente @ 9298478c0b0583956ee23308b32f251b4d924f23 (main)
 // Arquivo: docs/exemplos-blocos/convenio.json. Atualize com scripts/sync-contrato.mjs; não edite à mão.
 export default {
   "versao": 1,
@@ -88,7 +88,7 @@ export default {
         "profissional": {
           "id": "9b08de1dd2ae38487aaa3f42500664f05eae8ef2b1f3068cd5de4aceac951511",
           "nome": "Beto Reis",
-          "especialidade": "fonoaudiologia"
+          "especialidade": "Fonoaudiologia"
         },
         "sessoes": 1
       },
@@ -98,7 +98,7 @@ export default {
         "profissional": {
           "id": "76528714a71668d11a5ac5a2e4a035172a6c9394943011a2e1a79014a47a6a26",
           "nome": "Ana Lima",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "sessoes": 1
       }

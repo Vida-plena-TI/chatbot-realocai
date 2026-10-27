@@ -2,9 +2,18 @@
 // para src/reports/contrato/, com a origem e o commit no cabeçalho. Só lê o outro repositório
 // (`git show`); nunca faz checkout, commit ou push nele.
 //
-// Uso: node scripts/sync-contrato.mjs [caminho-do-clone] [ref]
-//      padrão: ~/dev/reallocaai-agente  origin/feature/relatorios-gerais
-//      --check: só confere se as cópias batem com o ref (exit 1 se não)
+// Uso: node scripts/sync-contrato.mjs [--check] [caminho-do-clone] [ref]
+//      padrão: ~/dev/reallocaai-agente  origin/main
+//
+// Conferir (não escreve nada; exit 1 e lista os arquivos que diferem):
+//      git -C ~/dev/reallocaai-agente fetch origin
+//      npm run sync:contrato -- --check
+// Sincronizar (sobrescreve src/reports/contrato/ com o ref; revise o diff e commite):
+//      git -C ~/dev/reallocaai-agente fetch origin
+//      npm run sync:contrato
+//      npm run check:blocks && npm run check:render
+// Para outro ref (ex.: uma branch do agente ainda não mesclada):
+//      npm run sync:contrato -- --check ~/dev/reallocaai-agente origin/<branch>
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -14,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 const args = process.argv.slice(2).filter((a) => a !== '--check');
 const check = process.argv.includes('--check');
 const repo = args[0] || join(homedir(), 'dev', 'reallocaai-agente');
-const ref = args[1] || 'origin/feature/relatorios-gerais';
+const ref = args[1] || 'origin/main';
 const destino = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'reports', 'contrato');
 const PASTA = 'docs/exemplos-blocos';
 

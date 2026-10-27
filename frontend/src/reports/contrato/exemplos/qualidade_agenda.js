@@ -1,5 +1,5 @@
 // Exemplo real de bloco do RealocAI, copiado sem alteração. Dados FICTÍCIOS.
-// Origem: Vida-plena-TI/reallocaai-agente @ 5ce822b4647836bcb47c6ccbd66c5c2e0f4d7268 (feature/relatorios-gerais)
+// Origem: Vida-plena-TI/reallocaai-agente @ 9298478c0b0583956ee23308b32f251b4d924f23 (main)
 // Arquivo: docs/exemplos-blocos/qualidade_agenda.json. Atualize com scripts/sync-contrato.mjs; não edite à mão.
 export default {
   "versao": 1,
@@ -42,7 +42,7 @@ export default {
         "profissional": {
           "id": "76528714a71668d11a5ac5a2e4a035172a6c9394943011a2e1a79014a47a6a26",
           "nome": "Ana Lima",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "slots_escalados": 50,
         "slots_ocupados": 13,
@@ -57,7 +57,7 @@ export default {
         "profissional": {
           "id": "3f831f5c6d924b40780632d12722ac3876b21abd49cd1e114eafaa03aec8d0a3",
           "nome": "Cau Melo",
-          "especialidade": "terapia_ocupacional"
+          "especialidade": "Terapia Ocupacional"
         },
         "slots_escalados": 50,
         "slots_ocupados": 11,
@@ -72,7 +72,7 @@ export default {
         "profissional": {
           "id": "9b08de1dd2ae38487aaa3f42500664f05eae8ef2b1f3068cd5de4aceac951511",
           "nome": "Beto Reis",
-          "especialidade": "fonoaudiologia"
+          "especialidade": "Fonoaudiologia"
         },
         "slots_escalados": 60,
         "slots_ocupados": 12,
@@ -87,7 +87,7 @@ export default {
         "profissional": {
           "id": "9f767b2539be0bca1e48d23ead1d9646f3698151a4c27eb02371cf03e0cd556f",
           "nome": "Diva Rocha",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "slots_escalados": 18,
         "slots_ocupados": 6,
@@ -104,7 +104,7 @@ export default {
         "profissional": {
           "id": "76528714a71668d11a5ac5a2e4a035172a6c9394943011a2e1a79014a47a6a26",
           "nome": "Ana Lima",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "slots_escalados": 10,
         "slots_ocupados": 5,
@@ -121,7 +121,7 @@ export default {
         "profissional": {
           "id": "76528714a71668d11a5ac5a2e4a035172a6c9394943011a2e1a79014a47a6a26",
           "nome": "Ana Lima",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "slots_escalados": 10,
         "slots_ocupados": 4,
@@ -138,7 +138,7 @@ export default {
         "profissional": {
           "id": "76528714a71668d11a5ac5a2e4a035172a6c9394943011a2e1a79014a47a6a26",
           "nome": "Ana Lima",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "slots_escalados": 10,
         "slots_ocupados": 0,
@@ -155,7 +155,7 @@ export default {
         "profissional": {
           "id": "76528714a71668d11a5ac5a2e4a035172a6c9394943011a2e1a79014a47a6a26",
           "nome": "Ana Lima",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "slots_escalados": 10,
         "slots_ocupados": 2,
@@ -172,7 +172,7 @@ export default {
         "profissional": {
           "id": "76528714a71668d11a5ac5a2e4a035172a6c9394943011a2e1a79014a47a6a26",
           "nome": "Ana Lima",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "slots_escalados": 10,
         "slots_ocupados": 2,
@@ -189,7 +189,7 @@ export default {
         "profissional": {
           "id": "9b08de1dd2ae38487aaa3f42500664f05eae8ef2b1f3068cd5de4aceac951511",
           "nome": "Beto Reis",
-          "especialidade": "fonoaudiologia"
+          "especialidade": "Fonoaudiologia"
         },
         "slots_escalados": 20,
         "slots_ocupados": 6,
@@ -206,7 +206,7 @@ export default {
         "profissional": {
           "id": "9b08de1dd2ae38487aaa3f42500664f05eae8ef2b1f3068cd5de4aceac951511",
           "nome": "Beto Reis",
-          "especialidade": "fonoaudiologia"
+          "especialidade": "Fonoaudiologia"
         },
         "slots_escalados": 20,
         "slots_ocupados": 4,
@@ -223,7 +223,7 @@ export default {
         "profissional": {
           "id": "9b08de1dd2ae38487aaa3f42500664f05eae8ef2b1f3068cd5de4aceac951511",
           "nome": "Beto Reis",
-          "especialidade": "fonoaudiologia"
+          "especialidade": "Fonoaudiologia"
         },
         "slots_escalados": 20,
         "slots_ocupados": 2,
@@ -240,7 +240,7 @@ export default {
         "profissional": {
           "id": "3f831f5c6d924b40780632d12722ac3876b21abd49cd1e114eafaa03aec8d0a3",
           "nome": "Cau Melo",
-          "especialidade": "terapia_ocupacional"
+          "especialidade": "Terapia Ocupacional"
         },
         "slots_escalados": 10,
         "slots_ocupados": 3,
@@ -257,7 +257,7 @@ export default {
         "profissional": {
           "id": "3f831f5c6d924b40780632d12722ac3876b21abd49cd1e114eafaa03aec8d0a3",
           "nome": "Cau Melo",
-          "especialidade": "terapia_ocupacional"
+          "especialidade": "Terapia Ocupacional"
         },
         "slots_escalados": 10,
         "slots_ocupados": 4,
@@ -274,7 +274,7 @@ export default {
         "profissional": {
           "id": "3f831f5c6d924b40780632d12722ac3876b21abd49cd1e114eafaa03aec8d0a3",
           "nome": "Cau Melo",
-          "especialidade": "terapia_ocupacional"
+          "especialidade": "Terapia Ocupacional"
         },
         "slots_escalados": 10,
         "slots_ocupados": 1,
@@ -291,7 +291,7 @@ export default {
         "profissional": {
           "id": "3f831f5c6d924b40780632d12722ac3876b21abd49cd1e114eafaa03aec8d0a3",
           "nome": "Cau Melo",
-          "especialidade": "terapia_ocupacional"
+          "especialidade": "Terapia Ocupacional"
         },
         "slots_escalados": 10,
         "slots_ocupados": 2,
@@ -308,7 +308,7 @@ export default {
         "profissional": {
           "id": "3f831f5c6d924b40780632d12722ac3876b21abd49cd1e114eafaa03aec8d0a3",
           "nome": "Cau Melo",
-          "especialidade": "terapia_ocupacional"
+          "especialidade": "Terapia Ocupacional"
         },
         "slots_escalados": 10,
         "slots_ocupados": 1,
@@ -325,7 +325,7 @@ export default {
         "profissional": {
           "id": "9f767b2539be0bca1e48d23ead1d9646f3698151a4c27eb02371cf03e0cd556f",
           "nome": "Diva Rocha",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "slots_escalados": 10,
         "slots_ocupados": 4,
@@ -342,7 +342,7 @@ export default {
         "profissional": {
           "id": "9f767b2539be0bca1e48d23ead1d9646f3698151a4c27eb02371cf03e0cd556f",
           "nome": "Diva Rocha",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "slots_escalados": 8,
         "slots_ocupados": 2,
