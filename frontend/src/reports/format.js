@@ -139,7 +139,7 @@ export const rotuloTipo = (tipo) => TIPOS[tipo] || 'Relatório';
 
 // A aba nunca mostra o nome do paciente: em agenda_paciente fica só o tipo.
 export function tituloAba(b) {
-  if (b.tipo === 'ocupacao_profissional') return `Ocupação · ${b.dados.profissional.nome}`;
+  if (b.tipo === 'ocupacao_profissional') return b.dados?.profissional?.nome ? `Ocupação · ${b.dados.profissional.nome}` : rotuloTipo(b.tipo);
   if (b.tipo === 'disponibilidade') return b.dados?.minutos_por_janela > MINUTOS_POR_SLOT ? `Janelas de ${duracao(b.dados.minutos_por_janela)}` : 'Vagas livres';
   return rotuloTipo(b.tipo);
 }

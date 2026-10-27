@@ -63,26 +63,42 @@ const TEXTO_VAZIO = {
   tabela_generica: 'Nenhum resultado para este recorte.',
 };
 
-/** Erro ao desenhar um bloco fica no cartão; não derruba a conversa. Não registra dados. */
-class CorpoSeguro extends Component {
+/**
+ * Error boundary: um erro ao desenhar fica contido e vira `fallback`; não derruba a conversa.
+ * Não registra nada (nem o bloco nem a exceção) e o fallback não mostra conteúdo do bloco.
+ */
+export class Seguro extends Component {
   state = { erro: false };
   static getDerivedStateFromError() {
     return { erro: true };
   }
   render() {
-    if (this.state.erro) {
-      return (
-        <div className={s.stateBox}>
-          <div>
-            <strong>Não foi possível mostrar este relatório.</strong>
-            <span>Os dados chegaram num formato inesperado. A exportação continua disponível.</span>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
+    return this.state.erro ? this.props.fallback : this.props.children;
   }
 }
+
+const FALHA_CORPO = (
+  <div className={s.stateBox}>
+    <div>
+      <strong>Não foi possível mostrar este relatório.</strong>
+      <span>Os dados chegaram num formato inesperado. A exportação continua disponível.</span>
+    </div>
+  </div>
+);
+
+/** Cartão discreto quando nem o cabeçalho do bloco pôde ser desenhado. */
+export const CARTAO_INDISPONIVEL = (
+  <section className={s.card} aria-label="Relatório indisponível">
+    <div className={s.stateBox}>
+      <div>
+        <strong>Não foi possível exibir este relatório.</strong>
+        <span>Os dados chegaram num formato inesperado.</span>
+      </div>
+    </div>
+  </section>
+);
+
+const CorpoSeguro = ({ children }) => <Seguro fallback={FALHA_CORPO}>{children}</Seguro>;
 
 function cabecalho(b) {
   if (CABECALHOS_NOVOS[b.tipo]) return CABECALHOS_NOVOS[b.tipo](b);
@@ -143,7 +159,15 @@ export function ReportError({ onRetry }) {
  * `impressao`: versão do PDF, sem exportação nem controles. `texto`: destaque da mensagem, vai para o PDF.
  * @param {{bloco: import('./types').Bloco, texto?: string, exportavel?: boolean, expandido?: boolean, impressao?: boolean, onExpand?: () => void}} props
  */
-export function ReportCard({ bloco, texto, exportavel = true, expandido = false, impressao = false, onExpand }) {
+export function ReportCard(props) {
+  return (
+    <Seguro fallback={CARTAO_INDISPONIVEL}>
+      <Cartao {...props} />
+    </Seguro>
+  );
+}
+
+function Cartao({ bloco, texto, exportavel = true, expandido = false, impressao = false, onExpand }) {
   const Corpo = CORPOS[bloco.tipo];
   const h = cabecalho(bloco);
   const semDados = vazio(bloco);
