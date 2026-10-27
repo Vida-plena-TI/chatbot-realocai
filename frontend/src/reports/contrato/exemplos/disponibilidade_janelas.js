@@ -1,5 +1,5 @@
 // Exemplo real de bloco do RealocAI, copiado sem alteração. Dados FICTÍCIOS.
-// Origem: Vida-plena-TI/reallocaai-agente @ 5ce822b4647836bcb47c6ccbd66c5c2e0f4d7268 (feature/relatorios-gerais)
+// Origem: Vida-plena-TI/reallocaai-agente @ 9298478c0b0583956ee23308b32f251b4d924f23 (main)
 // Arquivo: docs/exemplos-blocos/disponibilidade_janelas.json. Atualize com scripts/sync-contrato.mjs; não edite à mão.
 export default {
   "versao": 1,
@@ -46,7 +46,7 @@ export default {
         "profissional": {
           "id": "9b08de1dd2ae38487aaa3f42500664f05eae8ef2b1f3068cd5de4aceac951511",
           "nome": "Beto Reis",
-          "especialidade": "fonoaudiologia"
+          "especialidade": "Fonoaudiologia"
         },
         "sala_id": "sala-2",
         "sala_nome": "Sala 2",
@@ -63,7 +63,7 @@ export default {
         "profissional": {
           "id": "3f831f5c6d924b40780632d12722ac3876b21abd49cd1e114eafaa03aec8d0a3",
           "nome": "Cau Melo",
-          "especialidade": "terapia_ocupacional"
+          "especialidade": "Terapia Ocupacional"
         },
         "sala_id": "sala-2",
         "sala_nome": "Sala 2",
@@ -80,7 +80,7 @@ export default {
         "profissional": {
           "id": "9b08de1dd2ae38487aaa3f42500664f05eae8ef2b1f3068cd5de4aceac951511",
           "nome": "Beto Reis",
-          "especialidade": "fonoaudiologia"
+          "especialidade": "Fonoaudiologia"
         },
         "sala_id": "sala-2",
         "sala_nome": "Sala 2",
@@ -97,7 +97,7 @@ export default {
         "profissional": {
           "id": "9b08de1dd2ae38487aaa3f42500664f05eae8ef2b1f3068cd5de4aceac951511",
           "nome": "Beto Reis",
-          "especialidade": "fonoaudiologia"
+          "especialidade": "Fonoaudiologia"
         },
         "sala_id": "sala-2",
         "sala_nome": "Sala 2",
@@ -114,7 +114,7 @@ export default {
         "profissional": {
           "id": "9b08de1dd2ae38487aaa3f42500664f05eae8ef2b1f3068cd5de4aceac951511",
           "nome": "Beto Reis",
-          "especialidade": "fonoaudiologia"
+          "especialidade": "Fonoaudiologia"
         },
         "sala_id": "sala-2",
         "sala_nome": "Sala 2",
@@ -131,7 +131,7 @@ export default {
         "profissional": {
           "id": "3f831f5c6d924b40780632d12722ac3876b21abd49cd1e114eafaa03aec8d0a3",
           "nome": "Cau Melo",
-          "especialidade": "terapia_ocupacional"
+          "especialidade": "Terapia Ocupacional"
         },
         "sala_id": "sala-2",
         "sala_nome": "Sala 2",
@@ -148,7 +148,7 @@ export default {
         "profissional": {
           "id": "76528714a71668d11a5ac5a2e4a035172a6c9394943011a2e1a79014a47a6a26",
           "nome": "Ana Lima",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "sala_id": "sala-1",
         "sala_nome": "Sala 1",
@@ -165,7 +165,7 @@ export default {
         "profissional": {
           "id": "9b08de1dd2ae38487aaa3f42500664f05eae8ef2b1f3068cd5de4aceac951511",
           "nome": "Beto Reis",
-          "especialidade": "fonoaudiologia"
+          "especialidade": "Fonoaudiologia"
         },
         "sala_id": "sala-2",
         "sala_nome": "Sala 2",
@@ -182,7 +182,7 @@ export default {
         "profissional": {
           "id": "3f831f5c6d924b40780632d12722ac3876b21abd49cd1e114eafaa03aec8d0a3",
           "nome": "Cau Melo",
-          "especialidade": "terapia_ocupacional"
+          "especialidade": "Terapia Ocupacional"
         },
         "sala_id": "sala-2",
         "sala_nome": "Sala 2",
@@ -199,7 +199,7 @@ export default {
         "profissional": {
           "id": "9b08de1dd2ae38487aaa3f42500664f05eae8ef2b1f3068cd5de4aceac951511",
           "nome": "Beto Reis",
-          "especialidade": "fonoaudiologia"
+          "especialidade": "Fonoaudiologia"
         },
         "sala_id": "sala-2",
         "sala_nome": "Sala 2",
@@ -216,7 +216,7 @@ export default {
         "profissional": {
           "id": "76528714a71668d11a5ac5a2e4a035172a6c9394943011a2e1a79014a47a6a26",
           "nome": "Ana Lima",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "sala_id": "sala-1",
         "sala_nome": "Sala 1",
@@ -233,7 +233,7 @@ export default {
         "profissional": {
           "id": "3f831f5c6d924b40780632d12722ac3876b21abd49cd1e114eafaa03aec8d0a3",
           "nome": "Cau Melo",
-          "especialidade": "terapia_ocupacional"
+          "especialidade": "Terapia Ocupacional"
         },
         "sala_id": "sala-2",
         "sala_nome": "Sala 2",
@@ -250,7 +250,7 @@ export default {
         "profissional": {
           "id": "9f767b2539be0bca1e48d23ead1d9646f3698151a4c27eb02371cf03e0cd556f",
           "nome": "Diva Rocha",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "sala_id": "sala-10",
         "sala_nome": "Sala 10",
@@ -267,7 +267,7 @@ export default {
         "profissional": {
           "id": "76528714a71668d11a5ac5a2e4a035172a6c9394943011a2e1a79014a47a6a26",
           "nome": "Ana Lima",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "sala_id": "sala-1",
         "sala_nome": "Sala 1",
@@ -284,7 +284,7 @@ export default {
         "profissional": {
           "id": "76528714a71668d11a5ac5a2e4a035172a6c9394943011a2e1a79014a47a6a26",
           "nome": "Ana Lima",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "sala_id": "sala-1",
         "sala_nome": "Sala 1",
@@ -301,7 +301,7 @@ export default {
         "profissional": {
           "id": "3f831f5c6d924b40780632d12722ac3876b21abd49cd1e114eafaa03aec8d0a3",
           "nome": "Cau Melo",
-          "especialidade": "terapia_ocupacional"
+          "especialidade": "Terapia Ocupacional"
         },
         "sala_id": "sala-2",
         "sala_nome": "Sala 2",
@@ -318,7 +318,7 @@ export default {
         "profissional": {
           "id": "9f767b2539be0bca1e48d23ead1d9646f3698151a4c27eb02371cf03e0cd556f",
           "nome": "Diva Rocha",
-          "especialidade": "psicologia"
+          "especialidade": "Psicologia"
         },
         "sala_id": "sala-10",
         "sala_nome": "Sala 10",
@@ -498,19 +498,6 @@ export default {
           "data": "2026-09-28",
           "dia_semana": "segunda-feira",
           "periodo": "Tarde",
-          "profissional": "Cau Melo",
-          "especialidade": "Terapia Ocupacional",
-          "sala": "Sala 2",
-          "posto": 2,
-          "inicio": "15:00",
-          "fim": "18:00",
-          "slots": 6,
-          "cabem": 2
-        },
-        {
-          "data": "2026-09-28",
-          "dia_semana": "segunda-feira",
-          "periodo": "Tarde",
           "profissional": "Beto Reis",
           "especialidade": "Fonoaudiologia",
           "sala": "Sala 2",
@@ -519,6 +506,19 @@ export default {
           "fim": "18:00",
           "slots": 5,
           "cabem": 1
+        },
+        {
+          "data": "2026-09-28",
+          "dia_semana": "segunda-feira",
+          "periodo": "Tarde",
+          "profissional": "Cau Melo",
+          "especialidade": "Terapia Ocupacional",
+          "sala": "Sala 2",
+          "posto": 2,
+          "inicio": "15:00",
+          "fim": "18:00",
+          "slots": 6,
+          "cabem": 2
         },
         {
           "data": "2026-09-29",
@@ -563,9 +563,9 @@ export default {
           "data": "2026-09-30",
           "dia_semana": "quarta-feira",
           "periodo": "Manhã",
-          "profissional": "Ana Lima",
-          "especialidade": "Psicologia",
-          "sala": "Sala 1",
+          "profissional": "Beto Reis",
+          "especialidade": "Fonoaudiologia",
+          "sala": "Sala 2",
           "posto": 1,
           "inicio": "07:00",
           "fim": "12:00",
@@ -575,10 +575,23 @@ export default {
         {
           "data": "2026-09-30",
           "dia_semana": "quarta-feira",
-          "periodo": "Manhã",
+          "periodo": "Tarde",
           "profissional": "Beto Reis",
           "especialidade": "Fonoaudiologia",
           "sala": "Sala 2",
+          "posto": 1,
+          "inicio": "15:00",
+          "fim": "18:00",
+          "slots": 6,
+          "cabem": 2
+        },
+        {
+          "data": "2026-09-30",
+          "dia_semana": "quarta-feira",
+          "periodo": "Manhã",
+          "profissional": "Ana Lima",
+          "especialidade": "Psicologia",
+          "sala": "Sala 1",
           "posto": 1,
           "inicio": "07:00",
           "fim": "12:00",
@@ -599,19 +612,6 @@ export default {
           "cabem": 3
         },
         {
-          "data": "2026-09-30",
-          "dia_semana": "quarta-feira",
-          "periodo": "Tarde",
-          "profissional": "Beto Reis",
-          "especialidade": "Fonoaudiologia",
-          "sala": "Sala 2",
-          "posto": 1,
-          "inicio": "15:00",
-          "fim": "18:00",
-          "slots": 6,
-          "cabem": 2
-        },
-        {
           "data": "2026-10-01",
           "dia_semana": "quinta-feira",
           "periodo": "Manhã",
@@ -628,12 +628,12 @@ export default {
           "data": "2026-10-01",
           "dia_semana": "quinta-feira",
           "periodo": "Tarde",
-          "profissional": "Cau Melo",
-          "especialidade": "Terapia Ocupacional",
-          "sala": "Sala 2",
-          "posto": 2,
-          "inicio": "13:00",
-          "fim": "16:00",
+          "profissional": "Diva Rocha",
+          "especialidade": "Psicologia",
+          "sala": "Sala 10",
+          "posto": 1,
+          "inicio": "15:00",
+          "fim": "18:00",
           "slots": 6,
           "cabem": 2
         },
@@ -641,12 +641,12 @@ export default {
           "data": "2026-10-01",
           "dia_semana": "quinta-feira",
           "periodo": "Tarde",
-          "profissional": "Diva Rocha",
-          "especialidade": "Psicologia",
-          "sala": "Sala 10",
-          "posto": 1,
-          "inicio": "15:00",
-          "fim": "18:00",
+          "profissional": "Cau Melo",
+          "especialidade": "Terapia Ocupacional",
+          "sala": "Sala 2",
+          "posto": 2,
+          "inicio": "13:00",
+          "fim": "16:00",
           "slots": 6,
           "cabem": 2
         },
