@@ -226,6 +226,15 @@ for (const [nome, bloco] of Object.entries(amostras)) {
   }
 }
 
+// O plano semanal também é exemplo dos testes do backend: as duas cópias precisam ser iguais.
+const PLANO_BACKEND = new URL('../../backend/chat/tests/fixtures/tabela_generica_plano_semanal.json', import.meta.url);
+const planoIgual = JSON.stringify(JSON.parse(readFileSync(PLANO_BACKEND, 'utf8'))) === JSON.stringify(amostras.tabelaGenericaPlanoSemanal);
+if (planoIgual) console.log('✓ tabelaGenericaPlanoSemanal igual à fixture do backend');
+else {
+  falhas++;
+  console.error('✗ tabelaGenericaPlanoSemanal difere de backend/chat/tests/fixtures/tabela_generica_plano_semanal.json');
+}
+
 if (falhas) {
   console.error(`\n${falhas} problema(s) de contrato nas fixtures.`);
   process.exit(1);

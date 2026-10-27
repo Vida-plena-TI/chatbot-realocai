@@ -416,3 +416,58 @@ export const disponibilidadeSintetica = {
     },
   ],
 };
+
+// --- Plano semanal (tabela_generica, relatorio "plano_semanal"; dados FICTÍCIOS) -------------
+// Forma de blocos_gerais.plano_semanal no agente. Na ordem do agente, por dia pedido: o plano
+// por horário e, para cada especialidade que não coube, a linha "Não coube" (horario,
+// profissional e sala "—", posto null) e as alternativas, com o `dia` em que acontecem (a
+// quinta dentro do grupo da quarta e vice-versa). Ordenar por dia ou horário muda a sequência.
+// Cópia de backend/chat/tests/fixtures/tabela_generica_plano_semanal.json (check:blocks confere).
+const colsPlano = [
+  { chave: 'dia', rotulo: 'Dia', formato: 'texto' },
+  { chave: 'situacao', rotulo: 'Situação', formato: 'texto' },
+  { chave: 'especialidade', rotulo: 'Especialidade', formato: 'texto' },
+  { chave: 'horario', rotulo: 'Horário', formato: 'texto' },
+  { chave: 'profissional', rotulo: 'Profissional', formato: 'texto' },
+  { chave: 'sala', rotulo: 'Sala', formato: 'texto' },
+  { chave: 'posto', rotulo: 'Posto', formato: 'inteiro' },
+];
+const sessao = (dia, situacao, especialidade, horario, profissional, sala, posto) => ({ dia, situacao, especialidade, horario, profissional, sala, posto });
+const naoCoube = (dia, especialidade) => sessao(dia, 'Não coube', especialidade, '—', '—', '—', null);
+const linhasPlano = [
+  sessao('quarta-feira', 'Plano', 'Psicologia', '10:00 às 10:30', 'Ana Lima', 'Sala 3', 1),
+  sessao('quarta-feira', 'Plano', 'Fonoaudiologia', '11:00 às 11:30', 'Beto Reis', 'Sala 10', 2),
+  naoCoube('quarta-feira', 'Terapia Ocupacional'),
+  sessao('quarta-feira', 'Alternativa', 'Terapia Ocupacional', '14:00 às 14:30', 'Cau Melo', 'Sala 2', 1),
+  sessao('quinta-feira', 'Alternativa', 'Terapia Ocupacional', '08:00 às 08:30', 'Cau Melo', 'Sala 2', 1),
+  sessao('quinta-feira', 'Plano', 'Psicologia', '10:30 às 11:00', 'Ana Lima', 'Sala 3', 1),
+  sessao('quinta-feira', 'Plano', 'Terapia Ocupacional', '11:30 às 12:00', 'Cau Melo', 'Sala 2', 2),
+  naoCoube('quinta-feira', 'Fonoaudiologia'),
+  sessao('quarta-feira', 'Alternativa', 'Fonoaudiologia', '15:00 às 15:30', 'Beto Reis', 'Sala 10', 1),
+];
+export const tabelaGenericaPlanoSemanal = {
+  versao: 1,
+  tipo: 'tabela_generica',
+  titulo: 'Plano semanal: quarta e quinta, das 10:00 às 12:00 (sessões de 30 min)',
+  periodo: { inicio: '2026-09-28', fim: '2026-10-03' },
+  meta: null,
+  parcial: false,
+  dias_nao_lidos: [],
+  avisos: ['A recorrência semanal usa a grade semanal da planilha (uma fotografia da semana, sem datas): feriados e exceções do calendário não são vistos.'],
+  resumo: [
+    { rotulo: 'Quarta-feira', valor: '2 de 3', formato: 'texto', exibicao: '2 de 3 especialidades' },
+    { rotulo: 'Quinta-feira', valor: '2 de 3', formato: 'texto', exibicao: '2 de 3 especialidades' },
+    { rotulo: 'Não couberam', valor: 2, formato: 'inteiro', exibicao: '2' },
+  ],
+  dados: {
+    tipo: 'tabela_generica',
+    relatorio: 'plano_semanal',
+    dimensoes: [],
+    metricas: [],
+    colunas: colsPlano,
+    linhas: linhasPlano,
+    total: {},
+    linhas_omitidas: 0,
+  },
+  tabelas: [{ nome: 'Plano', colunas: colsPlano, linhas: linhasPlano }],
+};
