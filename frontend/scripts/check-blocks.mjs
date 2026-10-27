@@ -4,6 +4,9 @@
 // Também valida contra o JSON Schema copiado em src/reports/contrato/ (tipos, obrigatórios,
 // enum, padrões, mínimos e campos extras).
 //
+// Roda no build do Docker (contexto: só frontend/), então lê apenas arquivos de frontend/. A
+// comparação com as cópias do backend fica em check-fixtures.mjs (só no monorepo).
+//
 // Uso: npm run check:blocks   (exit code 1 se faltar campo ou sobrar campo que o real não tem)
 import { readFileSync } from 'node:fs';
 import * as amostras from '../src/reports/sampleBlocks.js';
@@ -228,17 +231,9 @@ for (const [nome, bloco] of Object.entries(amostras)) {
   }
 }
 
-// O plano semanal também é exemplo dos testes do backend: as duas cópias precisam ser iguais.
-const PLANO_BACKEND = new URL('../../backend/chat/tests/fixtures/tabela_generica_plano_semanal.json', import.meta.url);
-const planoIgual = JSON.stringify(JSON.parse(readFileSync(PLANO_BACKEND, 'utf8'))) === JSON.stringify(amostras.tabelaGenericaPlanoSemanal);
-if (planoIgual) console.log('✓ tabelaGenericaPlanoSemanal igual à fixture do backend');
-else {
-  falhas++;
-  console.error('✗ tabelaGenericaPlanoSemanal difere de backend/chat/tests/fixtures/tabela_generica_plano_semanal.json');
-}
-
-// E tem a forma do exemplo oficial do agente (cópia sincronizada): mesmo envelope, mesmas
-// colunas e periodo null. Os valores das linhas podem diferir (a fixture é menor).
+// O plano semanal tem a forma do exemplo oficial do agente (cópia sincronizada): mesmo
+// envelope, mesmas colunas e periodo null. Os valores das linhas podem diferir (a fixture é
+// menor). A igualdade com a cópia do backend é do check:fixtures.
 const forma = (b) =>
   JSON.stringify({
     envelope: Object.keys(b),
