@@ -27,6 +27,8 @@ nginx não-root, SPA estática                  Django + gunicorn (gthread), nã
 
 - Dois Apps do mesmo repositório (`Vida-plena-TI/chatbot-realocai`, branch `main`), cada
   um com o próprio caminho de build (`/backend` e `/frontend`) e o próprio `Dockerfile`.
+  O contexto do build é **só** essa pasta: o build do front não pode ler nada fora de
+  `frontend/` (ver [Testar as imagens localmente](#testar-as-imagens-localmente)).
 - Front e API são **subdomínios irmãos**. O cookie `csrftoken` usa
   `Domain=.vidaplenamulti.com.br` para o front conseguir lê-lo. O `sessionid` fica só no
   host da API (HttpOnly). Ver [Cookies entre subdomínios](#cookies-entre-subdomínios).
@@ -220,7 +222,9 @@ Ordem: **DNS → Supabase → backend → frontend → testes pós-deploy**.
 - **Domains**: host `chat.vidaplenamulti.com.br`, HTTPS ligado, path `/`, **porta
   `8080`**.
 - **Mounts/Volumes**: nenhum.
-- **Deploy**. O log de build mostra `npm ci`, `check:blocks` e `vite build`. Na execução,
+- **Deploy**. O log de build mostra `npm ci`, `check:blocks` e `vite build`. Erro
+  `ENOENT ... /backend/...` (ou outro caminho fora de `/app`) no `check:blocks` quer dizer
+  que algum script passou a ler fora de `frontend/`. Na execução,
   o nginx sobe sem erros e o status fica *healthy*.
 
 ### Deploys seguintes
@@ -391,6 +395,23 @@ docker run --rm chatbot-backend
 docker build -t chatbot-frontend \
   --build-arg VITE_API_BASE_URL=https://api-chat.vidaplenamulti.com.br ./frontend
 docker run --rm -p 8080:8080 chatbot-frontend    # http://localhost:8080/healthz
+```
+
+O Dockerfile do front roda `check:blocks` e `build`, e o contexto é só `frontend/`:
+
+| Script | Onde roda | Lê |
+| --- | --- | --- |
+| `npm run check:blocks` | no build do Docker e no monorepo | só `frontend/` (fixtures, schema e exemplos sincronizados em `src/reports/contrato/`) |
+| `npm run check:fixtures` | **só no monorepo** (nunca no Docker) | `frontend/` e as cópias das fixtures em `backend/chat/tests/fixtures/` |
+| `npm run check:docker-context` | no monorepo, antes do merge | copia só `frontend/` para um diretório temporário e roda o que o Dockerfile roda |
+
+Sem Docker, `npm run check:docker-context` (dentro de `frontend/`) reproduz o passo de
+build do Easypanel: rode antes de qualquer merge que toque em `frontend/scripts`,
+`frontend/package.json` ou no `frontend/Dockerfile`. Para o build completo, da raiz:
+
+```bash
+docker build -f frontend/Dockerfile --build-arg VITE_API_BASE_URL=https://api-chat.vidaplenamulti.com.br \
+  --build-arg VITE_USE_MOCK=false --build-arg PORT=8080 -t chatbot-frontend:test frontend
 ```
 
 Se o Docker Hub limitar os downloads (erro 429), use o mirror só no build local:
