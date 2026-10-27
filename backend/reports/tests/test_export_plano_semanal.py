@@ -67,7 +67,7 @@ def test_plan_notice_goes_to_the_summary_like_the_other_types(api):
     summary = open_xlsx(export(api, [bloco]))["Resumo"]
 
     assert rows(summary)[1][0] == bloco["titulo"]
-    assert summary["B2"].value == "28/09 a 03/10/2026"
+    assert summary["B2"].value is None  # periodo null: the plan has no dates
     assert summary["C2"].value is None  # meta null
     assert summary["E2"].value == bloco["avisos"][0]
     assert "feriados e exceções" in summary["E2"].value

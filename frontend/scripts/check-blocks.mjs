@@ -7,6 +7,7 @@
 // Uso: npm run check:blocks   (exit code 1 se faltar campo ou sobrar campo que o real não tem)
 import { readFileSync } from 'node:fs';
 import * as amostras from '../src/reports/sampleBlocks.js';
+import planoOficial from '../src/reports/contrato/exemplos/tabela_generica_plano_semanal.js';
 
 const SCHEMA = JSON.parse(readFileSync(new URL('../src/reports/contrato/bloco_relatorio.schema.json', import.meta.url), 'utf8'));
 // ocupacao_profissional fica só com a conferência de forma: a fixture tem de propósito o dia
@@ -214,7 +215,8 @@ for (const [nome, bloco] of Object.entries(amostras)) {
   const erros = [];
   if (!dados) erros.push(`tipo desconhecido: ${JSON.stringify(bloco?.tipo)}`);
   else {
-    conferir(bloco, { ...BASE, dados }, nome, erros);
+    // periodo pode ser null (bloco sem datas, como o plano semanal); o schema confere o resto.
+    conferir(bloco, { ...BASE, ...(bloco.periodo === null && { periodo: true }), dados }, nome, erros);
     if (!SO_FORMA.has(bloco.tipo)) validar(bloco, SCHEMA, nome, erros);
   }
   if (erros.length) {
@@ -233,6 +235,25 @@ if (planoIgual) console.log('✓ tabelaGenericaPlanoSemanal igual à fixture do 
 else {
   falhas++;
   console.error('✗ tabelaGenericaPlanoSemanal difere de backend/chat/tests/fixtures/tabela_generica_plano_semanal.json');
+}
+
+// E tem a forma do exemplo oficial do agente (cópia sincronizada): mesmo envelope, mesmas
+// colunas e periodo null. Os valores das linhas podem diferir (a fixture é menor).
+const forma = (b) =>
+  JSON.stringify({
+    envelope: Object.keys(b),
+    dados: Object.keys(b.dados),
+    periodo: b.periodo,
+    colunas: b.dados.colunas,
+    tabelas: b.tabelas.map((t) => ({ nome: t.nome, colunas: t.colunas })),
+  });
+const errosOficial = validar(planoOficial, SCHEMA, 'planoOficial', []);
+if (forma(planoOficial) === forma(amostras.tabelaGenericaPlanoSemanal) && planoOficial.periodo === null && !errosOficial.length) {
+  console.log('✓ tabelaGenericaPlanoSemanal com a forma do exemplo oficial (envelope, colunas, periodo null)');
+} else {
+  falhas++;
+  console.error('✗ tabelaGenericaPlanoSemanal difere da forma de contrato/exemplos/tabela_generica_plano_semanal.js');
+  errosOficial.forEach((e) => console.error(`    ${e}`));
 }
 
 if (falhas) {
