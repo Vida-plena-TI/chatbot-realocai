@@ -9,9 +9,15 @@
 //   - booleano do JSON vira "Sim"/"Não" (tela, PDF e Excel local); a string "true" fica como veio;
 //   - plano semanal (tabela_generica): linhas na ordem do agente na tela, no PDF e no Excel local,
 //     "Não coube" com "—", posto null como "—" (vazio no Excel), aviso na tela, no PDF e no Resumo;
-//   - nada vai para o console durante a renderização (LGPD: o nome do paciente nunca é logado).
+//   - periodo null ou ausente (bloco sem datas): tela larga e compacta, PDF e Excel local sem
+//     "null"/"Invalid Date" nem separador solto; bloco com período mostra o mesmo de antes;
+//   - nada vai para o console durante a renderização (LGPD: o nome do paciente nunca é logado);
+//   - com DOM (check-render-dom.mjs): bloco quebrado não derruba o grupo, os vizinhos nem a
+//     conversa; histórico com periodo null e com período.
 //
 // Uso: npm run check:render   (exit code 1 se alguma verificação falhar)
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 
 const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom', logLevel: 'error' });
@@ -94,6 +100,21 @@ try {
   r.boolTela = render([{ ...blocoBool, dados: { ...blocoBool.dados, colunas: colunasBool, linhas: blocoBool.tabelas[0].linhas } }]);
   r.planoTela = render([amostras.tabelaGenericaPlanoSemanal]);
   r.planoPdf = render([amostras.tabelaGenericaPlanoSemanal], PrintReport);
+  // periodo null (bloco sem datas, como o plano) em todos os tipos, no estado vazio e com meta;
+  // periodo ausente também não quebra. A tela traz a versão larga e a compacta (celular).
+  const semPeriodo = Object.fromEntries(
+    ['ocupacaoProfissional', 'pacientesSemana', 'ocupacaoAgregada', 'disponibilidadeVagas', 'convenio', 'agendaPaciente', 'qualidadeAgenda', 'tabelaGenericaRanking', 'tabelaGenericaPlanoSemanal'].map(
+      (k) => [k, { ...amostras[k], periodo: null }],
+    ),
+  );
+  semPeriodo.comMeta = { ...amostras.tabelaGenericaCapacidade, periodo: null };
+  semPeriodo.vazio = { ...amostras.tabelaGenericaRanking, periodo: null, dados: { ...amostras.tabelaGenericaRanking.dados, linhas: [] } };
+  const { periodo: _omitido, ...semCampo } = amostras.ocupacaoAgregada;
+  semPeriodo.ausente = semCampo;
+  r.semPeriodo = Object.fromEntries(Object.entries(semPeriodo).map(([k, b]) => [k, { tela: render([b]), pdf: render([b], PrintReport) }]));
+  r.comPeriodo = Object.fromEntries(
+    ['ocupacaoProfissional', 'pacientesSemana', 'pacientesDia', 'ocupacaoAgregada', 'agendaPaciente', 'tabelaGenericaRanking', 'tabelaGenericaCapacidade'].map((k) => [k, render([amostras[k]])]),
+  );
   Object.assign(console, originais);
 
   const erros = Object.entries({ ...r, ...r.novos }).filter(([, h]) => typeof h === 'string' && h.startsWith('ERRO'));
@@ -167,6 +188,45 @@ try {
   ok(JSON.stringify(linhasXls) === JSON.stringify(esperadoXls), `Excel local do plano: linhas na ordem recebida, posto null vazio, "—" como texto (${linhasXls.length})`);
   ok(xlsPlano.split('ss:Name="Resumo"')[1].split('</Worksheet>')[0].includes(plano.avisos[0]), 'Excel local do plano: aviso na aba Resumo');
 
+  // --- periodo null: nada de "null"/"Invalid Date" nem separador sobrando; cartão alinhado --
+  const css = await server.ssrLoadModule('/src/reports/reports.module.css').then((m) => m.default);
+  // Texto do cabeçalho do cartão (div headText): tipo, título e o subtítulo, se houver.
+  const cabecalhos = (html) => [...html.matchAll(new RegExp(`<div class="${css.headText}">(.*?)</div>`, 'g'))].map((m) => m[1]);
+  const subtitulos = (html) =>
+    cabecalhos(html).flatMap((h) => [...h.matchAll(new RegExp(`<span class="${css.sub}">(.*?)</span>`, 'g'))].map((m) => texto(m[1]).trim()));
+  const problemas = (html) => [
+    ...(html.startsWith('ERRO') || !html.includes(css.card) || html.includes('Relatório indisponível') ? ['cartão não desenhado'] : []),
+    ...(/\b(null|undefined|NaN)\b|Invalid Date/.test(texto(html)) ? ['"null"/"undefined"/"NaN"/"Invalid Date" no texto'] : []),
+    ...subtitulos(html).filter((t) => !t || /^[·—]|[·—]$|· ·/.test(t)).map((t) => `subtítulo ${JSON.stringify(t)}`),
+    ...(cabecalhos(html).every((h) => h.includes(css.kicker) && h.includes('<h3')) ? [] : ['cabeçalho sem tipo ou título']),
+  ];
+  for (const [k, { tela, pdf }] of Object.entries(r.semPeriodo)) {
+    const p = [...problemas(tela).map((x) => `tela: ${x}`), ...problemas(pdf).map((x) => `PDF: ${x}`)];
+    ok(!p.length, `periodo ${k === 'ausente' ? 'ausente' : 'null'}, ${k}: tela (larga e compacta) e PDF sem "null"/"Invalid Date" nem separador solto [${subtitulos(tela)[0] ?? 'sem subtítulo'}]${p.length ? ` — ${p.join('; ')}` : ''}`);
+  }
+  ok(subtitulos(r.semPeriodo.comMeta.tela)[0] === 'meta 80%', 'periodo null com meta: subtítulo só "meta 80%"');
+  ok(subtitulos(r.semPeriodo.tabelaGenericaPlanoSemanal.tela).length === 0, 'periodo null sem meta (plano): sem subtítulo');
+  ok(texto(r.semPeriodo.vazio.tela).includes('Nenhum resultado para este recorte.') && !/<span><\/span>/.test(r.semPeriodo.vazio.tela), 'periodo null no estado vazio: só a mensagem, sem período vazio');
+  ok(r.semPeriodo.tabelaGenericaPlanoSemanal.tela.includes('dayCard'), 'periodo null: versão compacta (celular) desenhada');
+  // Bloco antigo com período: o mesmo subtítulo de antes.
+  const esperadoCom = {
+    ocupacaoProfissional: 'Terapia Ocupacional · 05/10 a 10/10/2026',
+    pacientesSemana: '05/10 a 10/10/2026',
+    pacientesDia: 'Quinta, 08/10/2026',
+    ocupacaoAgregada: 'Quinta, 08/10/2026 · meta 80%',
+    agendaPaciente: 'Convênio Unimed · 28/09 a 03/10/2026',
+    tabelaGenericaRanking: '28/09 a 03/10/2026 · meta 80%',
+    tabelaGenericaCapacidade: '28/09 a 03/10/2026 · meta 80%',
+  };
+  for (const [k, sub] of Object.entries(esperadoCom)) ok(subtitulos(r.comPeriodo[k])[0] === sub, `com período, ${k}: subtítulo igual ao de antes (${subtitulos(r.comPeriodo[k])[0]})`);
+  const xlsSem = await gerarExcel(Object.values(semPeriodo)).text();
+  const periodosXls = [...xlsSem.split('ss:Name="Resumo"')[1].split('</Worksheet>')[0].matchAll(/<Row>(.*?)<\/Row>/gs)]
+    .slice(1)
+    .map((m) => m[1].match(/<Cell[^>]*?(?:\/>|>.*?<\/Cell>)/g)[1]);
+  ok(periodosXls.length === Object.keys(semPeriodo).length && periodosXls.every((c) => c === '<Cell ss:StyleID="txt"/>'), `Excel local: Período vazio no Resumo com periodo null (${periodosXls.length})`);
+  const xlsCom = await gerarExcel([amostras.tabelaGenericaRanking]).text();
+  ok(xlsCom.includes('<Data ss:Type="String">28/09 a 03/10/2026</Data>'), 'Excel local: período preenchido continua no Resumo');
+
   // --- Disponibilidade por dia e especialidade: nada se perde nem se duplica -----------------
   // Lê as tabelas por dia do HTML (PDF e tela) e confere com o dado original.
   const tabelasDisp = (html) =>
@@ -235,6 +295,10 @@ try {
 } finally {
   await server.close();
 }
+
+// Boundaries e histórico precisam de DOM: processo próprio (os globais mudariam o SSR acima).
+const dom = spawnSync(process.execPath, [fileURLToPath(new URL('./check-render-dom.mjs', import.meta.url))], { stdio: 'inherit' });
+if (dom.status !== 0) falhas.push('verificações com DOM (check-render-dom.mjs)');
 
 if (falhas.length) {
   console.error(`\n${falhas.length} verificação(ões) falharam.`);
