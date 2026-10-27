@@ -1,5 +1,5 @@
 // Exemplo real de bloco do RealocAI, copiado sem alteração. Dados FICTÍCIOS.
-// Origem: Vida-plena-TI/reallocaai-agente @ 9298478c0b0583956ee23308b32f251b4d924f23 (main)
+// Origem: Vida-plena-TI/reallocaai-agente @ b55bf3ac0c3a3594bae39224274d39fdcf7ad95e (main)
 // Arquivo: docs/exemplos-blocos/agenda_paciente.json. Atualize com scripts/sync-contrato.mjs; não edite à mão.
 export default {
   "versao": 1,
