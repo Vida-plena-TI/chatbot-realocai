@@ -63,6 +63,15 @@ Produção no Easypanel (dois Apps do mesmo repo: `backend/Dockerfile` e
   `GUNICORN_THREADS`, `GUNICORN_TIMEOUT` (240), `GUNICORN_GRACEFUL_TIMEOUT`,
   `GUNICORN_KEEPALIVE`, `GUNICORN_LOG_LEVEL`. No front, `VITE_API_BASE_URL` e
   `VITE_USE_MOCK` viram build args (o build falha com mock ou sem `https://`).
+- **O build do front só pode depender de arquivos dentro de `frontend/`**: o contexto do
+  Docker no Easypanel é só essa pasta (`../backend`, `../docs` não existem lá). O Dockerfile
+  roda `check:blocks` e `build`; `check:blocks` lê só `frontend/`. A comparação das fixtures
+  com as cópias do backend é do `check:fixtures`, que só roda no monorepo e nunca no Docker.
+- **Antes de qualquer merge que toque em `frontend/scripts`, `frontend/package.json` ou no
+  `frontend/Dockerfile`**, rode `npm run check:docker-context` (dentro de `frontend/`):
+  copia só `frontend/` (sem o que o `.dockerignore` exclui) para um diretório temporário e
+  roda `npm ci`, `check:blocks`, `build` com os valores de produção e a busca da origem da
+  API no bundle, como o Easypanel. Não há CI: é essa a guarda.
 - Ao adicionar uma variável obrigatória em produção, inclua-a em `config/env_check.py` e
   nos testes `core/tests/test_env_check.py`.
 
@@ -85,7 +94,10 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   DOM (`scripts/check-render-dom.mjs`, DOM mínimo em `scripts/lib/mini-dom.mjs`).
 - Os blocos (componentes, `src/reports/types.js` e fixtures) seguem os nomes de campo dos
   exemplos reais do RealocAI, sem camada de adaptação; `npm run check:blocks` valida as
-  fixtures de `sampleBlocks.js` contra os campos obrigatórios do contrato real.
+  fixtures de `sampleBlocks.js` contra os campos obrigatórios do contrato real (só lê
+  `frontend/`; roda no Docker). `npm run check:fixtures` confere que as fixtures copiadas no
+  backend (`chat/tests/fixtures/`) são iguais às do front (só no monorepo; rode ao mudar
+  qualquer um dos lados).
 - **Exportação:** Excel é gerado pelo backend (`POST /api/reports/export/`, via
   `httpApi.exportReports`); PDF é a impressão do navegador (`imprimirBlocos` em
   `src/reports/localExport.js`), no mock e na API real. O PDF é uma cópia visual do cartão:

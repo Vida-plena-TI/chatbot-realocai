@@ -423,8 +423,8 @@ export const disponibilidadeSintetica = {
 // profissional e sala "—", posto null) e as alternativas, com o `dia` em que acontecem (a
 // quinta dentro do grupo da quarta e vice-versa). Ordenar por dia ou horário muda a sequência.
 // periodo null como no agente: o plano usa a grade semanal, sem datas.
-// Cópia de backend/chat/tests/fixtures/tabela_generica_plano_semanal.json (check:blocks confere a
-// cópia e a forma do exemplo oficial, contrato/exemplos/tabela_generica_plano_semanal.js).
+// Cópia de backend/chat/tests/fixtures/tabela_generica_plano_semanal.json (check:fixtures confere,
+// só no monorepo); check:blocks confere a forma do exemplo oficial, contrato/exemplos/.
 const colsPlano = [
   { chave: 'dia', rotulo: 'Dia', formato: 'texto' },
   { chave: 'situacao', rotulo: 'Situação', formato: 'texto' },

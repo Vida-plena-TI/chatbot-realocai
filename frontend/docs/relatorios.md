@@ -61,7 +61,9 @@ schema e exemplos para `src/reports/contrato/` sem alterar aquele repositório, 
   `total` são as dimensões. Com meta, percentuais ganham barra e `abaixo_da_meta` vira selo.
   `linhas_omitidas` > 0 mostra "+N linhas não exibidas".
 - **Listas longas:** no chat, as primeiras linhas e "Mostrar todas"; no PDF, tudo.
-- **Verificação:** `npm run check:blocks` valida as fixtures contra o schema copiado;
+- **Verificação:** `npm run check:blocks` valida as fixtures contra o schema copiado (só lê
+  `frontend/`: roda no build do Docker); `npm run check:fixtures` confere as cópias do
+  backend (só no monorepo);
   `npm run check:render` renderiza os cartões no Node (SSR do Vite) e confere tipo desconhecido,
   `meta: null`, `parcial`, "+N linhas" e console vazio.
 

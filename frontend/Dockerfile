@@ -38,6 +38,9 @@ COPY package.json package-lock.json ./
 RUN npm ci --include=dev --no-audit --no-fund
 
 COPY . .
+# The context is frontend/ only: nothing run here may read outside it. check:fixtures
+# (compares fixtures with backend/) runs only in the monorepo, never here.
+# Reproduce this step locally with: npm run check:docker-context
 RUN npm run check:blocks && npm run build
 RUN grep -rqF "$VITE_API_BASE_URL" dist/assets \
     || { echo "build: API origin not found in the bundle" >&2; exit 1; }
