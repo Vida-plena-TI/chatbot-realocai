@@ -21,7 +21,10 @@ export const diaCurto = (iso) => WD[toDate(iso).getDay()];
 export const diaLongo = (iso) => WDL[toDate(iso).getDay()];
 export const rotuloDia = (iso) => `${diaCurto(iso)} ${ddmm(iso)}`;
 
-export function periodo({ inicio, fim }) {
+/** Texto do período; null ou ausente (ex.: plano semanal, sem datas) vira "". */
+export function periodo(p) {
+  if (!p?.inicio || !p?.fim) return '';
+  const { inicio, fim } = p;
   if (inicio === fim) return `${diaLongo(inicio)}, ${ddmmaaaa(inicio)}`;
   return `${ddmm(inicio)} a ${ddmmaaaa(fim)}`;
 }

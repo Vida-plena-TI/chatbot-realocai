@@ -25,7 +25,8 @@
  * @property {number} versao
  * @property {'ocupacao_profissional'|'pacientes_por_profissional'|'ocupacao_agregada'|'disponibilidade'|'convenio'|'agenda_paciente'|'qualidade_agenda'|'tabela_generica'} tipo
  * @property {string} titulo
- * @property {{inicio: string, fim: string}} periodo Datas ISO AAAA-MM-DD.
+ * @property {{inicio: string, fim: string}|null} periodo Datas ISO AAAA-MM-DD; null quando o bloco
+ *   não tem datas (ex.: plano semanal, que usa a grade semanal). Sempre presente.
  * @property {number|null} meta Fração de 0 a 1 (ex.: 0.8); null quando a métrica não tem meta.
  * @property {boolean} parcial
  * @property {string[]} dias_nao_lidos Datas ISO que não puderam ser lidas (quando `parcial`).
