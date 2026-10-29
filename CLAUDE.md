@@ -215,8 +215,10 @@ extração de memórias). Ainda não há endpoints REST para `Memory`.
 
 No admin, mensagens são somente leitura (registro de auditoria) e não podem ser criadas
 por lá. Por padrão o admin mostra só metadados das mensagens (seq, papel, data, tamanho);
-o texto, os blocos e a `preview` da conversa só aparecem com
-`ADMIN_SHOW_MESSAGE_CONTENT=true` (padrão `false`).
+o texto, os blocos, a `preview` e o **título** da conversa (vem da primeira mensagem e
+pode ter nome de paciente; na listagem vira "(oculto)") só aparecem com
+`ADMIN_SHOW_MESSAGE_CONTENT=true` (padrão `false`). Por isso `Conversation.__str__`
+devolve só o id (aparece em breadcrumbs, colunas de FK e no `LogEntry` do admin).
 
 Título e prévia seguem o front (`src/utils/content.js`), em `chat/services/content.py`:
 `title_from` (espaços colapsados, corte em 60 com "…") e `summarize` (resposta sem o
@@ -241,6 +243,10 @@ Todos exigem sessão (401 se anônimo) e CSRF nos métodos não seguros. O query
 pelo usuário logado e exclui conversas soft-deleted: conversa de outro usuário ou apagada
 responde **404** (nunca 403).
 
+Toda resposta sob `/api/` (menos `/api/health/`) sai com `Cache-Control: no-store,
+private` (`core.middleware.NoStoreApiMiddleware`, logo depois do `SecurityMiddleware`);
+diretivas que a view já define são mantidas e `public` é removido.
+
 O contrato segue o mock do front (`src/api/mock/mockClient.js`, a especificação
 executável); `chat/tests/test_frontend_contract.py` percorre todas as chamadas de
 `src/api/http.js`.
@@ -262,6 +268,9 @@ executável); `chat/tests/test_frontend_contract.py` percorre todas as chamadas 
 - `GET /api/conversations/{id}/messages/` — paginada (**30** por página), por `seq`
   crescente. Campos: `id`, `seq`, `role`, `content`, `created_at` e `blocos` **só quando
   a mensagem tem blocos** (igual ao mock), para o histórico reabrir com os cartões.
+  Blocos com dados de pacientes só saem para quem pode vê-los (ver
+  [Relatórios com dados de pacientes](#relatórios-com-dados-de-pacientes-grupo-coordenacao));
+  o que está gravado não muda.
 - `POST /api/conversations/{id}/messages/` com `{content}` (trim; 1 a `MESSAGE_MAX_LENGTH`
   caracteres, padrão 2000):
   - conversa arquivada → 400 (o agente não é chamado); vazio/só espaços → 400 "A mensagem
@@ -282,11 +291,51 @@ executável); `chat/tests/test_frontend_contract.py` percorre todas as chamadas 
   chamar o RealocAI** nem extrair memórias. O realocAI nunca altera a agenda. O `content`
   do agente é gravado sem alteração (blocos ```` ```proposta ```` incluídos).
 
+## Relatórios com dados de pacientes (grupo `coordenacao`)
+
+Alguns blocos do RealocAI trazem nomes de pacientes. As regras ficam **num único lugar**,
+`chat/services/sensitive.py` (`SENSITIVE_BLOCK_RULES`):
+
+- `tipo == "agenda_paciente"`;
+- `tipo == "tabela_generica"` com `dados.relatorio == "pacientes_por_plano"`.
+
+**Todo tipo novo de bloco (ou valor novo de `relatorio`) com dado de paciente DEVE entrar
+nessa lista, com teste em `chat/tests/test_patient_reports.py`**; senão qualquer usuário
+logado o recebe. `is_sensitive_block` nunca lança (bloco malformado → não sensível).
+
+Quem vê: superusuários e membros ativos do grupo `coordenacao`
+(`can_view_patient_reports`). O grupo é criado **vazio** pela migração
+`chat.0005_patient_reports_group`; incluir pessoas: Admin do Django → Usuários → (usuário)
+→ Permissões → Grupos. Após o deploy ninguém além dos superusuários tem acesso até o
+administrador atribuir.
+
+Para quem não pode ver:
+
+- **Geração** (`agent._restrict_patient_reports`, entre a resposta do RealocAI e o
+  `record_exchange`): os blocos sensíveis são descartados (os outros da mesma resposta
+  ficam) e o texto do assistente vira `PATIENT_REPORTS_RESTRICTED_MESSAGE` ("Este relatório
+  contém dados de pacientes e está disponível apenas para a coordenação. Fale com a
+  coordenação para solicitá-lo."), que é o que fica gravado (também na `preview`). Nada do
+  bloco descartado vai para o banco. Log INFO só com `sensitive_blocks_dropped=<n>` e o id
+  da conversa.
+- **Histórico**: `MessageSerializer` omite os blocos sensíveis (contexto
+  `can_view_patient_reports`, ausente = não pode). Cobre mensagens gravadas antes da regra
+  e quem saiu do grupo.
+- **Exportação**: 403 (acima).
+
+O front não muda: resposta sem `blocos` é uma mensagem de texto comum.
+
+Testes: `TransactionTestCase` (testes com `transaction=True`) esvazia o banco e apaga o
+grupo da migração; nos fixtures, use `Group.objects.get_or_create`.
+
 ## Exportação de relatórios (`/api/reports/export/`)
 
 `POST /api/reports/export/` com `{formato, blocos}` → arquivo. Sessão + CSRF obrigatórios.
 Gera o arquivo **só a partir do corpo** (não lê o banco: nada de outro usuário entra).
 
+- Bloco com dados de pacientes no corpo e usuário fora do grupo `coordenacao` → **403**
+  `{"detail": "Você não tem permissão para exportar este relatório."}`, antes de validar
+  o resto e sem eco do corpo.
 - `formato`: só `"excel"` (.xlsx, openpyxl). Qualquer outro, inclusive `"pdf"`, → 400
   "Formato não suportado." (o PDF v1 é impressão do navegador, feita no front).
 - Corpo limitado por `REPORTS_EXPORT_MAX_BYTES` (padrão 5 MB) → 413 com mensagem fixa (sem
@@ -360,8 +409,9 @@ navegador ──POST /api/conversations/{id}/messages/──▶ Django (view)
         conversa_id=null (o RealocAI começa sem o histórico anterior)
         falha → log ERROR (conversation.id, tipo, status, duração) e AgentUnavailableError
         (502); NADA é gravado e o external_conversation_id não muda
-     d. sucesso → record_exchange: UMA transação grava user + assistant (seq consecutivos,
-        blocos), preview, título automático e o novo conversa_id
+     d. sucesso → sem o grupo `coordenacao`, descarta blocos com dados de pacientes e troca
+        o texto pela mensagem fixa; record_exchange: UMA transação grava user + assistant
+        (seq consecutivos, blocos), preview, título automático e o novo conversa_id
      e. finally: libera a reivindicação (só se ainda for a nossa)
      f. memory_extraction.extract_memories(conversation) — nunca levanta exceção
   3. 201 {user_message, assistant_message}  ou  409/502 {detail}

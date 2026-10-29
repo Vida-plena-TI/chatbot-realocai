@@ -207,6 +207,14 @@ Ordem: **DNS → Supabase → backend → frontend → testes pós-deploy**.
 - **Primeiro acesso ao admin**: no Console do App (shell do container), rode
   `python manage.py createsuperuser`. Não há autocadastro: as contas dos usuários são
   criadas no admin (`https://api-chat.vidaplenamulti.com.br/<ADMIN_URL>`).
+- **Grupo `coordenacao`** (relatórios com dados de pacientes): a migração
+  `chat.0005_patient_reports_group` cria o grupo **vazio**. Depois do deploy **ninguém**
+  recebe esses relatórios (`agenda_paciente` e pacientes por plano), só superusuários,
+  até o administrador incluir as pessoas: Admin do Django → **Usuários** → abra o usuário
+  → **Permissões** → **Grupos** → mova `coordenacao` para "Grupos escolhidos" → Salvar.
+  Para tirar o acesso, faça o caminho inverso; vale na próxima requisição, inclusive para
+  o histórico. Quem pode estar no grupo é decisão do dono do produto (ver CLAUDE.md,
+  "Relatórios com dados de pacientes").
 
 ### 2. App `chatbot-frontend`
 
@@ -248,7 +256,8 @@ Faça na ordem, com um usuário de teste e **dados fictícios**:
 2. **Headers**: `curl -sI https://chat.vidaplenamulti.com.br/` mostra
    `Content-Security-Policy`, `X-Frame-Options: DENY`, `Cache-Control: no-cache`.
    `curl -sI https://api-chat.vidaplenamulti.com.br/api/health/` mostra
-   `Strict-Transport-Security: max-age=3600`.
+   `Strict-Transport-Security: max-age=3600`. No DevTools → Network, as respostas de
+   `/api/conversations/...` e `/api/auth/me/` têm `Cache-Control: no-store, private`.
 3. **Login + CSRF entre subdomínios**: abra `https://chat.vidaplenamulti.com.br`, faça
    login. No DevTools (Application → Cookies), confira:
    - `csrftoken` com Domain `.vidaplenamulti.com.br`, Secure, SameSite=Lax, **sem**
@@ -269,6 +278,11 @@ Faça na ordem, com um usuário de teste e **dados fictícios**:
    chega via `NUM_PROXIES=1` e que o limite é compartilhado entre os workers.
 9. **Logs**: nos logs do backend aparecem só método, caminho (sem query string), status,
    tamanho e duração. Nenhum texto de mensagem.
+10. **Relatórios com dados de pacientes**: com um usuário **fora** do grupo
+    `coordenacao`, peça a agenda de um paciente fictício → a resposta é "Este relatório
+    contém dados de pacientes e está disponível apenas para a coordenação…", sem cartão.
+    Inclua o usuário no grupo (admin), peça de novo → o cartão aparece. Nos logs, só
+    `sensitive_blocks_dropped=<n>` com o id da conversa.
 
 ## Traefik: versão e timeouts
 
@@ -364,7 +378,10 @@ restauração), e a região dos dados passa a ser a da VPS.
 - [ ] **Data API do Supabase desligada** (ou `public` fora dos schemas expostos).
 - [ ] Senha do banco, `SECRET_KEY`, `REALOCAI_API_KEY` e `OPENAI_API_KEY` só no painel e
       no gerenciador de senhas; nunca em chat, e-mail, commit ou print.
-- [ ] `ADMIN_SHOW_MESSAGE_CONTENT=false` (admin mostra só metadados das mensagens).
+- [ ] `ADMIN_SHOW_MESSAGE_CONTENT=false` (admin mostra só metadados das mensagens e
+      esconde o título das conversas, que pode ter nome de paciente).
+- [ ] Grupo `coordenacao` só com quem o dono do produto autorizou a ver relatórios com
+      dados de pacientes; revisar os membros periodicamente.
 - [ ] `REALOCAI_USE_FAKE=false`, `DEBUG=false` (a validação garante).
 - [ ] `REALOCAI_INJECT_MEMORIES=false` até a validação manual descrita no CLAUDE.md.
 - [ ] Logs sem conteúdo: o access log não tem query string, IP, user agent nem corpo, e
