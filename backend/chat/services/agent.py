@@ -9,8 +9,9 @@ Flow of a turn:
    another turn is in flight, raise ConversationBusyError (409);
 3. call RealocAI with no transaction open (a 404 for a known conversa_id is retried
    once as a new conversation);
-4. on success only, store the user message and the answer in one transaction
-   (record_exchange); on failure nothing is stored;
+4. on success only, drop the blocks with patient data the owner may not see (see
+   chat.services.sensitive), then store the user message and the answer in one
+   transaction (record_exchange); on failure nothing is stored;
 5. release the claim, then extract long-term memories (never raises).
 
 Logging rule: message contents, report blocks and agent answers are health data and
@@ -34,6 +35,11 @@ from chat.services.realocai_client import (
     ChatFailure,
     ChatSuccess,
     send_chat_message,
+)
+from chat.services.sensitive import (
+    PATIENT_REPORTS_RESTRICTED_MESSAGE,
+    can_view_patient_reports,
+    split_sensitive_blocks,
 )
 
 logger = logging.getLogger(__name__)
@@ -114,11 +120,12 @@ def exchange_messages(conversation, content) -> Exchange:
                 "RealocAI sent invalid report blocks; storing none (conversation=%s)",
                 conversation.id,
             )
+        resposta, blocos = _restrict_patient_reports(conversation, result.resposta, result.blocos)
         user_message, assistant_message = record_exchange(
             conversation,
             content,
-            result.resposta,
-            blocos=result.blocos,
+            resposta,
+            blocos=blocos,
             external_conversation_id=result.conversa_id,
         )
     finally:
@@ -137,6 +144,22 @@ def proposal_reply(content):
     if text.startswith(PROPOSAL_REJECTED_PREFIX):
         return PROPOSAL_REJECTED_REPLY
     return None
+
+
+def _restrict_patient_reports(conversation, resposta, blocos):
+    """Drop blocks with patient data the conversation owner may not see.
+
+    When any is dropped, the answer is replaced by a fixed text (it may describe the
+    dropped report), so nothing of those blocks is ever stored. Other blocks stay.
+    """
+    if can_view_patient_reports(conversation.user):
+        return resposta, blocos
+    kept, dropped = split_sensitive_blocks(blocos)
+    if not dropped:
+        return resposta, blocos
+    # Only the count: the type, title or contents of a block are health data.
+    logger.info("sensitive_blocks_dropped=%d (conversation=%s)", dropped, conversation.id)
+    return PATIENT_REPORTS_RESTRICTED_MESSAGE, kept
 
 
 def _claim(conversation):

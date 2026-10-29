@@ -55,7 +55,9 @@ class Conversation(models.Model):
         ]
 
     def __str__(self):
-        return self.title or str(self.id)
+        # Never the title: it is derived from the first message and may name a patient,
+        # and __str__ shows up in the admin (breadcrumbs, FK columns, LogEntry.object_repr).
+        return str(self.id)
 
 
 class Message(models.Model):

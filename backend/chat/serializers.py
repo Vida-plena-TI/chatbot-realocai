@@ -9,8 +9,11 @@ from django.conf import settings
 from rest_framework import serializers
 
 from .models import Conversation, Message
+from .services.sensitive import split_sensitive_blocks
 
 TITLE_MAX_LENGTH = 120
+# Serializer context key: whether the requester may see blocks with patient data.
+CAN_VIEW_PATIENT_REPORTS = "can_view_patient_reports"
 EMPTY_MESSAGE = "A mensagem não pode ficar vazia."
 INVALID_STATUS = "Status inválido."
 
@@ -63,7 +66,11 @@ class ConversationCreateSerializer(ConversationSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    """`blocos` only appears when the message has report blocks (like the mock)."""
+    """`blocos` only appears when the message has report blocks (like the mock).
+
+    Blocks with patient data are left out unless the context says the requester may see
+    them (CAN_VIEW_PATIENT_REPORTS; missing means no). The stored message is unchanged.
+    """
 
     class Meta:
         model = Message
@@ -72,6 +79,8 @@ class MessageSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
+        if not self.context.get(CAN_VIEW_PATIENT_REPORTS, False):
+            data["blocos"], _ = split_sensitive_blocks(data.get("blocos"))
         if not data.get("blocos"):
             data.pop("blocos", None)
         return data

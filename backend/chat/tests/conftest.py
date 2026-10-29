@@ -3,8 +3,10 @@ from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 
 from chat.models import Conversation
+from chat.services.sensitive import PATIENT_REPORTS_GROUP
 
 
 @pytest.fixture
@@ -19,6 +21,13 @@ def other_user(db):
     return get_user_model().objects.create_user(
         email="outra.profissional@exemplo.com", password="senha-forte-123"
     )
+
+
+@pytest.fixture
+def coordinator(user):
+    """`user` in the group that may see report blocks with patient data."""
+    user.groups.add(Group.objects.get_or_create(name=PATIENT_REPORTS_GROUP)[0])
+    return user
 
 
 @pytest.fixture
