@@ -85,7 +85,7 @@ def test_agent_error_bodies_never_reach_the_logs(api, conversation, respx_mock, 
 
 
 def test_successful_turn_with_patient_blocks_logs_no_content(
-    api, conversation, respx_mock, fake_openai, caplog
+    api, coordinator, conversation, respx_mock, fake_openai, caplog
 ):
     blocos = [load_example("agenda_paciente"), load_example("disponibilidade_vagas")]
     respx_mock.post(REALOCAI_CHAT_URL).mock(

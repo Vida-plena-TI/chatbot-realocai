@@ -16,6 +16,7 @@ from rest_framework.throttling import ScopedRateThrottle
 
 from .models import Conversation
 from .serializers import (
+    CAN_VIEW_PATIENT_REPORTS,
     INVALID_STATUS,
     ConversationCreateSerializer,
     ConversationSerializer,
@@ -25,6 +26,7 @@ from .serializers import (
 )
 from .services.agent import AgentUnavailableError, ConversationBusyError, exchange_messages
 from .services.conversations import create_conversation, soft_delete_conversation
+from .services.sensitive import can_view_patient_reports
 
 DetailSerializer = inline_serializer("ChatDetail", fields={"detail": serializers.CharField()})
 
@@ -140,12 +142,16 @@ class ConversationViewSet(
     @action(detail=True, methods=["get", "post"])
     def messages(self, request: Request, pk=None) -> Response:
         conversation = self.get_object()
+        # Read on every request: covers messages stored before the restriction and users
+        # who have since left the group.
+        context = {CAN_VIEW_PATIENT_REPORTS: can_view_patient_reports(request.user)}
         if request.method == "GET":
             paginator = MessagePagination()
             page = paginator.paginate_queryset(
                 conversation.messages.order_by("seq"), request, view=self
             )
-            return paginator.get_paginated_response(MessageSerializer(page, many=True).data)
+            data = MessageSerializer(page, many=True, context=context).data
+            return paginator.get_paginated_response(data)
 
         if conversation.status == Conversation.Status.ARCHIVED:
             return Response({"detail": ARCHIVED_CONVERSATION}, status=status.HTTP_400_BAD_REQUEST)
@@ -160,4 +166,6 @@ class ConversationViewSet(
             # Nothing was stored: the client can send the same text again.
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        return Response(ExchangeSerializer(exchange).data, status=status.HTTP_201_CREATED)
+        return Response(
+            ExchangeSerializer(exchange, context=context).data, status=status.HTTP_201_CREATED
+        )
