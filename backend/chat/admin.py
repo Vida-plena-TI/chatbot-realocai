@@ -28,6 +28,11 @@ def message_size(obj):
     return size
 
 
+# Shown instead of a conversation title while contents are hidden: the automatic title
+# comes from the first message and may name a patient.
+HIDDEN_TITLE = "(oculto)"
+
+
 class MessageInline(admin.TabularInline):
     """Read-only transcript: messages are an audit record, created only by the app."""
 
@@ -54,7 +59,7 @@ class MessageInline(admin.TabularInline):
 
 @admin.register(Conversation)
 class ConversationAdmin(admin.ModelAdmin):
-    list_display = ["id", "user", "title", "status", "updated_at", "deleted_at"]
+    list_display = ["id", "user", "title_display", "status", "updated_at", "deleted_at"]
     list_filter = ["status", "user"]
     list_select_related = ["user"]
     search_fields = ["user__email"]
@@ -71,9 +76,14 @@ class ConversationAdmin(admin.ModelAdmin):
     raw_id_fields = ["user"]
     inlines = [MessageInline]
 
+    @admin.display(description="título")
+    def title_display(self, obj):
+        return obj.title if show_message_content() else HIDDEN_TITLE
+
     def get_exclude(self, request, obj=None):
-        # The preview is an excerpt of the last answer: content, like the messages.
-        return [] if show_message_content() else ["preview"]
+        # The preview is an excerpt of the last answer and the title comes from the first
+        # message: content, like the messages.
+        return [] if show_message_content() else ["title", "preview"]
 
     def get_readonly_fields(self, request, obj=None):
         hidden = self.get_exclude(request, obj)

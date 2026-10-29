@@ -3,6 +3,7 @@ from django.contrib.admin.sites import site
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
+from chat.admin import HIDDEN_TITLE
 from chat.models import Memory, Message
 from chat.services.conversations import add_memory, append_message, record_exchange
 
@@ -90,3 +91,69 @@ def test_message_cannot_be_added_via_admin(rf):
 
 def test_memory_is_editable_via_admin():
     assert "content" not in site._registry[Memory].readonly_fields
+
+
+PATIENT_TITLE = "Agenda da Paciente Ficticia Delta"
+
+
+@pytest.fixture
+def titled(conversation):
+    # Automatic titles come from the first message and may name a patient.
+    conversation.title = PATIENT_TITLE
+    conversation.save(update_fields=["title"])
+    return record_exchange(conversation, "Pergunta fictícia", "Resposta fictícia")[1]
+
+
+def admin_title_pages(admin_client, conversation, answer):
+    return [
+        admin_client.get(reverse("admin:chat_conversation_changelist")),
+        *admin_pages(admin_client, conversation, answer),
+        admin_client.get(reverse("admin:chat_message_changelist")),
+    ]
+
+
+@pytest.mark.django_db
+def test_conversation_title_is_hidden_by_default(admin_client, conversation, titled, settings):
+    settings.ADMIN_SHOW_MESSAGE_CONTENT = False
+
+    pages = admin_title_pages(admin_client, conversation, titled)
+
+    for response in pages:
+        assert response.status_code == 200
+        assert PATIENT_TITLE not in response.content.decode()
+    assert HIDDEN_TITLE in pages[0].content.decode()
+
+
+@pytest.mark.django_db
+def test_conversation_title_is_shown_when_enabled(admin_client, conversation, titled, settings):
+    settings.ADMIN_SHOW_MESSAGE_CONTENT = True
+
+    changelist = admin_client.get(reverse("admin:chat_conversation_changelist"))
+
+    assert PATIENT_TITLE in changelist.content.decode()
+    assert HIDDEN_TITLE not in changelist.content.decode()
+
+
+@pytest.mark.django_db
+def test_saving_with_hidden_title_keeps_it(admin_client, conversation, settings):
+    settings.ADMIN_SHOW_MESSAGE_CONTENT = False
+    conversation.title = PATIENT_TITLE
+    conversation.save(update_fields=["title"])
+    url = reverse("admin:chat_conversation_change", args=[conversation.pk])
+
+    response = admin_client.post(
+        url,
+        {
+            "user": conversation.user_id,
+            "status": "archived",
+            "summary": "",
+            "metadata": "{}",
+            "messages-TOTAL_FORMS": "0",
+            "messages-INITIAL_FORMS": "0",
+        },
+    )
+
+    assert response.status_code == 302
+    conversation.refresh_from_db()
+    assert conversation.title == PATIENT_TITLE
+    assert conversation.status == "archived"
