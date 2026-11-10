@@ -14,6 +14,7 @@ from rest_framework.test import APIClient
 from chat.models import Message
 from chat.services.conversations import record_exchange
 from chat.services.sensitive import (
+    PATIENT_DATA_FLAG,
     PATIENT_REPORTS_GROUP,
     PATIENT_REPORTS_RESTRICTED_MESSAGE,
     can_view_patient_reports,
@@ -147,10 +148,18 @@ def with_relatorio(bloco, relatorio):
     return bloco
 
 
+def flagged_unknown_report():
+    """A block no rule knows (future `relatorio`), flagged by the agent as sensitive."""
+    return with_relatorio(pacientes_por_profissional_nomes(), "relatorio_futuro") | {
+        PATIENT_DATA_FLAG: True
+    }
+
+
 SENSITIVE_EXAMPLES = {
     "agenda_paciente": lambda: load_example("agenda_paciente"),
     "pacientes_por_plano": pacientes_por_plano,
     "pacientes_por_profissional_nomes": pacientes_por_profissional_nomes,
+    "contem_dados_pacientes": flagged_unknown_report,
 }
 
 # Must keep reaching every logged-in user: counts only, or no patient data at all.
@@ -248,6 +257,38 @@ def test_counts_and_near_misses_are_not_sensitive(name):
     assert is_sensitive_block(NOT_SENSITIVE_EXAMPLES[name]()) is False
 
 
+@pytest.mark.parametrize(
+    "bloco",
+    [
+        {"tipo": "tipo_futuro", PATIENT_DATA_FLAG: True},
+        {PATIENT_DATA_FLAG: True},
+        load_example("disponibilidade_vagas") | {PATIENT_DATA_FLAG: True},
+        load_fixture("pacientes_por_profissional_semana") | {PATIENT_DATA_FLAG: True},
+    ],
+)
+def test_flag_true_makes_any_block_sensitive(bloco):
+    assert is_sensitive_block(bloco) is True
+
+
+@pytest.mark.parametrize("value", ["true", "True", 1, 1.0, None, False, 0, [], {}, [True]])
+def test_flag_is_strict_boolean_true(value):
+    bloco = load_example("disponibilidade_vagas") | {PATIENT_DATA_FLAG: value}
+
+    assert is_sensitive_block(bloco) is False
+
+
+@pytest.mark.parametrize("value", [False, "false", None, 0])
+def test_flag_false_does_not_override_the_rules(value):
+    assert is_sensitive_block(pacientes_por_profissional_nomes() | {PATIENT_DATA_FLAG: value})
+
+
+def test_flag_inside_dados_is_not_read():
+    bloco = load_example("disponibilidade_vagas")
+    bloco["dados"][PATIENT_DATA_FLAG] = True
+
+    assert is_sensitive_block(bloco) is False
+
+
 def test_old_pacientes_por_profissional_has_no_names_and_is_its_own_type():
     bloco = load_fixture("pacientes_por_profissional_semana")
 
@@ -277,6 +318,10 @@ def test_old_pacientes_por_profissional_has_no_names_and_is_its_own_type():
         {"tipo": "tabela_generica", "dados": {"relatorio": ["pacientes_por_profissional_nomes"]}},
         {"dados": {"relatorio": "pacientes_por_profissional_nomes"}},
         {"tipo": "convenio", "dados": {"relatorio": "pacientes_por_profissional_nomes"}},
+        {PATIENT_DATA_FLAG: "true"},
+        {PATIENT_DATA_FLAG: 1},
+        {PATIENT_DATA_FLAG: None},
+        {PATIENT_DATA_FLAG: {"x": True}},
     ],
 )
 def test_malformed_blocks_are_not_sensitive_and_never_raise(bloco):
