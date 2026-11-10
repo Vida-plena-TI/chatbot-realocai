@@ -473,3 +473,117 @@ export const tabelaGenericaPlanoSemanal = {
   },
   tabelas: [{ nome: 'Plano', colunas: colsPlano, linhas: linhasPlano }],
 };
+
+// --- Pacientes por profissional COM NOMES, agrupado (dados fictícios) ------------------------
+// Forma do exemplo oficial de `pacientes_por_profissional_nomes` (PR #14 do agente) + os campos
+// opcionais `agrupar_por` e `unidade_grupo` em `dados`, que o agente ainda vai enviar (fora do
+// schema sincronizado: check:blocks os tira só para validar) e `contem_dados_pacientes: true`.
+// 800 linhas em 33 grupos (especialidade > profissional), já contíguas e na ordem do agente:
+// especialidades em ordem alfabética, sem especialidade (null) por último, pacientes em ordem
+// alfabética dentro da profissional. Um grupo com 1 linha (singular) e um paciente em duas
+// profissionais. Todos os nomes de pacientes são "Paciente Fictício …".
+const ESPECIALIDADES_NOMES = [
+  ['Fisioterapia Neurofuncional', ['Antônia Valença Brandão', 'Bárbara Conceição Magalhães', 'Caetano Araújo Simões', 'Débora Assunção Queiroz']],
+  ['Fonoaudiologia', ['Elisângela Gonçalves Peçanha', 'Fábio Antunes Mourão', 'Glória Brandão de Sá', 'Heloísa Câmara Lisboa', 'Iára Monteiro Guimarães']],
+  ['Musicoterapia', ['Joaquim Estêvão Faria', 'Lúcia Helena Tavares Leão']],
+  ['Nutrição', ['Márcia Conceição Vilela', 'Natália Simões Andrade']],
+  ['Psicologia', ['Otávio Galvão Rezende', 'Patrícia Lemos Cordeiro', 'Quitéria Albuquerque Neves', 'Rosângela Pires Damasceno', 'Sebastião Ferraz Coutinho', 'Tânia Regina Mascarenhas']],
+  ['Psicomotricidade', ['Úrsula Valadares Teixeira', 'Valéria Bittencourt Salgado', 'Wânia Cavalcanti Prado']],
+  ['Psicopedagogia', ['Ximena Aragão Fontes', 'Yasmin Gusmão Bastos', 'Zélia Montenegro Lobo']],
+  ['Terapia Ocupacional', ['Ângela Maria Furtado Correia', 'Benedita Sampaio Falcão', 'Célia Regina Pacheco Leite', 'Dalva Nogueira Siqueira', 'Eunice Rocha Brandão', 'Flávia Medeiros Quintão']],
+  [null, ['Graça Holanda Vasconcelos', 'Inês Barreto Moura']],
+];
+// Linhas por profissional, na ordem acima (índice 12 = Natália Simões Andrade: 1 paciente).
+const TAMANHOS_NOMES = [6, 8, 32, 12, 23, 34, 14, 25, 36, 16, 27, 38, 1, 29, 40, 20, 31, 11, 22, 33, 13, 24, 35, 15, 26, 37, 17, 28, 39, 19, 30, 24, 35];
+const PEDRAS = ['Âmbar', 'Ágata', 'Água-Marinha', 'Ametista', 'Citrino', 'Coral', 'Cristal', 'Esmeralda', 'Granada', 'Jade', 'Jaspe', 'Obsidiana', 'Ônix', 'Opala', 'Pérola', 'Quartzo', 'Rubi', 'Safira', 'Topázio', 'Turmalina'];
+const SOBRENOMES = ['da Conceição', 'de Assunção', 'Gonçalves', 'Magalhães', 'Brandão', 'Simões', 'Araújo', 'Peçanha', 'Guimarães', 'Câmara', 'Estêvão', 'Mourão', 'Lisboa', 'Valença', 'Quintão', 'Falcão', 'Damasceno', 'Coutinho', 'Bittencourt', 'Montenegro'];
+const COMPLEMENTOS = ['Ribeiro', 'de Albuquerque Sá', 'Vasconcelos Leão'];
+const DIAS_NOMES = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const pacienteFicticio = (i) => `Paciente Fictício ${PEDRAS[i % 20]} ${SOBRENOMES[Math.floor(i / 20) % 20]} ${COMPLEMENTOS[Math.floor(i / 400) % 3]}`;
+const colsNomes = [
+  { chave: 'especialidade', rotulo: 'Especialidade', formato: 'texto' },
+  { chave: 'profissional', rotulo: 'Profissional', formato: 'texto' },
+  { chave: 'paciente', rotulo: 'Paciente', formato: 'texto' },
+  { chave: 'dias', rotulo: 'Dias', formato: 'texto' },
+  { chave: 'atendimentos_semana', rotulo: 'Atendimentos na semana', formato: 'inteiro' },
+];
+const porNome = new Intl.Collator('pt-BR', { sensitivity: 'base' }).compare;
+const gruposNomes = ESPECIALIDADES_NOMES.flatMap(([especialidade, profs]) => profs.map((profissional) => ({ especialidade, profissional })));
+let proximoPaciente = 0;
+const linhasPorGrupo = gruposNomes.map(({ especialidade, profissional }, g) => {
+  const indices = Array.from({ length: TAMANHOS_NOMES[g] }, () => proximoPaciente++);
+  // O mesmo paciente com duas profissionais: o primeiro de Fonoaudiologia volta em Psicologia.
+  if (g === 14) indices[0] = gruposNomes.slice(0, 4).reduce((acc, _, i) => acc + TAMANHOS_NOMES[i], 0);
+  return indices
+    .map((i) => {
+      const n = 1 + (i % 3);
+      const inicio = (i * 7) % (DIAS_NOMES.length - n + 1);
+      return { especialidade, profissional, paciente: pacienteFicticio(i), dias: DIAS_NOMES.slice(inicio, inicio + n).join(', '), atendimentos_semana: n + (i % 4 === 0 ? 1 : 0) };
+    })
+    .sort((a, b) => porNome(a.paciente, b.paciente));
+});
+const linhasNomes = linhasPorGrupo.flat();
+const distintosNomes = new Set(linhasNomes.map((l) => l.paciente)).size;
+const colsResumoNomes = [
+  { chave: 'especialidade', rotulo: 'Especialidade', formato: 'texto' },
+  { chave: 'profissional', rotulo: 'Profissional', formato: 'texto' },
+  { chave: 'pacientes', rotulo: 'Pacientes distintos', formato: 'inteiro' },
+  { chave: 'atendimentos_semana', rotulo: 'Atendimentos na semana', formato: 'inteiro' },
+];
+const resumoNomes = linhasPorGrupo.map((linhas, g) => ({
+  ...gruposNomes[g],
+  pacientes: linhas.length,
+  atendimentos_semana: linhas.reduce((acc, l) => acc + l.atendimentos_semana, 0),
+}));
+
+/** Modo plano: o mesmo relatório sem `agrupar_por` (como o agente manda hoje). */
+export const tabelaGenericaPacientesNomesPlana = {
+  versao: 1,
+  tipo: 'tabela_generica',
+  titulo: 'Pacientes por profissional (grade semanal vigente)',
+  periodo: null,
+  meta: null,
+  parcial: false,
+  dias_nao_lidos: [],
+  avisos: [
+    'Relatório gerencial da grade semanal vigente: cobre só pacientes com sessão na grade desta semana, não todos os pacientes da clínica.',
+    'Paciente atendido por mais de uma profissional aparece na lista de cada uma.',
+    `${linhasNomes.length - distintosNomes} paciente é atendido por mais de uma profissional e aparece em cada uma.`,
+  ],
+  resumo: [
+    { rotulo: 'Profissionais', valor: gruposNomes.length, formato: 'inteiro', exibicao: String(gruposNomes.length) },
+    { rotulo: 'Pacientes distintos', valor: distintosNomes, formato: 'inteiro', exibicao: String(distintosNomes) },
+    { rotulo: 'Com mais de uma profissional', valor: linhasNomes.length - distintosNomes, formato: 'inteiro', exibicao: String(linhasNomes.length - distintosNomes) },
+  ],
+  dados: {
+    tipo: 'tabela_generica',
+    relatorio: 'pacientes_por_profissional_nomes',
+    dimensoes: [],
+    metricas: [],
+    colunas: colsNomes,
+    linhas: linhasNomes,
+    total: {},
+    linhas_omitidas: 0,
+  },
+  tabelas: [
+    { nome: 'Pacientes', colunas: colsNomes, linhas: linhasNomes },
+    { nome: 'Resumo por profissional', colunas: colsResumoNomes, linhas: resumoNomes },
+  ],
+};
+
+/** Modo agrupado: especialidade > profissional, "(N pacientes)" no título de cada grupo. */
+export const tabelaGenericaPacientesNomesAgrupada = {
+  ...tabelaGenericaPacientesNomesPlana,
+  contem_dados_pacientes: true,
+  dados: {
+    ...tabelaGenericaPacientesNomesPlana.dados,
+    agrupar_por: ['especialidade', 'profissional'],
+    unidade_grupo: { singular: 'paciente', plural: 'pacientes' },
+  },
+};
+
+/** `agrupar_por` com coluna inexistente: volta ao modo plano, sem erro. */
+export const tabelaGenericaPacientesNomesAgruparInvalido = {
+  ...tabelaGenericaPacientesNomesAgrupada,
+  dados: { ...tabelaGenericaPacientesNomesAgrupada.dados, agrupar_por: ['especialidade', 'coluna_inexistente'] },
+};
