@@ -13,6 +13,7 @@ import {
   qualidadeAgenda,
   tabelaGenericaCapacidade,
   tabelaGenericaLonga,
+  tabelaGenericaPacientesNomesAgrupada,
   tabelaGenericaPersonalizado,
   tabelaGenericaRanking,
   tabelaGenericaSemMeta,
@@ -24,6 +25,8 @@ const blocoDesconhecido = { ...ocupacaoAgregada, tipo: 'tipo_futuro', titulo: 'R
 // Pedidos dos tipos novos. A ordem importa: o primeiro que casar responde.
 const NOVOS = [
   [/relat[óo]rios novos|todos os novos/, 'Separei os oito relatórios novos em abas.', [disponibilidadeVagas, disponibilidadeJanelas, convenio, agendaPaciente, qualidadeAgenda, tabelaGenericaRanking, tabelaGenericaCapacidade, tabelaGenericaPersonalizado]],
+  // Antes de "pacientes por" (contagens), que fica no fim: este é o relatório com os nomes.
+  [/nomes? d[eo]s? pacientes|pacientes de cada profissional/, 'Separei os pacientes de cada profissional por especialidade (dados fictícios).', [tabelaGenericaPacientesNomesAgrupada]],
   [/bloco desconhecido|tipo futuro/, 'Psicomotricidade (54,1%) e Sala 7 (50,0%) estão mais longe da meta de 80%.', [blocoDesconhecido, ocupacaoAgregada]],
   [/vagas? fict[íi]cias|semana cheia|disponibilidade sint[ée]tica/, 'Há bastante vaga livre na semana (exemplo sintético).', [disponibilidadeSintetica]],
   [/vagas? parcia|disponibilidade parcial/, 'Não consegui ler a quarta-feira. As vagas abaixo consideram os outros dias.', [disponibilidadeParcial]],
