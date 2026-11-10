@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowDown, CalendarX, Check, Info, TriangleAlert } from 'lucide-react';
 import s from './reports.module.css';
-import { faixa } from './format';
+import { faixa, int } from './format';
 
 /** Barra horizontal com a marca da meta. `neutro`: sem escala (inconsistência de dados). */
 export function Meter({ value, meta = 0.8, label, large = false, showMetaLabel = false, neutro = false }) {
@@ -79,6 +79,32 @@ export function useLimite(lista, limite, impressao) {
     botao: cortar ? (
       <button type="button" className={s.showAll} onClick={() => setTodas(true)}>
         Mostrar todas ({lista.length})
+      </button>
+    ) : null,
+  };
+}
+
+/**
+ * Como `useLimite`, mas em grupos inteiros (`{linhas}`): mostra grupos até somar cerca de
+ * `limite` linhas (sempre pelo menos o primeiro, nunca um grupo pela metade) e o botão com o
+ * total de linhas. Corta só se sobrarem 3 linhas ou mais. Na impressão (PDF) mostra tudo.
+ */
+export function useLimiteGrupos(grupos, limite, impressao) {
+  const [todas, setTodas] = useState(false);
+  const total = grupos.reduce((acc, g) => acc + g.linhas.length, 0);
+  let n = 0;
+  let linhas = 0;
+  for (const g of grupos) {
+    if (n && linhas + g.linhas.length > limite) break;
+    linhas += g.linhas.length;
+    n++;
+  }
+  const cortar = !impressao && !todas && total - linhas > 2;
+  return {
+    visiveis: cortar ? grupos.slice(0, n) : grupos,
+    botao: cortar ? (
+      <button type="button" className={s.showAll} onClick={() => setTodas(true)}>
+        Mostrar todas ({int(total)})
       </button>
     ) : null,
   };

@@ -191,6 +191,8 @@
 
 /**
  * Dimensões x métricas. `total` só tem as métricas; `linhas_omitidas` > 0 → "+N linhas".
+ * `agrupar_por` e `unidade_grupo` são opcionais e ainda fora do schema sincronizado (aditivos,
+ * `versao` 1): colunas que agrupam as linhas consecutivas e o nome da unidade no título do grupo.
  * @typedef {BlocoBase & {tipo: 'tabela_generica', dados: {
  *   tipo: 'tabela_generica',
  *   relatorio: string,
@@ -199,7 +201,9 @@
  *   colunas: {chave: string, rotulo: string, formato: Formato}[],
  *   linhas: Record<string, string|number|boolean|null>[],
  *   total: Record<string, string|number|boolean|null>,
- *   linhas_omitidas: number
+ *   linhas_omitidas: number,
+ *   agrupar_por?: string[],
+ *   unidade_grupo?: {singular: string, plural: string}
  * }}} BlocoTabelaGenerica
  */
 
