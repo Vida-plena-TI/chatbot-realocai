@@ -2,8 +2,8 @@
 
 Single source of truth for the chat turn (blocks dropped before they are stored), the
 history endpoint (blocks hidden on read) and the export (403). Blocks are opaque JSON,
-so the checks only look at `tipo` and `dados.relatorio` and never raise on malformed
-input.
+so the checks only look at `tipo`, `dados.relatorio` and the optional
+`contem_dados_pacientes` flag, and never raise on malformed input.
 """
 
 PATIENT_REPORTS_GROUP = "coordenacao"
@@ -14,7 +14,14 @@ PATIENT_REPORTS_GROUP = "coordenacao"
 SENSITIVE_BLOCK_RULES = (
     {"tipo": "agenda_paciente"},
     {"tipo": "tabela_generica", "relatorio": "pacientes_por_plano"},
+    {"tipo": "tabela_generica", "relatorio": "pacientes_por_profissional_nomes"},
 )
+
+# Optional block-level flag, outside contract version 1: RealocAI was asked to send
+# `"contem_dados_pacientes": true` on new block types with patient data. Only the JSON
+# boolean `true` counts ("true", 1 or null do not); a block without it falls back to
+# SENSITIVE_BLOCK_RULES, so the list above stays mandatory.
+PATIENT_DATA_FLAG = "contem_dados_pacientes"
 
 PATIENT_REPORTS_RESTRICTED_MESSAGE = (
     "Este relatório contém dados de pacientes e está disponível apenas para a "
@@ -23,9 +30,12 @@ PATIENT_REPORTS_RESTRICTED_MESSAGE = (
 
 
 def is_sensitive_block(bloco) -> bool:
-    """True when the block matches a SENSITIVE_BLOCK_RULES entry. Never raises."""
+    """True when the block is flagged with `contem_dados_pacientes: true` or matches a
+    SENSITIVE_BLOCK_RULES entry (exact string equality). Never raises."""
     if not isinstance(bloco, dict):
         return False
+    if bloco.get(PATIENT_DATA_FLAG) is True:
+        return True
     dados = bloco.get("dados")
     fields = {
         "tipo": bloco.get("tipo"),

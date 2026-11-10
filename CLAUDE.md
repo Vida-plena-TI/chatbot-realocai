@@ -297,11 +297,24 @@ Alguns blocos do RealocAI trazem nomes de pacientes. As regras ficam **num únic
 `chat/services/sensitive.py` (`SENSITIVE_BLOCK_RULES`):
 
 - `tipo == "agenda_paciente"`;
-- `tipo == "tabela_generica"` com `dados.relatorio == "pacientes_por_plano"`.
+- `tipo == "tabela_generica"` com `dados.relatorio == "pacientes_por_plano"`;
+- `tipo == "tabela_generica"` com `dados.relatorio == "pacientes_por_profissional_nomes"`
+  (nomes dos pacientes de cada profissional, `periodo: null`; PR #14 do agente).
+
+A comparação é por **igualdade exata** de texto (nunca prefixo ou substring):
+`pacientes_por_profissional_nomes_x` não casa. O tipo `pacientes_por_profissional` (só
+contagens, sem nomes) **não** é sensível e continua para todos.
 
 **Todo tipo novo de bloco (ou valor novo de `relatorio`) com dado de paciente DEVE entrar
 nessa lista, com teste em `chat/tests/test_patient_reports.py`**; senão qualquer usuário
 logado o recebe. `is_sensitive_block` nunca lança (bloco malformado → não sensível).
+
+**Marcação `contem_dados_pacientes`** (aditiva, fora do contrato `versao` 1): bloco com
+`"contem_dados_pacientes": true` no nível do bloco é sensível mesmo fora da lista. Só o
+booleano JSON `true` vale (`"true"`, `1`, `null` ou o campo dentro de `dados` não);
+`false` não anula a lista. O time do agente foi solicitado a enviar esse campo nos tipos
+novos com dados de pacientes, mas ele é só uma segunda proteção: a lista continua
+obrigatória. O schema e a cópia sincronizada do contrato não mudam.
 
 Quem vê: superusuários e membros ativos do grupo `coordenacao`
 (`can_view_patient_reports`). O grupo é criado **vazio** pela migração

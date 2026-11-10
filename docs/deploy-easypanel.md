@@ -209,12 +209,17 @@ Ordem: **DNS → Supabase → backend → frontend → testes pós-deploy**.
   criadas no admin (`https://api-chat.vidaplenamulti.com.br/<ADMIN_URL>`).
 - **Grupo `coordenacao`** (relatórios com dados de pacientes): a migração
   `chat.0005_patient_reports_group` cria o grupo **vazio**. Depois do deploy **ninguém**
-  recebe esses relatórios (`agenda_paciente` e pacientes por plano), só superusuários,
+  recebe esses relatórios (`agenda_paciente`, pacientes por plano, nomes de pacientes por
+  profissional e qualquer bloco com `contem_dados_pacientes: true`), só superusuários,
   até o administrador incluir as pessoas: Admin do Django → **Usuários** → abra o usuário
   → **Permissões** → **Grupos** → mova `coordenacao` para "Grupos escolhidos" → Salvar.
   Para tirar o acesso, faça o caminho inverso; vale na próxima requisição, inclusive para
   o histórico. Quem pode estar no grupo é decisão do dono do produto (ver CLAUDE.md,
   "Relatórios com dados de pacientes").
+- **Ordem com o agente**: relatório novo com dados de pacientes só pode ir para produção
+  no RealocAI **depois** do deploy do backend que já o restringe (regra em
+  `chat/services/sensitive.py`). No sentido inverso, o bloco chega a qualquer usuário
+  logado.
 
 ### 2. App `chatbot-frontend`
 
