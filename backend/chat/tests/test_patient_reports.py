@@ -26,6 +26,7 @@ from reports.views import PATIENT_REPORTS_FORBIDDEN
 
 from .conftest import REALOCAI_CHAT_URL
 from .test_api import messages_url
+from .test_realocai_client import load_fixture
 
 pytestmark = pytest.mark.django_db
 
@@ -68,9 +69,111 @@ def pacientes_por_plano():
     }
 
 
+def pacientes_por_profissional_nomes():
+    """Fictitious block in the shape of RealocAI's `pacientes_por_profissional_nomes`
+    (agent PR #14): patient names per professional, `periodo` null."""
+    colunas = [
+        {"chave": "especialidade", "rotulo": "Especialidade", "formato": "texto"},
+        {"chave": "profissional", "rotulo": "Profissional", "formato": "texto"},
+        {"chave": "paciente", "rotulo": "Paciente", "formato": "texto"},
+        {"chave": "dias", "rotulo": "Dias", "formato": "texto"},
+        {"chave": "atendimentos_semana", "rotulo": "Atendimentos na semana", "formato": "inteiro"},
+    ]
+    linhas = [
+        {
+            "especialidade": "Fonoaudiologia",
+            "profissional": "Profissional Ficticia Delta",
+            "paciente": "Paciente Ficticio Esmeralda",
+            "dias": "Seg, Qua",
+            "atendimentos_semana": 2,
+        },
+        {
+            "especialidade": "Psicologia",
+            "profissional": "Profissional Ficticia Gama",
+            "paciente": "Paciente Ficticio Esmeralda",
+            "dias": "Ter",
+            "atendimentos_semana": 1,
+        },
+    ]
+    resumo_colunas = [
+        {"chave": "especialidade", "rotulo": "Especialidade", "formato": "texto"},
+        {"chave": "profissional", "rotulo": "Profissional", "formato": "texto"},
+        {"chave": "pacientes", "rotulo": "Pacientes", "formato": "inteiro"},
+        {"chave": "atendimentos_semana", "rotulo": "Atendimentos na semana", "formato": "inteiro"},
+    ]
+    resumo_linhas = [
+        {
+            "especialidade": "Fonoaudiologia",
+            "profissional": "Profissional Ficticia Delta",
+            "pacientes": 1,
+            "atendimentos_semana": 2,
+        },
+        {
+            "especialidade": "Psicologia",
+            "profissional": "Profissional Ficticia Gama",
+            "pacientes": 1,
+            "atendimentos_semana": 1,
+        },
+    ]
+    return {
+        "versao": 1,
+        "tipo": "tabela_generica",
+        "titulo": "Pacientes por profissional (grade semanal vigente)",
+        "periodo": None,
+        "meta": None,
+        "parcial": False,
+        "dias_nao_lidos": [],
+        "avisos": ["Paciente atendido por mais de uma profissional aparece na lista de cada uma."],
+        "resumo": [{"rotulo": "Pacientes distintos", "valor": 1, "formato": "inteiro"}],
+        "dados": {
+            "tipo": "tabela_generica",
+            "relatorio": "pacientes_por_profissional_nomes",
+            "dimensoes": [],
+            "metricas": [],
+            "colunas": colunas,
+            "linhas": linhas,
+            "total": {},
+            "linhas_omitidas": 0,
+        },
+        "tabelas": [
+            {"nome": "Pacientes", "colunas": colunas, "linhas": linhas},
+            {"nome": "Resumo por profissional", "colunas": resumo_colunas, "linhas": resumo_linhas},
+        ],
+    }
+
+
+def with_relatorio(bloco, relatorio):
+    bloco["dados"]["relatorio"] = relatorio
+    return bloco
+
+
 SENSITIVE_EXAMPLES = {
     "agenda_paciente": lambda: load_example("agenda_paciente"),
     "pacientes_por_plano": pacientes_por_plano,
+    "pacientes_por_profissional_nomes": pacientes_por_profissional_nomes,
+}
+
+# Must keep reaching every logged-in user: counts only, or no patient data at all.
+NOT_SENSITIVE_EXAMPLES = {
+    "pacientes_por_profissional": lambda: load_fixture("pacientes_por_profissional_semana"),
+    "tabela_generica_plano_semanal": lambda: load_example("tabela_generica_plano_semanal"),
+    "tabela_generica_ranking": lambda: load_example("tabela_generica_ranking"),
+    "tabela_generica_capacidade": lambda: load_example("tabela_generica_capacidade"),
+    # Near misses of the new value: equality is exact, never prefix or substring.
+    **{
+        f"relatorio={value!r}": (
+            lambda value=value: with_relatorio(pacientes_por_profissional_nomes(), value)
+        )
+        for value in (
+            "pacientes_por_profissional",
+            "pacientes_por_profissional_nomes_x",
+            "pacientes_por_profissional_nome",
+            "x_pacientes_por_profissional_nomes",
+            "Pacientes_por_profissional_nomes",
+            " pacientes_por_profissional_nomes",
+            "pacientes_por_profissional_nomes ",
+        )
+    },
 }
 
 
@@ -140,6 +243,18 @@ def test_other_blocks_are_not_sensitive(bloco):
     assert not is_sensitive_block(bloco)
 
 
+@pytest.mark.parametrize("name", NOT_SENSITIVE_EXAMPLES)
+def test_counts_and_near_misses_are_not_sensitive(name):
+    assert is_sensitive_block(NOT_SENSITIVE_EXAMPLES[name]()) is False
+
+
+def test_old_pacientes_por_profissional_has_no_names_and_is_its_own_type():
+    bloco = load_fixture("pacientes_por_profissional_semana")
+
+    assert bloco["tipo"] == "pacientes_por_profissional"
+    assert not is_sensitive_block(bloco)
+
+
 @pytest.mark.parametrize(
     "bloco",
     [
@@ -155,6 +270,13 @@ def test_other_blocks_are_not_sensitive(bloco):
         {"tipo": "tabela_generica", "dados": "pacientes_por_plano"},
         {"tipo": "tabela_generica", "dados": {"relatorio": ["pacientes_por_plano"]}},
         {"tipo": "tabela_generica", "dados": None},
+        {"tipo": "tabela_generica", "dados": {"relatorio": None}},
+        {"tipo": "tabela_generica", "dados": {"relatorio": 1}},
+        {"tipo": "tabela_generica", "dados": {"relatorio": {"x": 1}}},
+        {"tipo": "tabela_generica", "dados": ["pacientes_por_profissional_nomes"]},
+        {"tipo": "tabela_generica", "dados": {"relatorio": ["pacientes_por_profissional_nomes"]}},
+        {"dados": {"relatorio": "pacientes_por_profissional_nomes"}},
+        {"tipo": "convenio", "dados": {"relatorio": "pacientes_por_profissional_nomes"}},
     ],
 )
 def test_malformed_blocks_are_not_sensitive_and_never_raise(bloco):
@@ -258,6 +380,20 @@ def test_mixed_answer_only_drops_the_sensitive_block(api, conversation, respx_mo
             assert value not in stored_text(conversation)
 
 
+@pytest.mark.parametrize("name", NOT_SENSITIVE_EXAMPLES)
+def test_non_sensitive_tabela_generica_and_counts_reach_users_without_group(
+    api, conversation, respx_mock, name
+):
+    bloco = NOT_SENSITIVE_EXAMPLES[name]()
+    mock_agent(respx_mock, [bloco])
+
+    answer = post_message(api, conversation).json()["assistant_message"]
+
+    assert answer["content"] == ANSWER
+    assert answer["blocos"] == [bloco]
+    assert history_blocos(api, conversation) == [bloco]
+
+
 def test_answer_without_sensitive_blocks_is_unchanged(api, conversation, respx_mock):
     comum = load_example("disponibilidade_vagas")
     mock_agent(respx_mock, [comum])
@@ -269,19 +405,24 @@ def test_answer_without_sensitive_blocks_is_unchanged(api, conversation, respx_m
 
 
 def test_dropping_logs_only_the_count(api, conversation, respx_mock, caplog):
-    blocos = [load_example("agenda_paciente"), pacientes_por_plano()]
+    blocos = [
+        load_example("agenda_paciente"),
+        pacientes_por_plano(),
+        pacientes_por_profissional_nomes(),
+    ]
     mock_agent(respx_mock, blocos)
 
     with capture_all_logs(caplog):
         assert post_message(api, conversation).status_code == 201
 
     dropped = [r for r in caplog.records if "sensitive_blocks_dropped" in r.getMessage()]
-    assert [r.getMessage().split(" ")[0] for r in dropped] == ["sensitive_blocks_dropped=2"]
+    assert [r.getMessage().split(" ")[0] for r in dropped] == ["sensitive_blocks_dropped=3"]
     logged = all_log_text(caplog)
     for value in (
         ANSWER,
         "agenda_paciente",
         "pacientes_por_plano",
+        "pacientes_por_profissional_nomes",
         *(b["titulo"] for b in blocos),
         *(v for b in blocos for v in sensitive_values(b)),
     ):
@@ -313,10 +454,21 @@ def test_history_hides_old_sensitive_blocks_without_changing_the_stored_ones(
     assert stored.blocos == old_answer
 
 
-def test_history_without_any_visible_block_has_no_blocos_key(api, conversation):
-    record_exchange(conversation, "Pergunta", ANSWER, blocos=[pacientes_por_plano()])
+@pytest.mark.parametrize("name", SENSITIVE_EXAMPLES)
+def test_history_without_any_visible_block_has_no_blocos_key(api, conversation, name):
+    record_exchange(conversation, "Pergunta", ANSWER, blocos=[SENSITIVE_EXAMPLES[name]()])
 
     assert history_blocos(api, conversation) is None
+
+
+@pytest.mark.parametrize("member", ["coordinator", "superuser"])
+@pytest.mark.parametrize("name", SENSITIVE_EXAMPLES)
+def test_history_shows_each_sensitive_block_to_members(request, api, conversation, member, name):
+    request.getfixturevalue(member)
+    bloco = SENSITIVE_EXAMPLES[name]()
+    record_exchange(conversation, "Pergunta", ANSWER, blocos=[bloco])
+
+    assert history_blocos(api, conversation) == [bloco]
 
 
 @pytest.mark.parametrize("member", ["coordinator", "superuser"])
@@ -371,3 +523,11 @@ def test_export_of_sensitive_block_works_for_members(request, api, member, name)
 
 def test_export_of_common_blocks_still_works_without_group(api):
     assert export(api, [load_example("disponibilidade_vagas")]).status_code == 200
+
+
+@pytest.mark.parametrize("name", NOT_SENSITIVE_EXAMPLES)
+def test_export_of_non_sensitive_tabela_generica_and_counts_works_without_group(api, name):
+    response = export(api, [NOT_SENSITIVE_EXAMPLES[name]()])
+
+    assert response.status_code == 200
+    assert response["Content-Disposition"].startswith("attachment;")

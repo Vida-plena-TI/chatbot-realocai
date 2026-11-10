@@ -14,6 +14,7 @@ PATIENT_REPORTS_GROUP = "coordenacao"
 SENSITIVE_BLOCK_RULES = (
     {"tipo": "agenda_paciente"},
     {"tipo": "tabela_generica", "relatorio": "pacientes_por_plano"},
+    {"tipo": "tabela_generica", "relatorio": "pacientes_por_profissional_nomes"},
 )
 
 PATIENT_REPORTS_RESTRICTED_MESSAGE = (
