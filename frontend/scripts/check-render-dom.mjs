@@ -3,6 +3,7 @@
 //   - um bloco que quebra ao desenhar vira o cartão "não foi possível exibir", sem conteúdo do
 //     bloco nem texto da exceção, e não desmonta o grupo, os blocos vizinhos nem as outras mensagens;
 //   - histórico: uma conversa salva com um bloco de periodo null e outro antigo com período mostra os dois;
+//   - tabela genérica agrupada (agrupar_por) que quebra fica dentro do mesmo boundary;
 //   - nada do bloco vai para o console (LGPD).
 //
 // Roda em processo próprio (os globais de DOM mudariam o SSR do check-render). Chamado pelo
@@ -87,10 +88,25 @@ try {
   ok(!historico.el.textContent.includes('Não foi possível'), 'histórico: nenhum cartão de erro');
   flushSync(() => historico.root.unmount());
 
+  // Modo agrupado dentro do mesmo boundary: uma linha null no meio quebra o desenho do grupo.
+  const agr = amostras.tabelaGenericaPacientesNomesAgrupada;
+  const agrQuebrada = { ...agr, dados: { ...agr.dados, linhas: [agr.dados.linhas[0], null, agr.dados.linhas[1]] } };
+  const agrupada = montar([
+    msg('g1', 'assistant', 'Agrupada quebrada.', [agrQuebrada, amostras.tabelaGenericaRanking]),
+    msg('g2', 'assistant', 'Agrupada inteira.', [agr]),
+  ]);
+  const [g1 = '', g2 = ''] = fragmentos(agrupada.el);
+  // O corpo quebra dentro do boundary do corpo (CorpoSeguro): cabeçalho e avisos ficam.
+  ok(g1.includes('Não foi possível mostrar este relatório.') && g1.includes('Agrupada quebrada.') && g1.includes('Exportar os 2 relatórios juntos?') && !g1.includes('Paciente Fictício') && !/TypeError|Cannot read/.test(g1),
+    'agrupada quebrada: corpo vira "não foi possível mostrar" (abas e "Exportar todos" continuam), sem nomes de pacientes nem texto da exceção');
+  ok(g2.includes('Fisioterapia Neurofuncional · Antônia Valença Brandão (6 pacientes)') && g2.includes('Mostrar todas (800)') && !g2.includes('Não foi possível'),
+    'agrupada: mensagem vizinha desenha os grupos e o botão normalmente');
+  flushSync(() => agrupada.root.unmount());
+
   Object.assign(console, originais);
   if (process.env.DEBUG_DOM) saida.forEach((l) => process.stdout.write(`--- ${l.slice(0, 160)}\n`));
   // O React (dev) avisa que um boundary capturou um erro, com a pilha de componentes.
-  ok(!saida.some((l) => l.includes(segredo) || l.includes('Cannot read')), `console sem conteúdo do bloco nem texto da exceção (${saida.length} aviso(s) do React)`);
+  ok(!saida.some((l) => l.includes(segredo) || l.includes('Cannot read') || l.includes('Paciente Fictício')), `console sem conteúdo do bloco nem texto da exceção (${saida.length} aviso(s) do React)`);
 } finally {
   await server.close();
 }

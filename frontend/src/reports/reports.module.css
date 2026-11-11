@@ -1108,6 +1108,18 @@
 .specTitle + .faixa {
   border-top: 0;
 }
+/* Tabela genérica agrupada (agrupar_por): título do grupo no celular é um h4 */
+.groupCards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.groupTitle {
+  margin: 0;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
 
 /* Listas simples (aguardando autorização, dias) */
 .plainList {
@@ -1301,12 +1313,16 @@
   break-inside: avoid;
 }
 /* Faixas livres são listas longas (~200 linhas): linhas mais baixas no PDF. */
+/* A tabela genérica agrupada também (~800 linhas): mesma altura, fonte de 12 px. */
 .printDoc .dispTable th,
-.printDoc .dispTable td {
+.printDoc .dispTable td,
+.printDoc .groupTable th,
+.printDoc .groupTable td {
   padding-top: 4px;
   padding-bottom: 4px;
 }
-.printDoc .dispTable tr.specRow th {
+.printDoc .dispTable tr.specRow th,
+.printDoc .groupTable tr.specRow th {
   padding-top: 5px;
   padding-bottom: 5px;
 }

@@ -11,6 +11,7 @@ const BACKEND = fileURLToPath(new URL('../../backend/', import.meta.url));
 // export de sampleBlocks.js → arquivo em backend/chat/tests/fixtures/
 const PARES = {
   tabelaGenericaPlanoSemanal: 'chat/tests/fixtures/tabela_generica_plano_semanal.json',
+  tabelaGenericaPacientesNomesAgrupada: 'chat/tests/fixtures/tabela_generica_pacientes_por_profissional_nomes_agrupada.json',
 };
 
 if (!existsSync(BACKEND)) {

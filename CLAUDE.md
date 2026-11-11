@@ -92,6 +92,19 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   têm um error boundary (`Seguro` em `ReportCard.jsx`): bloco que quebra vira um cartão
   "não foi possível exibir", sem conteúdo do bloco nem log. `check:render` cobre isso com
   DOM (`scripts/check-render-dom.mjs`, DOM mínimo em `scripts/lib/mini-dom.mjs`).
+- **Tabela genérica agrupada** (`TabelaGenerica.jsx`, `agruparLinhas`): campos opcionais
+  `dados.agrupar_por` (lista ordenada de chaves de `colunas`) e `dados.unidade_grupo`
+  (`{singular, plural}`), aditivos na `versao` 1 e ainda fora do schema sincronizado. Só agrupa
+  com lista não vazia de textos distintos que existem em `colunas`, ao menos uma linha e ao menos
+  uma coluna sobrando; senão é o modo plano com o HTML de antes. Grupo novo a cada mudança de
+  valor em relação à linha anterior (**nunca reordena nem junta grupos não consecutivos**); título
+  "valores · … (N unidade)", vazio vira "Sem <coluna>"; colunas de agrupamento saem do corpo;
+  "Mostrar todas" corta só entre grupos (~15 linhas); PDF com tudo e título junto da 1ª linha. O
+  Excel não muda (usa `tabelas`). Fixture fictícia de 800 linhas
+  `tabelaGenericaPacientesNomesAgrupada` (cópia no backend, `check:fixtures`). Ao sincronizar o
+  contrato do agente com esses campos, remover `semCamposPendentes` do `check:blocks` (hoje tira
+  `agrupar_por`/`unidade_grupo`/`contem_dados_pacientes` só para validar); detalhes em
+  `frontend/docs/relatorios.md`.
 - Os blocos (componentes, `src/reports/types.js` e fixtures) seguem os nomes de campo dos
   exemplos reais do RealocAI, sem camada de adaptação; `npm run check:blocks` valida as
   fixtures de `sampleBlocks.js` contra os campos obrigatórios do contrato real (só lê

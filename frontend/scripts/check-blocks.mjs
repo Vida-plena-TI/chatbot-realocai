@@ -212,8 +212,27 @@ function conferir(valor, spec, caminho, erros) {
   }
 }
 
+// Campos aditivos que o agente ainda vai enviar e que a cópia sincronizada do schema (versao 1)
+// não conhece: `agrupar_por` e `unidade_grupo` em `dados` da tabela_generica e
+// `contem_dados_pacientes` no bloco. São retirados SÓ para esta validação (a fixture continua com
+// eles). TODO: quando o PR do agente com o schema e o exemplo oficial for mergeado, rode
+// `npm run sync:contrato` e troque isto por validação completa (tipos de `agrupar_por` e
+// `unidade_grupo` pelo schema, sem retirar nada).
+const PENDENTES_DADOS = ['agrupar_por', 'unidade_grupo'];
+const PENDENTES_BLOCO = ['contem_dados_pacientes'];
+function semCamposPendentes(bloco) {
+  if (!bloco || typeof bloco !== 'object') return bloco;
+  const copia = Object.fromEntries(Object.entries(bloco).filter(([k]) => !PENDENTES_BLOCO.includes(k)));
+  if (bloco.tipo === 'tabela_generica' && bloco.dados && typeof bloco.dados === 'object') {
+    copia.dados = Object.fromEntries(Object.entries(bloco.dados).filter(([k]) => !PENDENTES_DADOS.includes(k)));
+  }
+  return copia;
+}
+
 let falhas = 0;
-for (const [nome, bloco] of Object.entries(amostras)) {
+for (const [nome, original] of Object.entries(amostras)) {
+  const bloco = semCamposPendentes(original);
+  const pendentes = original !== bloco && JSON.stringify(original) !== JSON.stringify(bloco);
   const dados = DADOS[bloco?.tipo];
   const erros = [];
   if (!dados) erros.push(`tipo desconhecido: ${JSON.stringify(bloco?.tipo)}`);
@@ -227,7 +246,7 @@ for (const [nome, bloco] of Object.entries(amostras)) {
     console.error(`✗ ${nome} (${bloco?.tipo})`);
     erros.forEach((e) => console.error(`    ${e}`));
   } else {
-    console.log(`✓ ${nome} (${bloco.tipo}${SO_FORMA.has(bloco.tipo) ? '' : ', schema'})`);
+    console.log(`✓ ${nome} (${bloco.tipo}${SO_FORMA.has(bloco.tipo) ? '' : ', schema'}${pendentes ? ', sem agrupar_por/unidade_grupo/contem_dados_pacientes até sincronizar o contrato' : ''})`);
   }
 }
 

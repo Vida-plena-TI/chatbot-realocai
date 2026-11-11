@@ -60,12 +60,49 @@ schema e exemplos para `src/reports/contrato/` sem alterar aquele repositório, 
 - **`tabela_generica`:** só `dados.colunas`/`linhas`/`total`, na ordem do agente. Colunas fora de
   `total` são as dimensões. Com meta, percentuais ganham barra e `abaixo_da_meta` vira selo.
   `linhas_omitidas` > 0 mostra "+N linhas não exibidas".
+- **`tabela_generica` agrupada (`dados.agrupar_por`, opcional):** campos aditivos que o agente vai
+  enviar sem mudar a `versao` 1 (primeiro em `pacientes_por_profissional_nomes`). Ainda **fora do
+  schema sincronizado** (ver "Depois de sincronizar o contrato", abaixo).
+  - `agrupar_por`: lista ordenada de chaves de `dados.colunas` (ex.: `["especialidade",
+    "profissional"]`). `unidade_grupo` (opcional): `{"singular": "paciente", "plural": "pacientes"}`.
+  - Só agrupa se `agrupar_por` for lista não vazia de textos distintos, todos em `colunas` (pela
+    `chave`), houver ao menos uma linha e sobrar ao menos uma coluna no corpo. Qualquer outro caso
+    (ausente, tipo errado, coluna inexistente, lista vazia, chave repetida, todas as colunas) é o
+    modo plano, com o mesmo HTML de antes, sem erro.
+  - **Grupos consecutivos, nunca reordena:** as linhas são lidas na ordem recebida e um grupo novo
+    abre quando a combinação de valores das colunas de agrupamento muda em relação à linha anterior.
+    Valores iguais não consecutivos viram grupos separados. O agente manda as linhas já contíguas
+    e na ordem desejada; nenhuma camada (tela, PDF, Excel, backend) ordena ou junta.
+  - Título do grupo: valores unidos por " · " + " (N unidade)" (N em pt-BR; singular com N = 1,
+    plural nos demais; sem `unidade_grupo`, só "(N)"). Valor `null`, `""` ou só espaços vira
+    "Sem <rótulo da coluna em minúsculas>" (ex.: "Sem especialidade"). Ex.: "Terapia Ocupacional ·
+    Maria Silva (12 pacientes)". As colunas de agrupamento saem do corpo (ficam só no título); as
+    outras mantêm formato e alinhamento.
+  - Tela larga: uma tabela só (colunas alinhadas), um `tbody` por grupo com o título
+    (`th scope="rowgroup"`) + a primeira linha, igual às faixas da disponibilidade. Celular: título
+    do grupo (`h4`) + um cartão por linha com as colunas restantes.
+  - **"Mostrar todas" corta por grupo:** grupos inteiros até somar cerca de 15 linhas (sempre o
+    primeiro, mesmo maior que 15; nunca um grupo pela metade); o botão mostra o total de linhas.
+  - PDF: todas as linhas, `thead` repetido em cada página, título junto com a primeira linha (nunca
+    sozinho no fim da página), linhas sem quebra, fonte de 12 px.
+  - O Excel não muda: continua escrevendo `tabelas` ("Pacientes", plana, e "Resumo por
+    profissional") como vieram. `agrupar_por`/`unidade_grupo` são só apresentação.
 - **Listas longas:** no chat, as primeiras linhas e "Mostrar todas"; no PDF, tudo.
 - **Verificação:** `npm run check:blocks` valida as fixtures contra o schema copiado (só lê
   `frontend/`: roda no build do Docker); `npm run check:fixtures` confere as cópias do
   backend (só no monorepo);
   `npm run check:render` renderiza os cartões no Node (SSR do Vite) e confere tipo desconhecido,
-  `meta: null`, `parcial`, "+N linhas" e console vazio.
+  `meta: null`, `parcial`, "+N linhas", console vazio e as invariantes do modo agrupado (soma das
+  linhas e dos N dos títulos = total, ordem recebida na tela e no PDF, colunas de agrupamento fora
+  do corpo, títulos sem "null", singular/plural, grupos não consecutivos separados, corte só entre
+  grupos e `agrupar_por` inválido = HTML do modo plano).
+- **Depois de sincronizar o contrato** (PR do agente com `agrupar_por`/`unidade_grupo` no schema e
+  um exemplo oficial): rodar `npm run sync:contrato`; em `scripts/check-blocks.mjs`, apagar
+  `semCamposPendentes` (hoje retira `agrupar_por`/`unidade_grupo` de `dados` e
+  `contem_dados_pacientes` do bloco **só para validar**), para a fixture
+  `tabelaGenericaPacientesNomesAgrupada` passar pela validação completa; comparar a fixture com o
+  exemplo oficial (como o plano semanal) e ajustar nomes de campo se divergirem; atualizar o
+  typedef em `types.js` e a cópia do backend (`npm run check:fixtures`).
 
 ## Regras visuais
 
