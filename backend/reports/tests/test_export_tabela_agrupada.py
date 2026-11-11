@@ -1,6 +1,6 @@
 """Export of a grouped `tabela_generica` (patient names per professional) carrying the
-optional `dados.agrupar_por` and `dados.unidade_grupo` fields, which the agent will add
-without changing contract versao 1. Grouping is screen/PDF presentation only: the
+optional `dados.agrupar_por` and `dados.unidade_grupo` fields (optional in contract versao 1
+since agent PR #15). Grouping is screen/PDF presentation only: the
 spreadsheet keeps writing `tabelas` as received. Fictitious data only."""
 
 import pytest
@@ -45,8 +45,9 @@ def test_fixture_carries_the_new_fields_and_is_in_agent_order():
     # Guards the order assertions: sorting by any of these would change the sequence.
     for key in ("paciente", "dias", "atendimentos_semana"):
         assert sorted(linhas, key=lambda linha, k=key: linha[k]) != linhas, key
-    # A null especialidade comes last, as the agent sends it.
-    assert linhas[-1]["especialidade"] is None
+    # A missing especialidade is "—" (never null) and comes last, as the agent sends it.
+    assert linhas[-1]["especialidade"] == "—"
+    assert all(isinstance(linha["especialidade"], str) for linha in linhas)
 
 
 def test_new_fields_in_dados_pass_the_envelope_validation():
