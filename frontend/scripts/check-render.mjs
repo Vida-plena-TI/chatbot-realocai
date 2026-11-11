@@ -40,9 +40,11 @@ try {
   const { PrintReport } = await server.ssrLoadModule('/src/reports/PrintReport.jsx');
   const amostras = await server.ssrLoadModule('/src/reports/sampleBlocks.js');
   const { agruparFaixas, subtotal } = await server.ssrLoadModule('/src/reports/Disponibilidade.jsx');
-  const { diaCompleto: diaCompletoSsr, formatarValor } = await server.ssrLoadModule('/src/reports/format.js');
+  const { diaCompleto: diaCompletoSsr, formatarValor, int } = await server.ssrLoadModule('/src/reports/format.js');
   const { gerarExcel } = await server.ssrLoadModule('/src/reports/localExport.js');
   const { agruparLinhas } = await server.ssrLoadModule('/src/reports/TabelaGenerica.jsx');
+  // Exemplo OFICIAL do agente (cópia sincronizada, dados fictícios), com agrupar_por/unidade_grupo.
+  const nomesOficial = (await server.ssrLoadModule('/src/reports/contrato/exemplos/tabela_generica_pacientes_por_profissional_nomes.js')).default;
 
   // Captura todo o console durante as renderizações.
   const saida = [];
@@ -51,9 +53,11 @@ try {
     originais[m] = console[m];
     console[m] = (...a) => saida.push(a.map(String).join(' '));
   }
+  // "Gerado em" fixo no PDF: duas renderizações em minutos diferentes não podem diferir.
+  const geradoEm = new Date('2026-11-11T12:00:00');
   const render = (blocos, el = ReportGroup) => {
     try {
-      return renderToStaticMarkup(createElement(el, { blocos, texto: 'Resposta de teste.' }));
+      return renderToStaticMarkup(createElement(el, { blocos, texto: 'Resposta de teste.', ...(el === PrintReport && { geradoEm }) }));
     } catch (e) {
       return `ERRO: ${e.message}`;
     }
@@ -118,6 +122,7 @@ try {
   const { periodo: _omitido, ...semCampo } = amostras.ocupacaoAgregada;
   semPeriodo.ausente = semCampo;
   semPeriodo.pacientesNomesAgrupada = amostras.tabelaGenericaPacientesNomesAgrupada;
+  semPeriodo.pacientesNomesOficial = nomesOficial;
   r.semPeriodo = Object.fromEntries(Object.entries(semPeriodo).map(([k, b]) => [k, { tela: render([b]), pdf: render([b], PrintReport) }]));
   r.comPeriodo = Object.fromEntries(
     ['ocupacaoProfissional', 'pacientesSemana', 'pacientesDia', 'ocupacaoAgregada', 'agendaPaciente', 'tabelaGenericaRanking', 'tabelaGenericaCapacidade'].map((k) => [k, render([amostras[k]])]),
@@ -143,8 +148,9 @@ try {
   const linhasForaDeOrdem = [gruposOrig[1], gruposOrig[0], ...gruposOrig.slice(2)].flatMap((g) => [...g].reverse());
   // Não consecutivos: grupo A, grupo B e de novo A (os mesmos valores) => três grupos.
   const linhasRepetidas = [...gruposOrig[0], ...gruposOrig[1], ...gruposOrig[0].slice(0, 2)];
-  // Vazios: null, "" e só espaços seguidos são o mesmo grupo "Sem especialidade".
-  const vazios = [null, '', '   '].map((especialidade, i) => ({ ...gruposOrig[0][i], especialidade, profissional: 'Profissional Fictícia Única' }));
+  // Vazios: null, "", só espaços e "—" (o que o agente manda) seguidos são o mesmo grupo
+  // "Sem especialidade".
+  const vazios = [null, '', '   ', '—'].map((especialidade, i) => ({ ...gruposOrig[0][i], especialidade, profissional: 'Profissional Fictícia Única' }));
   const variantes = {
     foraDeOrdem: comDados(agr, { linhas: linhasForaDeOrdem }),
     repetidos: comDados(agr, { linhas: linhasRepetidas }),
@@ -154,6 +160,7 @@ try {
     primeiroGrande: comDados(agr, { linhas: [...gruposOrig[2], ...gruposOrig[3]] }),
   };
   r.agr = { tela: render([agr]), pdf: render([agr], PrintReport) };
+  r.oficial = { tela: render([nomesOficial]), pdf: render([nomesOficial], PrintReport) };
   r.agrVar = Object.fromEntries(Object.entries(variantes).map(([k, b]) => [k, { tela: render([b]), pdf: render([b], PrintReport) }]));
   // Volta ao modo plano: HTML idêntico ao do mesmo bloco sem agrupar_por/unidade_grupo.
   const plano0 = semCampos(agr, ['agrupar_por', 'unidade_grupo']);
@@ -419,9 +426,9 @@ try {
 
   const titulos = [...pdfAgr.grupos, ...tabelaAgrupada(r.agrVar.vazios.pdf).grupos, ...tabelaAgrupada(r.agrVar.semUnidade.pdf).grupos].map((g) => g.titulo);
   ok(titulos.every((t) => t && !/\b(null|undefined|NaN)\b/.test(t) && !/^[·(]|· ·|· \(/.test(t)), 'agrupada: (e) nenhum título vazio, "null", "undefined" ou "NaN"');
-  ok(pdfAgr.grupos.filter((g) => g.titulo.startsWith('Sem especialidade · ')).length === 2, 'agrupada: (e) especialidade null vira "Sem especialidade"');
+  ok(pdfAgr.grupos.filter((g) => g.titulo.startsWith('Sem especialidade · ')).length === 2 && !pdfAgr.grupos.some((g) => g.titulo.startsWith('—')), 'agrupada: (e) especialidade "—" vira "Sem especialidade"');
   const vaz = tabelaAgrupada(r.agrVar.vazios.pdf).grupos;
-  ok(vaz.length === 1 && vaz[0].titulo === 'Sem especialidade · Profissional Fictícia Única (3 pacientes)', `agrupada: (e) null, "" e só espaços seguidos são um grupo só (${vaz.map((g) => g.titulo).join(' | ')})`);
+  ok(vaz.length === 1 && vaz[0].titulo === 'Sem especialidade · Profissional Fictícia Única (4 pacientes)', `agrupada: (e) null, "", só espaços e "—" seguidos são um grupo só (${vaz.map((g) => g.titulo).join(' | ')})`);
   const singular = pdfAgr.grupos.filter((g) => g.linhas.length === 1);
   ok(singular.length === 1 && singular[0].titulo === 'Nutrição · Natália Simões Andrade (1 paciente)' && pdfAgr.grupos.filter((g) => g.linhas.length > 1).every((g) => g.titulo.endsWith(` (${g.linhas.length} pacientes)`)),
     `agrupada: (f) singular com 1 ("${singular[0]?.titulo}") e plural nos demais`);
@@ -440,6 +447,50 @@ try {
   ok(grande.grupos.length === 1 && grande.grupos[0].linhas.length === gruposOrig[2].length && gruposOrig[2].length > 15 && texto(r.agrVar.primeiroGrande.tela).includes(`Mostrar todas (${gruposOrig[2].length + gruposOrig[3].length})`),
     `agrupada: (h) primeiro grupo maior que o limite aparece inteiro (${grande.grupos[0].linhas.length} linhas)`);
   ok(!texto(r.agrVar.soPrimeiro.tela).includes('Mostrar todas') && tabelaAgrupada(r.agrVar.soPrimeiro.tela).grupos.length === 1, 'agrupada: (h) sem botão quando tudo cabe');
+
+  // --- Exemplo OFICIAL do agente: as mesmas invariantes, com os grupos esperados calculados aqui
+  // (sem agruparLinhas). Só contagens e títulos nas mensagens; nunca linhas.
+  {
+    const { colunas, linhas, agrupar_por: por, unidade_grupo: un } = nomesOficial.dados;
+    const doGrupo = por.map((k) => colunas.find((c) => c.chave === k));
+    const corpo = colunas.filter((c) => !por.includes(c.chave));
+    const semValor = (v) => v == null || (typeof v === 'string' && ['', '—'].includes(v.trim()));
+    const esperados = [];
+    let ant;
+    for (const l of linhas) {
+      const vals = doGrupo.map((c) => (semValor(l[c.chave]) ? null : l[c.chave]));
+      const k = JSON.stringify(vals);
+      if (k !== ant) esperados.push({ vals, linhas: [] });
+      ant = k;
+      esperados.at(-1).linhas.push(l);
+    }
+    const tituloEsperado = ({ vals, linhas: ls }) =>
+      `${vals.map((v, j) => (v == null ? `Sem ${doGrupo[j].rotulo.toLocaleLowerCase('pt-BR')}` : formatarValor(v, doGrupo[j].formato))).join(' · ')} (${int(ls.length)} ${ls.length === 1 ? un.singular : un.plural})`;
+    const celulas = (ls) => ls.map((l) => corpo.map((c) => formatarValor(l[c.chave], c.formato)));
+    const pdf = tabelaAgrupada(r.oficial.pdf);
+    const tela = tabelaAgrupada(r.oficial.tela);
+    const comp = cartoesAgrupados(r.oficial.tela);
+    const totalOf = linhas.length;
+    const tag = `oficial (${totalOf} linhas, ${esperados.length} grupos)`;
+    ok(typeof r.oficial.tela === 'string' && !r.oficial.tela.startsWith('ERRO') && !r.oficial.pdf.startsWith('ERRO') && pdf && tela && !pdf.grupos.some((g) => g.erro) && !tela.grupos.some((g) => g.erro),
+      `${tag}: modo agrupado desenhado na tela e no PDF, título + primeira linha no mesmo tbody`);
+    ok(igual(colunas, agr.dados.colunas) && igual(por, agr.dados.agrupar_por) && igual(un, agr.dados.unidade_grupo), `${tag}: mesmas colunas, agrupar_por e unidade_grupo da fixture`);
+    ok(esperados.some((g) => g.linhas.length === 1) && esperados.some((g) => g.linhas.length > 1), `${tag}: tem grupo com 1 e com várias linhas (singular e plural testados)`);
+    for (const [onde, t] of [['PDF', pdf], ['tela', tela]]) {
+      ok(t.grupos.reduce((a, g) => a + g.linhas.length, 0) === totalOf, `${tag}: (a) ${onde}: soma das linhas dos grupos = total`);
+      ok(t.grupos.reduce((a, g) => a + nDoTitulo(g.titulo), 0) === totalOf && t.grupos.every((g) => nDoTitulo(g.titulo) === g.linhas.length), `${tag}: (b) ${onde}: soma dos N dos títulos = total e cada N = linhas do grupo`);
+      ok(igual(t.grupos.map((g) => g.titulo), esperados.map(tituloEsperado)), `${tag}: (c)(e)(f) ${onde}: títulos exatos, na ordem recebida, singular/plural`);
+      ok(igual(t.grupos.flatMap((g) => g.linhas), celulas(linhas)) && igual(t.grupos.map((g) => g.linhas.length), esperados.map((g) => g.linhas.length)), `${tag}: (c) ${onde}: todas as linhas na ordem exata recebida`);
+      ok(igual(t.cabecalho, corpo.map((c) => c.rotulo)) && t.grupos.every((g) => g.linhas.every((l) => l.length === corpo.length)), `${tag}: (d) ${onde}: colunas de agrupamento fora do cabeçalho e do corpo`);
+    }
+    const valoresDoGrupo = new Set(linhas.flatMap((l) => por.map((k) => l[k])));
+    ok([pdf, tela].every((t) => t.grupos.every((g) => g.linhas.every((l) => l.every((v) => !valoresDoGrupo.has(v))))), `${tag}: (d) nenhum valor de agrupamento nas células`);
+    ok(igual(comp.map((g) => g.titulo), tela.grupos.map((g) => g.titulo)) && igual(comp.flatMap((g) => g.cartoes), cartaoEsperado(linhas)) && comp.every((g) => g.rotulos.every((x) => !doGrupo.some((c) => c.rotulo === x))),
+      `${tag}: (c)(d) celular: mesmos títulos, um cartão por linha na ordem, sem colunas de agrupamento`);
+    ok(![r.oficial.tela, r.oficial.pdf].some((h) => /\b(null|undefined|NaN)\b|Invalid Date/.test(texto(h))), `${tag}: (e) nenhum "null", "undefined", "NaN" ou "Invalid Date" na tela nem no PDF`);
+    ok(totalOf > 15 || (!texto(r.oficial.tela).includes('Mostrar todas') && !texto(r.oficial.pdf).includes('Mostrar todas')), `${tag}: cabe sem "Mostrar todas"`);
+    ok(nomesOficial.avisos.every((a) => texto(r.oficial.tela).includes(a) && texto(r.oficial.pdf).includes(a)), `${tag}: avisos na tela e no PDF`);
+  }
 
   for (const [k, { tela, pdf }] of Object.entries(r.invalidos)) {
     ok(tela === r.plano0.tela && pdf === r.plano0.pdf && !tela.includes(css.groupTable), `agrupar_por inválido (${k}): modo plano, HTML idêntico (tela e PDF)`);
