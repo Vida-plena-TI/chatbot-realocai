@@ -8,9 +8,10 @@
 // comparação com as cópias do backend fica em check-fixtures.mjs (só no monorepo).
 //
 // Uso: npm run check:blocks   (exit code 1 se faltar campo ou sobrar campo que o real não tem)
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import * as amostras from '../src/reports/sampleBlocks.js';
 import planoOficial from '../src/reports/contrato/exemplos/tabela_generica_plano_semanal.js';
+import nomesOficial from '../src/reports/contrato/exemplos/tabela_generica_pacientes_por_profissional_nomes.js';
 
 const SCHEMA = JSON.parse(readFileSync(new URL('../src/reports/contrato/bloco_relatorio.schema.json', import.meta.url), 'utf8'));
 // ocupacao_profissional fica só com a conferência de forma: a fixture tem de propósito o dia
@@ -18,7 +19,9 @@ const SCHEMA = JSON.parse(readFileSync(new URL('../src/reports/contrato/bloco_re
 const SO_FORMA = new Set(['ocupacao_profissional']);
 
 // Notação: true = campo obrigatório (qualquer valor); {..} = objeto; [{..}] = lista de objetos;
-// [] = lista de qualquer coisa. Os objetos do schema não aceitam campos extras.
+// [] = lista de qualquer coisa; OPCIONAL = pode faltar (aditivo na versao 1; o schema confere o
+// tipo). Os objetos do schema não aceitam campos extras.
+const OPCIONAL = Symbol('opcional');
 const DATA_RELATORIO = { data: true, dia_semana: true };
 const CONTAGEM = { escalados: true, ocupados: true };
 const METRICAS = { ...CONTAGEM, livres: true, percentual: true, abaixo_da_meta: true, slots_para_meta: true };
@@ -47,6 +50,8 @@ const BASE = {
   avisos: [],
   resumo: [{ rotulo: true, valor: true, formato: true, exibicao: true }],
   tabelas: [{ nome: true, colunas: [{ chave: true, rotulo: true, formato: true }], linhas: [] }],
+  // No nível do bloco, só nos blocos com nomes de pacientes (sempre true).
+  contem_dados_pacientes: OPCIONAL,
 };
 
 const DADOS = {
@@ -140,6 +145,9 @@ const DADOS = {
     linhas: [],
     total: true,
     linhas_omitidas: true,
+    // Exibição agrupada (hoje só em pacientes_por_profissional_nomes); sempre juntos.
+    agrupar_por: OPCIONAL,
+    unidade_grupo: OPCIONAL,
   },
 };
 
@@ -179,6 +187,8 @@ function validar(v, sch, caminho, erros) {
   if (sch.format === 'date' && !DATA_ISO.test(v)) erros.push(`${caminho}: data ISO inválida`);
   if (sch.pattern && !new RegExp(sch.pattern).test(v)) erros.push(`${caminho}: não segue ${sch.pattern}`);
   if (sch.minimum != null && v < sch.minimum) erros.push(`${caminho}: menor que ${sch.minimum}`);
+  if (sch.minItems != null && v.length < sch.minItems) erros.push(`${caminho}: menos de ${sch.minItems} item(ns)`);
+  if (sch.minLength != null && v.length < sch.minLength) erros.push(`${caminho}: texto com menos de ${sch.minLength} caractere(s)`);
   if (sch.maximum != null && v > sch.maximum) erros.push(`${caminho}: maior que ${sch.maximum}`);
   if (sch.items && Array.isArray(v)) v.forEach((item, i) => validar(item, sch.items, `${caminho}[${i}]`, erros));
   if (TIPO.object(v) && (sch.properties || sch.additionalProperties !== undefined)) {
@@ -194,7 +204,7 @@ function validar(v, sch, caminho, erros) {
 }
 
 function conferir(valor, spec, caminho, erros) {
-  if (spec === true) return;
+  if (spec === true || spec === OPCIONAL) return;
   if (Array.isArray(spec)) {
     if (!Array.isArray(valor)) return erros.push(`${caminho}: esperada uma lista`);
     if (spec.length) valor.forEach((item, i) => conferir(item, spec[0], `${caminho}[${i}]`, erros));
@@ -204,35 +214,28 @@ function conferir(valor, spec, caminho, erros) {
     return erros.push(`${caminho}: esperado um objeto`);
   }
   for (const [chave, sub] of Object.entries(spec)) {
-    if (!(chave in valor)) erros.push(`${caminho}.${chave}: falta (obrigatório no RealocAI)`);
-    else conferir(valor[chave], sub, `${caminho}.${chave}`, erros);
+    if (!(chave in valor)) {
+      if (sub !== OPCIONAL) erros.push(`${caminho}.${chave}: falta (obrigatório no RealocAI)`);
+    } else conferir(valor[chave], sub, `${caminho}.${chave}`, erros);
   }
   for (const chave of Object.keys(valor)) {
     if (!(chave in spec)) erros.push(`${caminho}.${chave}: campo que o RealocAI não envia`);
   }
 }
 
-// Campos aditivos que o agente ainda vai enviar e que a cópia sincronizada do schema (versao 1)
-// não conhece: `agrupar_por` e `unidade_grupo` em `dados` da tabela_generica e
-// `contem_dados_pacientes` no bloco. São retirados SÓ para esta validação (a fixture continua com
-// eles). TODO: quando o PR do agente com o schema e o exemplo oficial for mergeado, rode
-// `npm run sync:contrato` e troque isto por validação completa (tipos de `agrupar_por` e
-// `unidade_grupo` pelo schema, sem retirar nada).
-const PENDENTES_DADOS = ['agrupar_por', 'unidade_grupo'];
-const PENDENTES_BLOCO = ['contem_dados_pacientes'];
-function semCamposPendentes(bloco) {
-  if (!bloco || typeof bloco !== 'object') return bloco;
-  const copia = Object.fromEntries(Object.entries(bloco).filter(([k]) => !PENDENTES_BLOCO.includes(k)));
-  if (bloco.tipo === 'tabela_generica' && bloco.dados && typeof bloco.dados === 'object') {
-    copia.dados = Object.fromEntries(Object.entries(bloco.dados).filter(([k]) => !PENDENTES_DADOS.includes(k)));
-  }
-  return copia;
-}
-
 let falhas = 0;
-for (const [nome, original] of Object.entries(amostras)) {
-  const bloco = semCamposPendentes(original);
-  const pendentes = original !== bloco && JSON.stringify(original) !== JSON.stringify(bloco);
+const relatar = (nome, tipo, erros, extra = '') => {
+  if (erros.length) {
+    falhas += erros.length;
+    console.error(`✗ ${nome} (${tipo})`);
+    erros.forEach((e) => console.error(`    ${e}`));
+  } else {
+    console.log(`✓ ${nome} (${tipo}${extra})`);
+  }
+};
+// Forma (campos obrigatórios e opcionais conhecidos) e, fora de SO_FORMA, o schema completo,
+// inclusive agrupar_por, unidade_grupo e contem_dados_pacientes. Nunca imprime linhas.
+const conferirBloco = (nome, bloco) => {
   const dados = DADOS[bloco?.tipo];
   const erros = [];
   if (!dados) erros.push(`tipo desconhecido: ${JSON.stringify(bloco?.tipo)}`);
@@ -241,33 +244,50 @@ for (const [nome, original] of Object.entries(amostras)) {
     conferir(bloco, { ...BASE, ...(bloco.periodo === null && { periodo: true }), dados }, nome, erros);
     if (!SO_FORMA.has(bloco.tipo)) validar(bloco, SCHEMA, nome, erros);
   }
-  if (erros.length) {
-    falhas += erros.length;
-    console.error(`✗ ${nome} (${bloco?.tipo})`);
-    erros.forEach((e) => console.error(`    ${e}`));
-  } else {
-    console.log(`✓ ${nome} (${bloco.tipo}${SO_FORMA.has(bloco.tipo) ? '' : ', schema'}${pendentes ? ', sem agrupar_por/unidade_grupo/contem_dados_pacientes até sincronizar o contrato' : ''})`);
-  }
+  relatar(nome, bloco?.tipo, erros, dados && !SO_FORMA.has(bloco.tipo) ? ', schema' : '');
+};
+
+for (const [nome, bloco] of Object.entries(amostras)) conferirBloco(nome, bloco);
+
+// Os exemplos oficiais sincronizados (src/reports/contrato/exemplos/) também seguem o schema
+// que veio com eles: um campo desconhecido ou de tipo errado num exemplo falha aqui.
+const PASTA_EXEMPLOS = new URL('../src/reports/contrato/exemplos/', import.meta.url);
+for (const arquivo of readdirSync(PASTA_EXEMPLOS).filter((f) => f.endsWith('.js')).sort()) {
+  const { default: bloco } = await import(new URL(arquivo, PASTA_EXEMPLOS));
+  conferirBloco(`oficial:${arquivo.replace(/\.js$/, '')}`, bloco);
 }
 
-// O plano semanal tem a forma do exemplo oficial do agente (cópia sincronizada): mesmo
-// envelope, mesmas colunas e periodo null. Os valores das linhas podem diferir (a fixture é
-// menor). A igualdade com a cópia do backend é do check:fixtures.
+// Fixtures com a FORMA do exemplo oficial correspondente (cópia sincronizada): mesmo envelope,
+// mesmas colunas e tabelas, mesmos tipos nos campos opcionais. Os valores e o tamanho das linhas
+// podem diferir (a fixture do plano é menor; a de nomes tem 800 linhas). A igualdade com a cópia
+// do backend é do check:fixtures.
+const tipoDe = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v);
 const forma = (b) =>
   JSON.stringify({
     envelope: Object.keys(b),
     dados: Object.keys(b.dados),
     periodo: b.periodo,
+    meta: b.meta,
+    resumo: (b.resumo || []).map((r) => [r.rotulo, r.formato]),
+    relatorio: b.dados.relatorio,
     colunas: b.dados.colunas,
     tabelas: b.tabelas.map((t) => ({ nome: t.nome, colunas: t.colunas })),
+    // Campos opcionais: presença, tipo e valor (agrupar_por e unidade_grupo são pequenos).
+    contem_dados_pacientes: ['contem_dados_pacientes' in b, b.contem_dados_pacientes],
+    contem_em_dados: 'contem_dados_pacientes' in b.dados,
+    agrupar_por: [tipoDe(b.dados.agrupar_por), b.dados.agrupar_por],
+    unidade_grupo: [tipoDe(b.dados.unidade_grupo), b.dados.unidade_grupo],
   });
-const errosOficial = validar(planoOficial, SCHEMA, 'planoOficial', []);
-if (forma(planoOficial) === forma(amostras.tabelaGenericaPlanoSemanal) && planoOficial.periodo === null && !errosOficial.length) {
-  console.log('✓ tabelaGenericaPlanoSemanal com a forma do exemplo oficial (envelope, colunas, periodo null)');
-} else {
-  falhas++;
-  console.error('✗ tabelaGenericaPlanoSemanal difere da forma de contrato/exemplos/tabela_generica_plano_semanal.js');
-  errosOficial.forEach((e) => console.error(`    ${e}`));
+const PARES_FORMA = [
+  ['tabelaGenericaPlanoSemanal', planoOficial, 'tabela_generica_plano_semanal'],
+  ['tabelaGenericaPacientesNomesAgrupada', nomesOficial, 'tabela_generica_pacientes_por_profissional_nomes'],
+];
+for (const [nome, oficial, arquivo] of PARES_FORMA) {
+  const fixture = amostras[nome];
+  const erros = [];
+  if (forma(oficial) !== forma(fixture)) erros.push(`forma diferente de contrato/exemplos/${arquivo}.js (envelope, colunas, tabelas ou campos opcionais)`);
+  if (oficial.periodo !== null) erros.push('o exemplo oficial deixou de ter periodo null');
+  relatar(`${nome} ~ oficial:${arquivo}`, 'forma', erros);
 }
 
 if (falhas) {
