@@ -94,17 +94,19 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   DOM (`scripts/check-render-dom.mjs`, DOM mínimo em `scripts/lib/mini-dom.mjs`).
 - **Tabela genérica agrupada** (`TabelaGenerica.jsx`, `agruparLinhas`): campos opcionais
   `dados.agrupar_por` (lista ordenada de chaves de `colunas`) e `dados.unidade_grupo`
-  (`{singular, plural}`), aditivos na `versao` 1 e ainda fora do schema sincronizado. Só agrupa
+  (`{singular, plural}`), opcionais na `versao` 1 e no schema sincronizado. Só agrupa
   com lista não vazia de textos distintos que existem em `colunas`, ao menos uma linha e ao menos
   uma coluna sobrando; senão é o modo plano com o HTML de antes. Grupo novo a cada mudança de
   valor em relação à linha anterior (**nunca reordena nem junta grupos não consecutivos**); título
-  "valores · … (N unidade)", vazio vira "Sem <coluna>"; colunas de agrupamento saem do corpo;
+  "valores · … (N unidade)", vazio ou `"—"` vira "Sem <coluna>"; colunas de agrupamento saem do corpo;
   "Mostrar todas" corta só entre grupos (~15 linhas); PDF com tudo e título junto da 1ª linha. O
   Excel não muda (usa `tabelas`). Fixture fictícia de 800 linhas
-  `tabelaGenericaPacientesNomesAgrupada` (cópia no backend, `check:fixtures`). Ao sincronizar o
-  contrato do agente com esses campos, remover `semCamposPendentes` do `check:blocks` (hoje tira
-  `agrupar_por`/`unidade_grupo`/`contem_dados_pacientes` só para validar); detalhes em
-  `frontend/docs/relatorios.md`.
+  `tabelaGenericaPacientesNomesAgrupada` (cópia no backend, `check:fixtures`), com a forma do
+  exemplo oficial (`check:blocks` compara; especialidade ausente = `"—"`, como o agente manda);
+  detalhes em `frontend/docs/relatorios.md`.
+- **Contrato sincronizado** (`src/reports/contrato/`, gerado por `npm run sync:contrato`; nunca
+  editar à mão) com `Vida-plena-TI/reallocaai-agente` @ `43d46d7` (main, PR #15). `check:blocks`
+  valida fixtures e exemplos oficiais contra o schema completo.
 - Os blocos (componentes, `src/reports/types.js` e fixtures) seguem os nomes de campo dos
   exemplos reais do RealocAI, sem camada de adaptação; `npm run check:blocks` valida as
   fixtures de `sampleBlocks.js` contra os campos obrigatórios do contrato real (só lê
@@ -322,12 +324,12 @@ contagens, sem nomes) **não** é sensível e continua para todos.
 nessa lista, com teste em `chat/tests/test_patient_reports.py`**; senão qualquer usuário
 logado o recebe. `is_sensitive_block` nunca lança (bloco malformado → não sensível).
 
-**Marcação `contem_dados_pacientes`** (aditiva, fora do contrato `versao` 1): bloco com
+**Marcação `contem_dados_pacientes`** (opcional na `versao` 1, no schema desde o PR #15 do agente): bloco com
 `"contem_dados_pacientes": true` no nível do bloco é sensível mesmo fora da lista. Só o
 booleano JSON `true` vale (`"true"`, `1`, `null` ou o campo dentro de `dados` não);
-`false` não anula a lista. O time do agente foi solicitado a enviar esse campo nos tipos
-novos com dados de pacientes, mas ele é só uma segunda proteção: a lista continua
-obrigatória. O schema e a cópia sincronizada do contrato não mudam.
+`false` não anula a lista. O agente envia o campo em `agenda_paciente`, `pacientes_por_plano`
+e `pacientes_por_profissional_nomes` (os exemplos oficiais são testados pelos dois critérios),
+mas ele é só uma segunda proteção: a lista continua obrigatória.
 
 Quem vê: superusuários e membros ativos do grupo `coordenacao`
 (`can_view_patient_reports`). O grupo é criado **vazio** pela migração
