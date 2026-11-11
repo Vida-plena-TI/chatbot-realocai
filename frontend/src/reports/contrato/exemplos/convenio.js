@@ -1,5 +1,5 @@
 // Exemplo real de bloco do RealocAI, copiado sem alteração. Dados FICTÍCIOS.
-// Origem: Vida-plena-TI/reallocaai-agente @ b55bf3ac0c3a3594bae39224274d39fdcf7ad95e (main)
+// Origem: Vida-plena-TI/reallocaai-agente @ 43d46d70a0a0bd97ed4119cdeb9e6de2a43adc4e (main)
 // Arquivo: docs/exemplos-blocos/convenio.json. Atualize com scripts/sync-contrato.mjs; não edite à mão.
 export default {
   "versao": 1,
