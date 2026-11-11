@@ -290,6 +290,27 @@ for (const [nome, oficial, arquivo] of PARES_FORMA) {
   relatar(`${nome} ~ oficial:${arquivo}`, 'forma', erros);
 }
 
+// Garantias do agente para a exibição agrupada, na fixture e no oficial: cada coluna de
+// agrupamento traz texto em toda linha (sem valor vem como "—", nunca null) e cada combinação
+// de valores forma um único trecho contíguo. Só conta; nunca imprime valores.
+for (const [nome, bloco] of [['tabelaGenericaPacientesNomesAgrupada', amostras.tabelaGenericaPacientesNomesAgrupada], ['oficial:tabela_generica_pacientes_por_profissional_nomes', nomesOficial]]) {
+  const { agrupar_por: por, linhas } = bloco.dados;
+  const erros = [];
+  const semTexto = linhas.filter((l) => por.some((k) => typeof l[k] !== 'string' || !l[k].trim())).length;
+  if (semTexto) erros.push(`${semTexto} linha(s) com coluna de agrupamento sem texto (o agente manda "—", nunca null)`);
+  const vistos = new Set();
+  let anterior;
+  let repetidos = 0;
+  for (const l of linhas) {
+    const chave = JSON.stringify(por.map((k) => l[k]));
+    if (chave !== anterior && vistos.has(chave)) repetidos++;
+    vistos.add(chave);
+    anterior = chave;
+  }
+  if (repetidos) erros.push(`${repetidos} grupo(s) não contíguo(s)`);
+  relatar(`${nome}`, `agrupamento: ${vistos.size} grupos contíguos, colunas de agrupamento com texto`, erros);
+}
+
 if (falhas) {
   console.error(`\n${falhas} problema(s) de contrato nas fixtures.`);
   process.exit(1);
