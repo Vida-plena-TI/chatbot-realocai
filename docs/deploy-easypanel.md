@@ -210,7 +210,8 @@ Ordem: **DNS → Supabase → backend → frontend → testes pós-deploy**.
 - **Grupo `coordenacao`** (relatórios com dados de pacientes): a migração
   `chat.0005_patient_reports_group` cria o grupo **vazio**. Depois do deploy **ninguém**
   recebe esses relatórios (`agenda_paciente`, pacientes por plano, nomes de pacientes por
-  profissional e qualquer bloco com `contem_dados_pacientes: true`), só superusuários,
+  profissional, plano de realocação e qualquer bloco com `contem_dados_pacientes: true`),
+  só superusuários,
   até o administrador incluir as pessoas: Admin do Django → **Usuários** → abra o usuário
   → **Permissões** → **Grupos** → mova `coordenacao` para "Grupos escolhidos" → Salvar.
   Para tirar o acesso, faça o caminho inverso; vale na próxima requisição, inclusive para

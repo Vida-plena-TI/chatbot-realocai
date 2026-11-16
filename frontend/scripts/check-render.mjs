@@ -16,6 +16,9 @@
 //     (d) colunas de agrupamento fora do corpo; (e) nenhum título vazio/"null"/"undefined"/"NaN";
 //     (f) singular/plural; (g) grupos não consecutivos com os mesmos valores não se fundem;
 //     (h) "Mostrar todas" corta só entre grupos; agrupar_por inválido = HTML do modo plano;
+//     o mesmo nos exemplos oficiais agrupados (nomes por profissional e plano de realocação, com
+//     os títulos "Opção N (M passos)" e uma variante com 1 passo para o singular); a pergunta do
+//     plano de realocação (sem agrupar_por) sai no modo plano;
 //   - nada vai para o console durante a renderização (LGPD: o nome do paciente nunca é logado);
 //   - com DOM (check-render-dom.mjs): bloco quebrado não derruba o grupo, os vizinhos nem a
 //     conversa; histórico com periodo null e com período.
@@ -43,8 +46,12 @@ try {
   const { diaCompleto: diaCompletoSsr, formatarValor, int } = await server.ssrLoadModule('/src/reports/format.js');
   const { gerarExcel } = await server.ssrLoadModule('/src/reports/localExport.js');
   const { agruparLinhas } = await server.ssrLoadModule('/src/reports/TabelaGenerica.jsx');
-  // Exemplo OFICIAL do agente (cópia sincronizada, dados fictícios), com agrupar_por/unidade_grupo.
-  const nomesOficial = (await server.ssrLoadModule('/src/reports/contrato/exemplos/tabela_generica_pacientes_por_profissional_nomes.js')).default;
+  // Exemplos OFICIAIS do agente (cópia sincronizada, dados fictícios): os nomes por profissional e
+  // o plano de realocação com agrupar_por/unidade_grupo; a pergunta do plano sem agrupamento.
+  const exemplo = async (nome) => (await server.ssrLoadModule(`/src/reports/contrato/exemplos/${nome}.js`)).default;
+  const nomesOficial = await exemplo('tabela_generica_pacientes_por_profissional_nomes');
+  const realocacaoOficial = await exemplo('tabela_generica_plano_realocacao');
+  const perguntaOficial = await exemplo('tabela_generica_plano_realocacao_pergunta');
 
   // Captura todo o console durante as renderizações.
   const saida = [];
@@ -123,6 +130,8 @@ try {
   semPeriodo.ausente = semCampo;
   semPeriodo.pacientesNomesAgrupada = amostras.tabelaGenericaPacientesNomesAgrupada;
   semPeriodo.pacientesNomesOficial = nomesOficial;
+  semPeriodo.planoRealocacaoOficial = realocacaoOficial;
+  semPeriodo.planoRealocacaoPerguntaOficial = perguntaOficial;
   r.semPeriodo = Object.fromEntries(Object.entries(semPeriodo).map(([k, b]) => [k, { tela: render([b]), pdf: render([b], PrintReport) }]));
   r.comPeriodo = Object.fromEntries(
     ['ocupacaoProfissional', 'pacientesSemana', 'pacientesDia', 'ocupacaoAgregada', 'agendaPaciente', 'tabelaGenericaRanking', 'tabelaGenericaCapacidade'].map((k) => [k, render([amostras[k]])]),
@@ -160,7 +169,20 @@ try {
     primeiroGrande: comDados(agr, { linhas: [...gruposOrig[2], ...gruposOrig[3]] }),
   };
   r.agr = { tela: render([agr]), pdf: render([agr], PrintReport) };
-  r.oficial = { tela: render([nomesOficial]), pdf: render([nomesOficial], PrintReport) };
+  // Plano de realocação: todas as opções têm 3 passos; a variante com só o 1º passo da Opção 1
+  // (e a Opção 2 inteira) testa o singular.
+  const [op1, op2] = (() => {
+    const g = new Map();
+    for (const l of realocacaoOficial.dados.linhas) g.set(l.opcao, [...(g.get(l.opcao) ?? []), l]);
+    return [...g.values()];
+  })();
+  const realocacaoSingular = comDados(realocacaoOficial, { linhas: [op1[0], ...op2] });
+  const oficiais = [
+    ['oficial nomes', nomesOficial, { igualFixture: true, singularEPlural: true }],
+    ['oficial plano_realocacao', realocacaoOficial, {}],
+    ['oficial plano_realocacao (1 passo)', realocacaoSingular, { singularEPlural: true }],
+  ].map(([tag, bloco, opcoes]) => ({ tag, bloco, opcoes, html: { tela: render([bloco]), pdf: render([bloco], PrintReport) } }));
+  r.pergunta = { tela: render([perguntaOficial]), pdf: render([perguntaOficial], PrintReport) };
   r.agrVar = Object.fromEntries(Object.entries(variantes).map(([k, b]) => [k, { tela: render([b]), pdf: render([b], PrintReport) }]));
   // Volta ao modo plano: HTML idêntico ao do mesmo bloco sem agrupar_por/unidade_grupo.
   const plano0 = semCampos(agr, ['agrupar_por', 'unidade_grupo']);
@@ -448,10 +470,12 @@ try {
     `agrupada: (h) primeiro grupo maior que o limite aparece inteiro (${grande.grupos[0].linhas.length} linhas)`);
   ok(!texto(r.agrVar.soPrimeiro.tela).includes('Mostrar todas') && tabelaAgrupada(r.agrVar.soPrimeiro.tela).grupos.length === 1, 'agrupada: (h) sem botão quando tudo cabe');
 
-  // --- Exemplo OFICIAL do agente: as mesmas invariantes, com os grupos esperados calculados aqui
+  // --- Exemplos OFICIAIS do agente: as mesmas invariantes, com os grupos esperados calculados aqui
   // (sem agruparLinhas). Só contagens e títulos nas mensagens; nunca linhas.
-  {
-    const { colunas, linhas, agrupar_por: por, unidade_grupo: un } = nomesOficial.dados;
+  const NUMERICOS = new Set(['percentual', 'inteiro', 'decimal']);
+  const titulosOficiais = {};
+  for (const { tag: nomeOficial, bloco: oficial, opcoes, html } of oficiais) {
+    const { colunas, linhas, agrupar_por: por, unidade_grupo: un } = oficial.dados;
     const doGrupo = por.map((k) => colunas.find((c) => c.chave === k));
     const corpo = colunas.filter((c) => !por.includes(c.chave));
     const semValor = (v) => v == null || (typeof v === 'string' && ['', '—'].includes(v.trim()));
@@ -467,15 +491,19 @@ try {
     const tituloEsperado = ({ vals, linhas: ls }) =>
       `${vals.map((v, j) => (v == null ? `Sem ${doGrupo[j].rotulo.toLocaleLowerCase('pt-BR')}` : formatarValor(v, doGrupo[j].formato))).join(' · ')} (${int(ls.length)} ${ls.length === 1 ? un.singular : un.plural})`;
     const celulas = (ls) => ls.map((l) => corpo.map((c) => formatarValor(l[c.chave], c.formato)));
-    const pdf = tabelaAgrupada(r.oficial.pdf);
-    const tela = tabelaAgrupada(r.oficial.tela);
-    const comp = cartoesAgrupados(r.oficial.tela);
+    // Rótulo do cartão no celular: as colunas não numéricas do corpo (total vazio), unidas por " · ".
+    const dimsCorpo = corpo.filter((c) => !NUMERICOS.has(c.formato));
+    const cartoes = (ls) => ls.map((l) => dimsCorpo.map((c) => formatarValor(l[c.chave], c.formato)).join(' · ') || '—');
+    const pdf = tabelaAgrupada(html.pdf);
+    const tela = tabelaAgrupada(html.tela);
+    const comp = cartoesAgrupados(html.tela);
     const totalOf = linhas.length;
-    const tag = `oficial (${totalOf} linhas, ${esperados.length} grupos)`;
-    ok(typeof r.oficial.tela === 'string' && !r.oficial.tela.startsWith('ERRO') && !r.oficial.pdf.startsWith('ERRO') && pdf && tela && !pdf.grupos.some((g) => g.erro) && !tela.grupos.some((g) => g.erro),
+    const tag = `${nomeOficial} (${totalOf} linhas, ${esperados.length} grupos)`;
+    ok(typeof html.tela === 'string' && !html.tela.startsWith('ERRO') && !html.pdf.startsWith('ERRO') && pdf && tela && !pdf.grupos.some((g) => g.erro) && !tela.grupos.some((g) => g.erro),
       `${tag}: modo agrupado desenhado na tela e no PDF, título + primeira linha no mesmo tbody`);
-    ok(igual(colunas, agr.dados.colunas) && igual(por, agr.dados.agrupar_por) && igual(un, agr.dados.unidade_grupo), `${tag}: mesmas colunas, agrupar_por e unidade_grupo da fixture`);
-    ok(esperados.some((g) => g.linhas.length === 1) && esperados.some((g) => g.linhas.length > 1), `${tag}: tem grupo com 1 e com várias linhas (singular e plural testados)`);
+    if (opcoes.igualFixture) ok(igual(colunas, agr.dados.colunas) && igual(por, agr.dados.agrupar_por) && igual(un, agr.dados.unidade_grupo), `${tag}: mesmas colunas, agrupar_por e unidade_grupo da fixture`);
+    if (opcoes.singularEPlural) ok(esperados.some((g) => g.linhas.length === 1) && esperados.some((g) => g.linhas.length > 1), `${tag}: tem grupo com 1 e com várias linhas (singular e plural testados)`);
+    titulosOficiais[nomeOficial] = pdf?.grupos.map((g) => g.titulo) ?? [];
     for (const [onde, t] of [['PDF', pdf], ['tela', tela]]) {
       ok(t.grupos.reduce((a, g) => a + g.linhas.length, 0) === totalOf, `${tag}: (a) ${onde}: soma das linhas dos grupos = total`);
       ok(t.grupos.reduce((a, g) => a + nDoTitulo(g.titulo), 0) === totalOf && t.grupos.every((g) => nDoTitulo(g.titulo) === g.linhas.length), `${tag}: (b) ${onde}: soma dos N dos títulos = total e cada N = linhas do grupo`);
@@ -485,11 +513,27 @@ try {
     }
     const valoresDoGrupo = new Set(linhas.flatMap((l) => por.map((k) => l[k])));
     ok([pdf, tela].every((t) => t.grupos.every((g) => g.linhas.every((l) => l.every((v) => !valoresDoGrupo.has(v))))), `${tag}: (d) nenhum valor de agrupamento nas células`);
-    ok(igual(comp.map((g) => g.titulo), tela.grupos.map((g) => g.titulo)) && igual(comp.flatMap((g) => g.cartoes), cartaoEsperado(linhas)) && comp.every((g) => g.rotulos.every((x) => !doGrupo.some((c) => c.rotulo === x))),
+    ok(igual(comp.map((g) => g.titulo), tela.grupos.map((g) => g.titulo)) && igual(comp.flatMap((g) => g.cartoes), cartoes(linhas)) && comp.every((g) => g.rotulos.every((x) => !doGrupo.some((c) => c.rotulo === x))),
       `${tag}: (c)(d) celular: mesmos títulos, um cartão por linha na ordem, sem colunas de agrupamento`);
-    ok(![r.oficial.tela, r.oficial.pdf].some((h) => /\b(null|undefined|NaN)\b|Invalid Date/.test(texto(h))), `${tag}: (e) nenhum "null", "undefined", "NaN" ou "Invalid Date" na tela nem no PDF`);
-    ok(totalOf > 15 || (!texto(r.oficial.tela).includes('Mostrar todas') && !texto(r.oficial.pdf).includes('Mostrar todas')), `${tag}: cabe sem "Mostrar todas"`);
-    ok(nomesOficial.avisos.every((a) => texto(r.oficial.tela).includes(a) && texto(r.oficial.pdf).includes(a)), `${tag}: avisos na tela e no PDF`);
+    ok(![html.tela, html.pdf].some((h) => /\b(null|undefined|NaN)\b|Invalid Date/.test(texto(h))), `${tag}: (e) nenhum "null", "undefined", "NaN" ou "Invalid Date" na tela nem no PDF`);
+    ok(totalOf > 15 || (!texto(html.tela).includes('Mostrar todas') && !texto(html.pdf).includes('Mostrar todas')), `${tag}: cabe sem "Mostrar todas"`);
+    ok(oficial.avisos.every((a) => texto(html.tela).includes(a) && texto(html.pdf).includes(a)), `${tag}: avisos na tela e no PDF`);
+  }
+  // Título do grupo do plano de realocação: formato atual "valores (N unidade)". Só "Opção N" e
+  // contagens; nunca nomes.
+  {
+    const t = titulosOficiais['oficial plano_realocacao'];
+    ok(igual(t, ['Opção 1 (3 passos)', 'Opção 2 (3 passos)', 'Opção 3 (3 passos)']), `plano_realocacao: títulos dos grupos ${JSON.stringify(t)}`);
+    const t1 = titulosOficiais['oficial plano_realocacao (1 passo)'];
+    ok(igual(t1, ['Opção 1 (1 passo)', 'Opção 2 (3 passos)']), `plano_realocacao: singular ${JSON.stringify(t1)}`);
+  }
+  // Pergunta do plano de realocação (sem agrupar_por): modo plano, todas as linhas, sem null.
+  {
+    const { colunas, linhas } = perguntaOficial.dados;
+    const pdf = r.pergunta.pdf;
+    ok(!r.pergunta.tela.startsWith('ERRO') && !pdf.startsWith('ERRO') && !r.pergunta.tela.includes(css.groupTable) && !pdf.includes(css.groupTable), 'oficial plano_realocacao (pergunta): modo plano na tela e no PDF');
+    ok(colunas.every((c) => texto(pdf).includes(c.rotulo)) && linhas.every((l) => colunas.every((c) => texto(pdf).includes(formatarValor(l[c.chave], c.formato)))), `oficial plano_realocacao (pergunta): ${linhas.length} linhas e ${colunas.length} colunas no PDF`);
+    ok(![r.pergunta.tela, pdf].some((h) => /\b(null|undefined|NaN)\b|Invalid Date/.test(texto(h))), 'oficial plano_realocacao (pergunta): nenhum "null", "undefined", "NaN" ou "Invalid Date"');
   }
 
   for (const [k, { tela, pdf }] of Object.entries(r.invalidos)) {
