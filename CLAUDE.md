@@ -105,8 +105,14 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   exemplo oficial (`check:blocks` compara; especialidade ausente = `"—"`, como o agente manda);
   detalhes em `frontend/docs/relatorios.md`.
 - **Contrato sincronizado** (`src/reports/contrato/`, gerado por `npm run sync:contrato`; nunca
-  editar à mão) com `Vida-plena-TI/reallocaai-agente` @ `43d46d7` (main, PR #15). `check:blocks`
+  editar à mão) com `Vida-plena-TI/reallocaai-agente` @ `4313040` (main, PR #16). `check:blocks`
   valida fixtures e exemplos oficiais contra o schema completo.
+- **Plano de realocação** (`tabela_generica`, `dados.relatorio: "plano_realocacao"`, PR #16 do
+  agente; **nomes de pacientes**, restrito à coordenação): plano agrupado por opção
+  (`agrupar_por: ["opcao"]`, unidade passo/passos) e pergunta de nome ambíguo (modo plano), ambos
+  com `periodo`/`meta` `null`. Usa o modo agrupado existente, sem código próprio: título
+  "Opção 1 (3 passos)". **Pendente:** a documentação do agente cita "Opção 1 · 3 passos"; o
+  formato do título não muda até decisão (detalhes em `frontend/docs/relatorios.md`).
 - Os blocos (componentes, `src/reports/types.js` e fixtures) seguem os nomes de campo dos
   exemplos reais do RealocAI, sem camada de adaptação; `npm run check:blocks` valida as
   fixtures de `sampleBlocks.js` contra os campos obrigatórios do contrato real (só lê
@@ -314,11 +320,14 @@ Alguns blocos do RealocAI trazem nomes de pacientes. As regras ficam **num únic
 - `tipo == "agenda_paciente"`;
 - `tipo == "tabela_generica"` com `dados.relatorio == "pacientes_por_plano"`;
 - `tipo == "tabela_generica"` com `dados.relatorio == "pacientes_por_profissional_nomes"`
-  (nomes dos pacientes de cada profissional, `periodo: null`; PR #14 do agente).
+  (nomes dos pacientes de cada profissional, `periodo: null`; PR #14 do agente);
+- `tipo == "tabela_generica"` com `dados.relatorio == "plano_realocacao"` (plano de realocação e a
+  pergunta de nome ambíguo, ambos com nomes de pacientes e `periodo: null`; PR #16 do agente).
 
 A comparação é por **igualdade exata** de texto (nunca prefixo ou substring):
-`pacientes_por_profissional_nomes_x` não casa. O tipo `pacientes_por_profissional` (só
-contagens, sem nomes) **não** é sensível e continua para todos.
+`pacientes_por_profissional_nomes_x`, `plano_realocacao_x`, `"plano_realocacao "` e
+`Plano_realocacao` não casam. O tipo `pacientes_por_profissional` (só contagens, sem nomes)
+**não** é sensível e continua para todos.
 
 **Todo tipo novo de bloco (ou valor novo de `relatorio`) com dado de paciente DEVE entrar
 nessa lista, com teste em `chat/tests/test_patient_reports.py`**; senão qualquer usuário
@@ -327,9 +336,9 @@ logado o recebe. `is_sensitive_block` nunca lança (bloco malformado → não se
 **Marcação `contem_dados_pacientes`** (opcional na `versao` 1, no schema desde o PR #15 do agente): bloco com
 `"contem_dados_pacientes": true` no nível do bloco é sensível mesmo fora da lista. Só o
 booleano JSON `true` vale (`"true"`, `1`, `null` ou o campo dentro de `dados` não);
-`false` não anula a lista. O agente envia o campo em `agenda_paciente`, `pacientes_por_plano`
-e `pacientes_por_profissional_nomes` (os exemplos oficiais são testados pelos dois critérios),
-mas ele é só uma segunda proteção: a lista continua obrigatória.
+`false` não anula a lista. O agente envia o campo em `agenda_paciente`, `pacientes_por_plano`,
+`pacientes_por_profissional_nomes` e `plano_realocacao` (os exemplos oficiais são testados pelos
+dois critérios), mas ele é só uma segunda proteção: a lista continua obrigatória.
 
 Quem vê: superusuários e membros ativos do grupo `coordenacao`
 (`can_view_patient_reports`). O grupo é criado **vazio** pela migração

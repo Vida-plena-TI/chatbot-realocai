@@ -45,10 +45,11 @@ Aditivos na versão 1 do contrato. A fonte da verdade é o repositório do agent
 `EXEMPLOS` em `scripts/sync-contrato.mjs`) para `src/reports/contrato/` sem alterar aquele
 repositório, e `npm run sync:contrato -- --check` confere se a cópia está em dia.
 
-**Contrato sincronizado** com `Vida-plena-TI/reallocaai-agente` @ `43d46d70a0a0bd97ed4119cdeb9e6de2a43adc4e`
-(main, merge do PR #15): schema com `dados.agrupar_por`, `dados.unidade_grupo` e
-`contem_dados_pacientes` no nível do bloco; exemplos oficiais incluindo
-`tabela_generica_pacientes_por_plano` e `tabela_generica_pacientes_por_profissional_nomes`.
+**Contrato sincronizado** com `Vida-plena-TI/reallocaai-agente` @ `431304065416441b13c735476ae0c53256d34d19`
+(main, merge do PR #16): schema com `dados.agrupar_por`, `dados.unidade_grupo` e
+`contem_dados_pacientes` no nível do bloco (igual ao do PR #15); exemplos oficiais incluindo
+`tabela_generica_pacientes_por_plano`, `tabela_generica_pacientes_por_profissional_nomes`,
+`tabela_generica_plano_realocacao` e `tabela_generica_plano_realocacao_pergunta`.
 
 - **Tipo desconhecido é ignorado** (`blocoSuportado` em `ReportCard.jsx`): sem cartão, sem aba e
   fora do "Exportar todos". Um erro ao desenhar um bloco fica no próprio cartão.
@@ -66,8 +67,8 @@ repositório, e `npm run sync:contrato -- --check` confere se a cópia está em 
   `total` são as dimensões. Com meta, percentuais ganham barra e `abaixo_da_meta` vira selo.
   `linhas_omitidas` > 0 mostra "+N linhas não exibidas".
 - **`tabela_generica` agrupada (`dados.agrupar_por`, opcional):** campos aditivos na `versao` 1, no
-  schema sincronizado (hoje só em `pacientes_por_profissional_nomes`; vêm juntos ou não vêm). O
-  bloco também traz `contem_dados_pacientes: true` no nível do bloco (a tela não usa).
+  schema sincronizado (hoje em `pacientes_por_profissional_nomes` e no plano de `plano_realocacao`;
+  vêm juntos ou não vêm). O bloco também traz `contem_dados_pacientes: true` no nível do bloco (a tela não usa).
   - `agrupar_por`: lista ordenada de chaves de `dados.colunas` (ex.: `["especialidade",
     "profissional"]`). `unidade_grupo` (opcional): `{"singular": "paciente", "plural": "pacientes"}`.
   - Só agrupa se `agrupar_por` for lista não vazia de textos distintos, todos em `colunas` (pela
@@ -93,6 +94,23 @@ repositório, e `npm run sync:contrato -- --check` confere se a cópia está em 
     sozinho no fim da página), linhas sem quebra, fonte de 12 px.
   - O Excel não muda: continua escrevendo `tabelas` ("Pacientes", plana, e "Resumo por
     profissional") como vieram. `agrupar_por`/`unidade_grupo` são só apresentação.
+- **Plano de realocação (`tabela_generica`, `dados.relatorio: "plano_realocacao"`, PR #16 do
+  agente):** sugestão de como abrir espaço para um atendimento deslocando outros pacientes (só
+  pelo chat; nada muda na planilha). **Tem nomes de pacientes** (coluna `paciente`) e
+  `contem_dados_pacientes: true`: o backend só entrega a superusuários e ao grupo `coordenacao`
+  (lista de `chat/services/sensitive.py`, igualdade exata). `periodo` e `meta` são `null`. Dois
+  formatos com o mesmo `relatorio`:
+  - **Plano** ("Plano de realocação (grade semanal vigente)"): colunas `opcao` (texto,
+    "Opção 1"…), `passo` (inteiro), `paciente` ("Quem"), `terapia`, `profissional`, `de`, `para`,
+    `observacao`; até 3 opções, linhas contíguas por opção na ordem de execução, com
+    `agrupar_por: ["opcao"]` e `unidade_grupo: {"singular": "passo", "plural": "passos"}`. A tela
+    usa o modo agrupado sem nada específico: título **"Opção 1 (3 passos)"** (formato atual do
+    front; a documentação do agente cita "Opção 1 · 3 passos", ver Pendências). Excel: abas
+    "Passos" e "Resumo por opção". Sem opção: mesmas colunas, `linhas` vazia ou uma linha
+    "Fora da janela pedida".
+  - **Pergunta** ("Plano de realocação: qual paciente?", nome ambíguo): sem agrupamento, modo
+    plano; colunas `candidata`, `paciente` ("Nome"), `terapia`, `profissional`, `dias`. Excel: aba
+    "Candidatas".
 - **Listas longas:** no chat, as primeiras linhas e "Mostrar todas"; no PDF, tudo.
 - **Verificação:** `npm run check:blocks` valida as fixtures e todos os exemplos oficiais contra o
   schema copiado completo (inclusive `agrupar_por`, `unidade_grupo` e `contem_dados_pacientes`),
@@ -104,8 +122,16 @@ repositório, e `npm run sync:contrato -- --check` confere se a cópia está em 
   `meta: null`, `parcial`, "+N linhas", console vazio e as invariantes do modo agrupado (soma das
   linhas e dos N dos títulos = total, ordem recebida na tela e no PDF, colunas de agrupamento fora
   do corpo, títulos sem "null", singular/plural, grupos não consecutivos separados, corte só entre
-  grupos e `agrupar_por` inválido = HTML do modo plano), na fixture de 800 linhas e no exemplo
-  oficial de `pacientes_por_profissional_nomes` (com os grupos esperados calculados à parte).
+  grupos e `agrupar_por` inválido = HTML do modo plano), na fixture de 800 linhas e nos exemplos
+  oficiais de `pacientes_por_profissional_nomes` e `plano_realocacao` (com os grupos esperados
+  calculados à parte; o plano também com uma variante de 1 passo para o singular e os títulos
+  exatos "Opção N (3 passos)"); a pergunta do plano sai no modo plano.
+
+### Pendências
+
+- **Separador do título do grupo no plano de realocação:** o front produz "Opção 1 (3 passos)";
+  a documentação do agente (PR #16) escreve "Opção 1 · 3 passos". Decisão em aberto com o time
+  do agente; o formato não mudou.
 
 ## Regras visuais
 
