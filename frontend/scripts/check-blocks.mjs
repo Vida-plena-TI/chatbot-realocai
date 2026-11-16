@@ -12,6 +12,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import * as amostras from '../src/reports/sampleBlocks.js';
 import planoOficial from '../src/reports/contrato/exemplos/tabela_generica_plano_semanal.js';
 import nomesOficial from '../src/reports/contrato/exemplos/tabela_generica_pacientes_por_profissional_nomes.js';
+import realocacaoOficial from '../src/reports/contrato/exemplos/tabela_generica_plano_realocacao.js';
 
 const SCHEMA = JSON.parse(readFileSync(new URL('../src/reports/contrato/bloco_relatorio.schema.json', import.meta.url), 'utf8'));
 // ocupacao_profissional fica só com a conferência de forma: a fixture tem de propósito o dia
@@ -145,7 +146,7 @@ const DADOS = {
     linhas: [],
     total: true,
     linhas_omitidas: true,
-    // Exibição agrupada (hoje só em pacientes_por_profissional_nomes); sempre juntos.
+    // Exibição agrupada (pacientes_por_profissional_nomes e plano_realocacao); sempre juntos.
     agrupar_por: OPCIONAL,
     unidade_grupo: OPCIONAL,
   },
@@ -290,10 +291,15 @@ for (const [nome, oficial, arquivo] of PARES_FORMA) {
   relatar(`${nome} ~ oficial:${arquivo}`, 'forma', erros);
 }
 
-// Garantias do agente para a exibição agrupada, na fixture e no oficial: cada coluna de
+// Garantias do agente para a exibição agrupada, na fixture e nos oficiais agrupados: cada coluna de
 // agrupamento traz texto em toda linha (sem valor vem como "—", nunca null) e cada combinação
 // de valores forma um único trecho contíguo. Só conta; nunca imprime valores.
-for (const [nome, bloco] of [['tabelaGenericaPacientesNomesAgrupada', amostras.tabelaGenericaPacientesNomesAgrupada], ['oficial:tabela_generica_pacientes_por_profissional_nomes', nomesOficial]]) {
+const AGRUPADOS = [
+  ['tabelaGenericaPacientesNomesAgrupada', amostras.tabelaGenericaPacientesNomesAgrupada],
+  ['oficial:tabela_generica_pacientes_por_profissional_nomes', nomesOficial],
+  ['oficial:tabela_generica_plano_realocacao', realocacaoOficial],
+];
+for (const [nome, bloco] of AGRUPADOS) {
   const { agrupar_por: por, linhas } = bloco.dados;
   const erros = [];
   const semTexto = linhas.filter((l) => por.some((k) => typeof l[k] !== 'string' || !l[k].trim())).length;
