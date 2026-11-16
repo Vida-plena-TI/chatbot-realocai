@@ -17,6 +17,7 @@ from chat.services.sensitive import (
     PATIENT_DATA_FLAG,
     PATIENT_REPORTS_GROUP,
     PATIENT_REPORTS_RESTRICTED_MESSAGE,
+    SENSITIVE_BLOCK_RULES,
     can_view_patient_reports,
     is_sensitive_block,
     split_sensitive_blocks,
@@ -148,6 +149,27 @@ def with_relatorio(bloco, relatorio):
     return bloco
 
 
+def plano_realocacao_without_flag(relatorio="plano_realocacao"):
+    """The official plano_realocacao example (agent PR #16, fictitious names) without the
+    block-level flag, so only SENSITIVE_BLOCK_RULES can make it sensitive."""
+    bloco = load_example("tabela_generica_plano_realocacao")
+    del bloco[PATIENT_DATA_FLAG]
+    return with_relatorio(bloco, relatorio)
+
+
+# Near misses of "plano_realocacao": equality is exact, never prefix, substring or case-folded.
+PLANO_REALOCACAO_NEAR_MISSES = (
+    "plano_realocacao_x",
+    "plano_realocacao ",
+    " plano_realocacao",
+    "plano_realocaca",
+    "x_plano_realocacao",
+    "Plano_realocacao",
+    "PLANO_REALOCACAO",
+    "plano-realocacao",
+)
+
+
 def flagged_unknown_report():
     """A block no rule knows (future `relatorio`), flagged by the agent as sensitive."""
     return with_relatorio(pacientes_por_profissional_nomes(), "relatorio_futuro") | {
@@ -161,6 +183,9 @@ OFFICIAL_SENSITIVE_EXAMPLES = {
     "agenda_paciente": "agenda_paciente",
     "pacientes_por_plano": "tabela_generica_pacientes_por_plano",
     "pacientes_por_profissional_nomes": "tabela_generica_pacientes_por_profissional_nomes",
+    # agent PR #16: the grouped plan and the ambiguous-name question share the same relatorio.
+    "plano_realocacao": "tabela_generica_plano_realocacao",
+    "plano_realocacao:pergunta": "tabela_generica_plano_realocacao_pergunta",
 }
 
 SENSITIVE_EXAMPLES = {
@@ -193,6 +218,12 @@ NOT_SENSITIVE_EXAMPLES = {
             " pacientes_por_profissional_nomes",
             "pacientes_por_profissional_nomes ",
         )
+    },
+    **{
+        f"plano_realocacao sem flag, relatorio={value!r}": (
+            lambda value=value: plano_realocacao_without_flag(value)
+        )
+        for value in PLANO_REALOCACAO_NEAR_MISSES
     },
 }
 
@@ -332,6 +363,28 @@ def test_official_example_is_sensitive_by_the_flag_alone(name):
     assert is_sensitive_block(bloco) is True
     del bloco[PATIENT_DATA_FLAG]
     assert is_sensitive_block(bloco) is False
+
+
+@pytest.mark.parametrize(
+    "name", ["tabela_generica_plano_realocacao", "tabela_generica_plano_realocacao_pergunta"]
+)
+def test_plano_realocacao_is_in_the_list_by_exact_relatorio(name):
+    bloco = load_example(name)
+    del bloco[PATIENT_DATA_FLAG]
+
+    assert bloco["tipo"] == "tabela_generica"
+    assert bloco["dados"]["relatorio"] == "plano_realocacao"
+    assert {"tipo": "tabela_generica", "relatorio": "plano_realocacao"} in SENSITIVE_BLOCK_RULES
+    assert is_sensitive_block(bloco) is True
+
+
+@pytest.mark.parametrize("relatorio", PLANO_REALOCACAO_NEAR_MISSES)
+def test_plano_realocacao_with_a_similar_relatorio_is_sensitive_only_by_the_flag(relatorio):
+    flagged = with_relatorio(load_example("tabela_generica_plano_realocacao"), relatorio)
+
+    assert flagged[PATIENT_DATA_FLAG] is True
+    assert is_sensitive_block(flagged) is True
+    assert is_sensitive_block(plano_realocacao_without_flag(relatorio)) is False
 
 
 @pytest.mark.parametrize("name", OFFICIAL_SENSITIVE_EXAMPLES.values())
@@ -510,6 +563,8 @@ def test_dropping_logs_only_the_count(api, conversation, respx_mock, caplog):
         load_example("agenda_paciente"),
         pacientes_por_plano(),
         pacientes_por_profissional_nomes(),
+        plano_realocacao_without_flag(),
+        load_example("tabela_generica_plano_realocacao_pergunta"),
     ]
     mock_agent(respx_mock, blocos)
 
@@ -517,13 +572,14 @@ def test_dropping_logs_only_the_count(api, conversation, respx_mock, caplog):
         assert post_message(api, conversation).status_code == 201
 
     dropped = [r for r in caplog.records if "sensitive_blocks_dropped" in r.getMessage()]
-    assert [r.getMessage().split(" ")[0] for r in dropped] == ["sensitive_blocks_dropped=3"]
+    assert [r.getMessage().split(" ")[0] for r in dropped] == ["sensitive_blocks_dropped=5"]
     logged = all_log_text(caplog)
     for value in (
         ANSWER,
         "agenda_paciente",
         "pacientes_por_plano",
         "pacientes_por_profissional_nomes",
+        "plano_realocacao",
         *(b["titulo"] for b in blocos),
         *(v for b in blocos for v in sensitive_values(b)),
     ):

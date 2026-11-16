@@ -15,6 +15,7 @@ SENSITIVE_BLOCK_RULES = (
     {"tipo": "agenda_paciente"},
     {"tipo": "tabela_generica", "relatorio": "pacientes_por_plano"},
     {"tipo": "tabela_generica", "relatorio": "pacientes_por_profissional_nomes"},
+    {"tipo": "tabela_generica", "relatorio": "plano_realocacao"},
 )
 
 # Optional block-level flag (optional in contract version 1 since agent PR #15): RealocAI
