@@ -17,8 +17,8 @@ SENSITIVE_BLOCK_RULES = (
     {"tipo": "tabela_generica", "relatorio": "pacientes_por_profissional_nomes"},
 )
 
-# Optional block-level flag, outside contract version 1: RealocAI was asked to send
-# `"contem_dados_pacientes": true` on new block types with patient data. Only the JSON
+# Optional block-level flag (optional in contract version 1 since agent PR #15): RealocAI
+# sends `"contem_dados_pacientes": true` on the block types with patient data. Only the JSON
 # boolean `true` counts ("true", 1 or null do not); a block without it falls back to
 # SENSITIVE_BLOCK_RULES, so the list above stays mandatory.
 PATIENT_DATA_FLAG = "contem_dados_pacientes"

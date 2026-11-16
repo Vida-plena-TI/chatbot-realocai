@@ -155,11 +155,22 @@ def flagged_unknown_report():
     }
 
 
+# The agent's official examples (fictitious data, synced by frontend/scripts/sync-contrato.mjs):
+# each one matches SENSITIVE_BLOCK_RULES AND carries `contem_dados_pacientes: true` at block level.
+OFFICIAL_SENSITIVE_EXAMPLES = {
+    "agenda_paciente": "agenda_paciente",
+    "pacientes_por_plano": "tabela_generica_pacientes_por_plano",
+    "pacientes_por_profissional_nomes": "tabela_generica_pacientes_por_profissional_nomes",
+}
+
 SENSITIVE_EXAMPLES = {
-    "agenda_paciente": lambda: load_example("agenda_paciente"),
     "pacientes_por_plano": pacientes_por_plano,
     "pacientes_por_profissional_nomes": pacientes_por_profissional_nomes,
     "contem_dados_pacientes": flagged_unknown_report,
+    **{
+        f"oficial:{kind}": (lambda name=name: load_example(name))
+        for kind, name in OFFICIAL_SENSITIVE_EXAMPLES.items()
+    },
 }
 
 # Must keep reaching every logged-in user: counts only, or no patient data at all.
@@ -287,6 +298,51 @@ def test_flag_inside_dados_is_not_read():
     bloco["dados"][PATIENT_DATA_FLAG] = True
 
     assert is_sensitive_block(bloco) is False
+
+
+def unknown_to_the_rules(bloco):
+    """The same block with a `tipo` (or `dados.relatorio`) that no rule knows."""
+    if bloco["tipo"] == "tabela_generica":
+        bloco["dados"]["relatorio"] = "relatorio_futuro"
+    else:
+        bloco["tipo"] = "tipo_futuro"
+    return bloco
+
+
+@pytest.mark.parametrize("name", OFFICIAL_SENSITIVE_EXAMPLES.values())
+def test_official_example_has_the_flag_at_block_level(name):
+    bloco = load_example(name)
+
+    assert bloco[PATIENT_DATA_FLAG] is True
+    assert PATIENT_DATA_FLAG not in bloco["dados"]
+
+
+@pytest.mark.parametrize("name", OFFICIAL_SENSITIVE_EXAMPLES.values())
+def test_official_example_is_sensitive_by_the_list_alone(name):
+    bloco = load_example(name)
+    del bloco[PATIENT_DATA_FLAG]
+
+    assert is_sensitive_block(bloco) is True
+
+
+@pytest.mark.parametrize("name", OFFICIAL_SENSITIVE_EXAMPLES.values())
+def test_official_example_is_sensitive_by_the_flag_alone(name):
+    bloco = unknown_to_the_rules(load_example(name))
+
+    assert is_sensitive_block(bloco) is True
+    del bloco[PATIENT_DATA_FLAG]
+    assert is_sensitive_block(bloco) is False
+
+
+@pytest.mark.parametrize("name", OFFICIAL_SENSITIVE_EXAMPLES.values())
+def test_flag_moved_inside_dados_of_official_example_counts_only_through_the_list(name):
+    unknown = unknown_to_the_rules(load_example(name))
+    unknown["dados"][PATIENT_DATA_FLAG] = unknown.pop(PATIENT_DATA_FLAG)
+    known = load_example(name)
+    known["dados"][PATIENT_DATA_FLAG] = known.pop(PATIENT_DATA_FLAG)
+
+    assert is_sensitive_block(unknown) is False
+    assert is_sensitive_block(known) is True
 
 
 def test_old_pacientes_por_profissional_has_no_names_and_is_its_own_type():

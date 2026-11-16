@@ -475,12 +475,13 @@ export const tabelaGenericaPlanoSemanal = {
 };
 
 // --- Pacientes por profissional COM NOMES, agrupado (dados fictícios) ------------------------
-// Forma do exemplo oficial de `pacientes_por_profissional_nomes` (PR #14 do agente) + os campos
-// opcionais `agrupar_por` e `unidade_grupo` em `dados`, que o agente ainda vai enviar (fora do
-// schema sincronizado: check:blocks os tira só para validar) e `contem_dados_pacientes: true`.
+// Mesma FORMA do exemplo oficial (contrato/exemplos/tabela_generica_pacientes_por_profissional_nomes.js,
+// PR #15 do agente; check:blocks compara): `agrupar_por` e `unidade_grupo` em `dados` e
+// `contem_dados_pacientes: true` no nível do bloco. Só o tamanho difere do oficial.
 // 800 linhas em 33 grupos (especialidade > profissional), já contíguas e na ordem do agente:
-// especialidades em ordem alfabética, sem especialidade (null) por último, pacientes em ordem
-// alfabética dentro da profissional. Um grupo com 1 linha (singular) e um paciente em duas
+// especialidades em ordem alfabética, sem especialidade por último (o agente manda "—" na coluna,
+// como em toda tabela pronta; a tela mostra "Sem especialidade"), pacientes em ordem alfabética
+// dentro da profissional. Um grupo com 1 linha (singular) e um paciente em duas
 // profissionais. Todos os nomes de pacientes são "Paciente Fictício …".
 const ESPECIALIDADES_NOMES = [
   ['Fisioterapia Neurofuncional', ['Antônia Valença Brandão', 'Bárbara Conceição Magalhães', 'Caetano Araújo Simões', 'Débora Assunção Queiroz']],
@@ -491,7 +492,7 @@ const ESPECIALIDADES_NOMES = [
   ['Psicomotricidade', ['Úrsula Valadares Teixeira', 'Valéria Bittencourt Salgado', 'Wânia Cavalcanti Prado']],
   ['Psicopedagogia', ['Ximena Aragão Fontes', 'Yasmin Gusmão Bastos', 'Zélia Montenegro Lobo']],
   ['Terapia Ocupacional', ['Ângela Maria Furtado Correia', 'Benedita Sampaio Falcão', 'Célia Regina Pacheco Leite', 'Dalva Nogueira Siqueira', 'Eunice Rocha Brandão', 'Flávia Medeiros Quintão']],
-  [null, ['Graça Holanda Vasconcelos', 'Inês Barreto Moura']],
+  ['—', ['Graça Holanda Vasconcelos', 'Inês Barreto Moura']],
 ];
 // Linhas por profissional, na ordem acima (índice 12 = Natália Simões Andrade: 1 paciente).
 const TAMANHOS_NOMES = [6, 8, 32, 12, 23, 34, 14, 25, 36, 16, 27, 38, 1, 29, 40, 20, 31, 11, 22, 33, 13, 24, 35, 15, 26, 37, 17, 28, 39, 19, 30, 24, 35];
@@ -536,7 +537,7 @@ const resumoNomes = linhasPorGrupo.map((linhas, g) => ({
   atendimentos_semana: linhas.reduce((acc, l) => acc + l.atendimentos_semana, 0),
 }));
 
-/** Modo plano: o mesmo relatório sem `agrupar_por` (como o agente manda hoje). */
+/** Modo plano: o mesmo relatório sem `agrupar_por` (como o agente mandava antes do PR #15). */
 export const tabelaGenericaPacientesNomesPlana = {
   versao: 1,
   tipo: 'tabela_generica',

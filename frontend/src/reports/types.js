@@ -33,6 +33,9 @@
  * @property {string[]} avisos
  * @property {ItemResumo[]} resumo
  * @property {Tabela[]} tabelas
+ * @property {true} [contem_dados_pacientes] Opcional; só nos blocos com nomes de pacientes
+ *   (agenda_paciente, pacientes_por_plano, pacientes_por_profissional_nomes), sempre true. A tela
+ *   não usa: a restrição é do backend (lista em chat/services/sensitive.py + este campo).
  */
 
 /** @typedef {{data: string, dia_semana: string}} DataRelatorio */
@@ -191,8 +194,9 @@
 
 /**
  * Dimensões x métricas. `total` só tem as métricas; `linhas_omitidas` > 0 → "+N linhas".
- * `agrupar_por` e `unidade_grupo` são opcionais e ainda fora do schema sincronizado (aditivos,
- * `versao` 1): colunas que agrupam as linhas consecutivas e o nome da unidade no título do grupo.
+ * `agrupar_por` e `unidade_grupo` são opcionais na `versao` 1 (no schema sincronizado desde o
+ * PR #15 do agente; vêm juntos): colunas que agrupam as linhas consecutivas e o nome da unidade
+ * no título do grupo. Sem valor numa coluna de agrupamento, o agente manda "—".
  * @typedef {BlocoBase & {tipo: 'tabela_generica', dados: {
  *   tipo: 'tabela_generica',
  *   relatorio: string,
@@ -202,8 +206,8 @@
  *   linhas: Record<string, string|number|boolean|null>[],
  *   total: Record<string, string|number|boolean|null>,
  *   linhas_omitidas: number,
- *   agrupar_por?: string[],
- *   unidade_grupo?: {singular: string, plural: string}
+ *   agrupar_por?: string[]|null,
+ *   unidade_grupo?: {singular: string, plural: string}|null
  * }}} BlocoTabelaGenerica
  */
 

@@ -41,9 +41,14 @@ No mock, experimente:
 ## Tipos novos
 
 Aditivos na versão 1 do contrato. A fonte da verdade é o repositório do agente
-(`docs/exemplos-blocos/`, branch `feature/relatorios-gerais`); `npm run sync:contrato` copia
-schema e exemplos para `src/reports/contrato/` sem alterar aquele repositório, e
-`npm run sync:contrato -- --check` confere se a cópia está em dia.
+(`docs/exemplos-blocos/`, branch `main`); `npm run sync:contrato` copia schema e exemplos (lista
+`EXEMPLOS` em `scripts/sync-contrato.mjs`) para `src/reports/contrato/` sem alterar aquele
+repositório, e `npm run sync:contrato -- --check` confere se a cópia está em dia.
+
+**Contrato sincronizado** com `Vida-plena-TI/reallocaai-agente` @ `43d46d70a0a0bd97ed4119cdeb9e6de2a43adc4e`
+(main, merge do PR #15): schema com `dados.agrupar_por`, `dados.unidade_grupo` e
+`contem_dados_pacientes` no nível do bloco; exemplos oficiais incluindo
+`tabela_generica_pacientes_por_plano` e `tabela_generica_pacientes_por_profissional_nomes`.
 
 - **Tipo desconhecido é ignorado** (`blocoSuportado` em `ReportCard.jsx`): sem cartão, sem aba e
   fora do "Exportar todos". Um erro ao desenhar um bloco fica no próprio cartão.
@@ -60,9 +65,9 @@ schema e exemplos para `src/reports/contrato/` sem alterar aquele repositório, 
 - **`tabela_generica`:** só `dados.colunas`/`linhas`/`total`, na ordem do agente. Colunas fora de
   `total` são as dimensões. Com meta, percentuais ganham barra e `abaixo_da_meta` vira selo.
   `linhas_omitidas` > 0 mostra "+N linhas não exibidas".
-- **`tabela_generica` agrupada (`dados.agrupar_por`, opcional):** campos aditivos que o agente vai
-  enviar sem mudar a `versao` 1 (primeiro em `pacientes_por_profissional_nomes`). Ainda **fora do
-  schema sincronizado** (ver "Depois de sincronizar o contrato", abaixo).
+- **`tabela_generica` agrupada (`dados.agrupar_por`, opcional):** campos aditivos na `versao` 1, no
+  schema sincronizado (hoje só em `pacientes_por_profissional_nomes`; vêm juntos ou não vêm). O
+  bloco também traz `contem_dados_pacientes: true` no nível do bloco (a tela não usa).
   - `agrupar_por`: lista ordenada de chaves de `dados.colunas` (ex.: `["especialidade",
     "profissional"]`). `unidade_grupo` (opcional): `{"singular": "paciente", "plural": "pacientes"}`.
   - Só agrupa se `agrupar_por` for lista não vazia de textos distintos, todos em `colunas` (pela
@@ -74,7 +79,8 @@ schema e exemplos para `src/reports/contrato/` sem alterar aquele repositório, 
     Valores iguais não consecutivos viram grupos separados. O agente manda as linhas já contíguas
     e na ordem desejada; nenhuma camada (tela, PDF, Excel, backend) ordena ou junta.
   - Título do grupo: valores unidos por " · " + " (N unidade)" (N em pt-BR; singular com N = 1,
-    plural nos demais; sem `unidade_grupo`, só "(N)"). Valor `null`, `""` ou só espaços vira
+    plural nos demais; sem `unidade_grupo`, só "(N)"). Valor `null`, `""`, só espaços ou `"—"` (o que
+    o agente manda nas colunas quando falta o valor, ex.: especialidade ausente) vira
     "Sem <rótulo da coluna em minúsculas>" (ex.: "Sem especialidade"). Ex.: "Terapia Ocupacional ·
     Maria Silva (12 pacientes)". As colunas de agrupamento saem do corpo (ficam só no título); as
     outras mantêm formato e alinhamento.
@@ -88,21 +94,18 @@ schema e exemplos para `src/reports/contrato/` sem alterar aquele repositório, 
   - O Excel não muda: continua escrevendo `tabelas` ("Pacientes", plana, e "Resumo por
     profissional") como vieram. `agrupar_por`/`unidade_grupo` são só apresentação.
 - **Listas longas:** no chat, as primeiras linhas e "Mostrar todas"; no PDF, tudo.
-- **Verificação:** `npm run check:blocks` valida as fixtures contra o schema copiado (só lê
-  `frontend/`: roda no build do Docker); `npm run check:fixtures` confere as cópias do
-  backend (só no monorepo);
+- **Verificação:** `npm run check:blocks` valida as fixtures e todos os exemplos oficiais contra o
+  schema copiado completo (inclusive `agrupar_por`, `unidade_grupo` e `contem_dados_pacientes`),
+  confere que `tabelaGenericaPlanoSemanal` e `tabelaGenericaPacientesNomesAgrupada` têm a forma do
+  exemplo oficial correspondente (envelope, colunas, tabelas e campos opcionais; o tamanho pode
+  diferir) e que as colunas de agrupamento trazem texto e grupos contíguos (só lê `frontend/`: roda
+  no build do Docker); `npm run check:fixtures` confere as cópias do backend (só no monorepo);
   `npm run check:render` renderiza os cartões no Node (SSR do Vite) e confere tipo desconhecido,
   `meta: null`, `parcial`, "+N linhas", console vazio e as invariantes do modo agrupado (soma das
   linhas e dos N dos títulos = total, ordem recebida na tela e no PDF, colunas de agrupamento fora
   do corpo, títulos sem "null", singular/plural, grupos não consecutivos separados, corte só entre
-  grupos e `agrupar_por` inválido = HTML do modo plano).
-- **Depois de sincronizar o contrato** (PR do agente com `agrupar_por`/`unidade_grupo` no schema e
-  um exemplo oficial): rodar `npm run sync:contrato`; em `scripts/check-blocks.mjs`, apagar
-  `semCamposPendentes` (hoje retira `agrupar_por`/`unidade_grupo` de `dados` e
-  `contem_dados_pacientes` do bloco **só para validar**), para a fixture
-  `tabelaGenericaPacientesNomesAgrupada` passar pela validação completa; comparar a fixture com o
-  exemplo oficial (como o plano semanal) e ajustar nomes de campo se divergirem; atualizar o
-  typedef em `types.js` e a cópia do backend (`npm run check:fixtures`).
+  grupos e `agrupar_por` inválido = HTML do modo plano), na fixture de 800 linhas e no exemplo
+  oficial de `pacientes_por_profissional_nomes` (com os grupos esperados calculados à parte).
 
 ## Regras visuais
 

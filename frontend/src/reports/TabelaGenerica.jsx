@@ -11,11 +11,14 @@ const NUMERICOS = new Set(['percentual', 'inteiro', 'decimal']);
 // Métrica booleana do relatório genérico: com meta vira selo, sem meta vira "Sim"/"Não".
 const META = 'abaixo_da_meta';
 
-const vazio = (v) => v == null || (typeof v === 'string' && v.trim() === '');
+// Sem valor numa coluna de agrupamento: null, "" ou só espaços, ou o "—" que o agente manda nas
+// colunas das tabelas prontas quando falta o valor (ex.: especialidade ausente).
+const SEM_VALOR = '—';
+const vazio = (v) => v == null || (typeof v === 'string' && (v.trim() === '' || v.trim() === SEM_VALOR));
 const texto = (v) => typeof v === 'string' && v.trim() !== '';
 
 /**
- * Modo agrupado (`dados.agrupar_por`, opcional e fora do contrato `versao` 1 por enquanto).
+ * Modo agrupado (`dados.agrupar_por` e `dados.unidade_grupo`, opcionais na `versao` 1).
  * Percorre as linhas NA ORDEM RECEBIDA e abre um grupo novo sempre que a combinação de valores
  * das colunas de agrupamento muda em relação à linha anterior: valores iguais não consecutivos
  * viram grupos separados. Nunca reordena, junta, cria ou descarta linhas.
@@ -38,7 +41,7 @@ export function agruparLinhas(dados) {
   const grupos = [];
   let anterior;
   for (const linha of linhas) {
-    // Vazio (null, "" ou só espaços) conta como um valor só: "Sem <coluna>".
+    // Sem valor (null, "", só espaços ou "—") conta como um valor só: "Sem <coluna>".
     const valores = doGrupo.map((c) => (vazio(linha?.[c.chave]) ? null : linha[c.chave]));
     const chave = JSON.stringify(valores);
     if (chave !== anterior) grupos.push({ valores, linhas: [] });

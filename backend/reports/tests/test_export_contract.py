@@ -32,6 +32,13 @@ NEW_TYPES = {
     ],
 }
 ALL_EXAMPLES = [name for names in NEW_TYPES.values() for name in names]
+# Official tabela_generica examples with patient names (block-level contem_dados_pacientes;
+# the second one also has dados.agrupar_por / unidade_grupo). Kept out of ALL_EXAMPLES, which
+# is sent in a single request capped at 10 blocks. The `api` user is in the coordination group.
+PATIENT_EXAMPLES = [
+    "tabela_generica_pacientes_por_plano",
+    "tabela_generica_pacientes_por_profissional_nomes",
+]
 FORBIDDEN_SHEET_CHARS = re.compile(r"[\\/?*\[\]:]")
 
 
@@ -52,7 +59,7 @@ def test_examples_cover_the_five_new_types():
     assert set(NEW_TYPES) <= EXPORTED_TIPOS
 
 
-@pytest.mark.parametrize("name", ALL_EXAMPLES)
+@pytest.mark.parametrize("name", ALL_EXAMPLES + PATIENT_EXAMPLES)
 def test_each_new_type_exports_one_sheet_per_table(api, name):
     bloco = load_example(name)
     today = timezone.localdate()
@@ -71,6 +78,20 @@ def test_each_new_type_exports_one_sheet_per_table(api, name):
         sheet = workbook[tabela["nome"]]
         assert [c.value for c in sheet[1]] == [c["rotulo"] for c in tabela["colunas"]]
         assert sheet.max_row == len(tabela["linhas"]) + 1
+
+
+@pytest.mark.parametrize("name", PATIENT_EXAMPLES)
+def test_patient_examples_export_rows_in_the_received_order(api, name):
+    """The grouping hint changes nothing in the spreadsheet: every column (grouping ones
+    included) and every row of `tabelas`, in the order received, "—" kept as text."""
+    bloco = load_example(name)
+
+    workbook = open_xlsx(export(api, [bloco]))
+
+    for tabela in bloco["tabelas"]:
+        body = rows(workbook[tabela["nome"]])[1:]
+        chaves = [c["chave"] for c in tabela["colunas"]]
+        assert body == [[linha[k] for k in chaves] for linha in tabela["linhas"]]
 
 
 def test_all_new_types_together_get_unique_sheet_names(api):
