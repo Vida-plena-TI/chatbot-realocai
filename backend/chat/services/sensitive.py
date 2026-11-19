@@ -16,6 +16,8 @@ SENSITIVE_BLOCK_RULES = (
     {"tipo": "tabela_generica", "relatorio": "pacientes_por_plano"},
     {"tipo": "tabela_generica", "relatorio": "pacientes_por_profissional_nomes"},
     {"tipo": "tabela_generica", "relatorio": "plano_realocacao"},
+    # Agent PR #18: patient names and also professional names (sensitive HR data).
+    {"tipo": "tabela_generica", "relatorio": "panorama_enxugamento"},
 )
 
 # Optional block-level flag (optional in contract version 1 since agent PR #15): RealocAI
@@ -24,8 +26,10 @@ SENSITIVE_BLOCK_RULES = (
 # SENSITIVE_BLOCK_RULES, so the list above stays mandatory.
 PATIENT_DATA_FLAG = "contem_dados_pacientes"
 
+# Stored in place of the assistant's answer whenever a sensitive block is dropped. Worded as
+# "dados sensíveis" because some reports also carry professional (HR) data, not only patients'.
 PATIENT_REPORTS_RESTRICTED_MESSAGE = (
-    "Este relatório contém dados de pacientes e está disponível apenas para a "
+    "Este relatório contém dados sensíveis e está disponível apenas para a "
     "coordenação. Fale com a coordenação para solicitá-lo."
 )
 
