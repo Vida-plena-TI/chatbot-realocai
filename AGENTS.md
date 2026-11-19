@@ -112,14 +112,22 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   exemplo oficial (`check:blocks` compara; especialidade ausente = `"—"`, como o agente manda);
   detalhes em `frontend/docs/relatorios.md`.
 - **Contrato sincronizado** (`src/reports/contrato/`, gerado por `npm run sync:contrato`; nunca
-  editar à mão) com `Vida-plena-TI/reallocaai-agente` @ `4313040` (main, PR #16). `check:blocks`
+  editar à mão) com `Vida-plena-TI/reallocaai-agente` @ `66157c2` (main, PR #18). `check:blocks`
   valida fixtures e exemplos oficiais contra o schema completo.
 - **Plano de realocação** (`tabela_generica`, `dados.relatorio: "plano_realocacao"`, PR #16 do
   agente; **nomes de pacientes**, restrito à coordenação): plano agrupado por opção
   (`agrupar_por: ["opcao"]`, unidade passo/passos) e pergunta de nome ambíguo (modo plano), ambos
   com `periodo`/`meta` `null`. Usa o modo agrupado existente, sem código próprio: título
-  "Opção 1 (3 passos)". **Pendente:** a documentação do agente cita "Opção 1 · 3 passos"; o
-  formato do título não muda até decisão (detalhes em `frontend/docs/relatorios.md`).
+  "Opção 1 (3 passos)", o formato que a documentação do agente adotou (commit `08245ae`).
+- **Panorama de enxugamento** (`tabela_generica`, `dados.relatorio: "panorama_enxugamento"`, PR #18
+  do agente; **nomes de pacientes e de profissionais, sensível de RH**, restrito à coordenação):
+  cenários que liberam turnos, agrupados em dois níveis (`agrupar_por: ["cenario",
+  "turno_liberado"]`, unidade passo/passos), `periodo`/`meta` `null`; Excel "Passos" e "Resumo dos
+  cenários". Usa o modo agrupado existente: um grupo por par contíguo, título
+  "Cenário 1 (E-5EB1) · equilibrado · libera 3 turnos · Ter tarde · <profissional> · Terapia
+  Alimentar (1 passo)". **Pendente:** o contrato do agente exemplifica um título por cenário
+  ("… libera 3 turnos (4 passos)"); o formato não muda até decisão (detalhes em
+  `frontend/docs/relatorios.md`).
 - Os blocos (componentes, `src/reports/types.js` e fixtures) seguem os nomes de campo dos
   exemplos reais do RealocAI, sem camada de adaptação; `npm run check:blocks` valida as
   fixtures de `sampleBlocks.js` contra os campos obrigatórios do contrato real (só lê
@@ -335,11 +343,15 @@ Alguns blocos do RealocAI trazem nomes de pacientes. As regras ficam **num únic
 - `tipo == "tabela_generica"` com `dados.relatorio == "pacientes_por_profissional_nomes"`
   (nomes dos pacientes de cada profissional, `periodo: null`; PR #14 do agente);
 - `tipo == "tabela_generica"` com `dados.relatorio == "plano_realocacao"` (plano de realocação e a
-  pergunta de nome ambíguo, ambos com nomes de pacientes e `periodo: null`; PR #16 do agente).
+  pergunta de nome ambíguo, ambos com nomes de pacientes e `periodo: null`; PR #16 do agente);
+- `tipo == "tabela_generica"` com `dados.relatorio == "panorama_enxugamento"` (cenários que liberam
+  turnos com presença paga, tool `planejar_enxugamento`, só pelo chat; PR #18 do agente). Além dos
+  nomes de pacientes, traz nomes de **profissionais** e é **sensível de RH**; `periodo`/`meta` `null`.
 
 A comparação é por **igualdade exata** de texto (nunca prefixo ou substring):
-`pacientes_por_profissional_nomes_x`, `plano_realocacao_x`, `"plano_realocacao "` e
-`Plano_realocacao` não casam. O tipo `pacientes_por_profissional` (só contagens, sem nomes)
+`pacientes_por_profissional_nomes_x`, `plano_realocacao_x`, `"plano_realocacao "`,
+`Plano_realocacao`, `panorama_enxugamento_x`, `" panorama_enxugamento"` e `PANORAMA_ENXUGAMENTO`
+não casam. O tipo `pacientes_por_profissional` (só contagens, sem nomes)
 **não** é sensível e continua para todos.
 
 **Todo tipo novo de bloco (ou valor novo de `relatorio`) com dado de paciente DEVE entrar
@@ -350,8 +362,8 @@ logado o recebe. `is_sensitive_block` nunca lança (bloco malformado → não se
 `"contem_dados_pacientes": true` no nível do bloco é sensível mesmo fora da lista. Só o
 booleano JSON `true` vale (`"true"`, `1`, `null` ou o campo dentro de `dados` não);
 `false` não anula a lista. O agente envia o campo em `agenda_paciente`, `pacientes_por_plano`,
-`pacientes_por_profissional_nomes` e `plano_realocacao` (os exemplos oficiais são testados pelos
-dois critérios), mas ele é só uma segunda proteção: a lista continua obrigatória.
+`pacientes_por_profissional_nomes`, `plano_realocacao` e `panorama_enxugamento` (os exemplos
+oficiais são testados pelos dois critérios), mas ele é só uma segunda proteção: a lista continua obrigatória.
 
 Quem vê: superusuários e membros ativos do grupo `coordenacao`
 (`can_view_patient_reports`). O grupo é criado **vazio** pela migração
@@ -364,10 +376,15 @@ Para quem não pode ver:
 - **Geração** (`agent._restrict_patient_reports`, entre a resposta do RealocAI e o
   `record_exchange`): os blocos sensíveis são descartados (os outros da mesma resposta
   ficam) e o texto do assistente vira `PATIENT_REPORTS_RESTRICTED_MESSAGE` ("Este relatório
-  contém dados de pacientes e está disponível apenas para a coordenação. Fale com a
-  coordenação para solicitá-lo."), que é o que fica gravado (também na `preview`). Nada do
-  bloco descartado vai para o banco. Log INFO só com `sensitive_blocks_dropped=<n>` e o id
-  da conversa.
+  contém dados sensíveis e está disponível apenas para a coordenação. Fale com a
+  coordenação para solicitá-lo."), que é o que fica gravado (também na `preview`). A troca
+  só acontece quando algum bloco sensível é cortado. Nada do bloco descartado vai para o
+  banco. Log INFO só com `sensitive_blocks_dropped=<n>` e o id da conversa.
+- **Limite conhecido (texto sem bloco):** quando a tool do panorama não acha cenário ou pergunta
+  qual profissional (nome ambíguo ou fora da grade), o RealocAI responde **sem bloco**, e o texto
+  do agente chega a qualquer usuário logado (não há como detectar sem um sinal do agente; o texto
+  da tool só traz contagens, mas o LLM pode repetir o nome que o usuário digitou). Pendente:
+  combinar com o agente um marcador na resposta para esses casos.
 - **Histórico**: `MessageSerializer` omite os blocos sensíveis (contexto
   `can_view_patient_reports`, ausente = não pode). Cobre mensagens gravadas antes da regra
   e quem saiu do grupo.

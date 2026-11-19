@@ -45,11 +45,12 @@ Aditivos na versão 1 do contrato. A fonte da verdade é o repositório do agent
 `EXEMPLOS` em `scripts/sync-contrato.mjs`) para `src/reports/contrato/` sem alterar aquele
 repositório, e `npm run sync:contrato -- --check` confere se a cópia está em dia.
 
-**Contrato sincronizado** com `Vida-plena-TI/reallocaai-agente` @ `431304065416441b13c735476ae0c53256d34d19`
-(main, merge do PR #16): schema com `dados.agrupar_por`, `dados.unidade_grupo` e
+**Contrato sincronizado** com `Vida-plena-TI/reallocaai-agente` @ `66157c27ec55dd96c92ed0dfd49dbf46ff9e455a`
+(main, merge do PR #18): schema com `dados.agrupar_por`, `dados.unidade_grupo` e
 `contem_dados_pacientes` no nível do bloco (igual ao do PR #15); exemplos oficiais incluindo
 `tabela_generica_pacientes_por_plano`, `tabela_generica_pacientes_por_profissional_nomes`,
-`tabela_generica_plano_realocacao` e `tabela_generica_plano_realocacao_pergunta`.
+`tabela_generica_plano_realocacao`, `tabela_generica_plano_realocacao_pergunta` e
+`tabela_generica_panorama_enxugamento`.
 
 - **Tipo desconhecido é ignorado** (`blocoSuportado` em `ReportCard.jsx`): sem cartão, sem aba e
   fora do "Exportar todos". Um erro ao desenhar um bloco fica no próprio cartão.
@@ -67,8 +68,8 @@ repositório, e `npm run sync:contrato -- --check` confere se a cópia está em 
   `total` são as dimensões. Com meta, percentuais ganham barra e `abaixo_da_meta` vira selo.
   `linhas_omitidas` > 0 mostra "+N linhas não exibidas".
 - **`tabela_generica` agrupada (`dados.agrupar_por`, opcional):** campos aditivos na `versao` 1, no
-  schema sincronizado (hoje em `pacientes_por_profissional_nomes` e no plano de `plano_realocacao`;
-  vêm juntos ou não vêm). O bloco também traz `contem_dados_pacientes: true` no nível do bloco (a tela não usa).
+  schema sincronizado (hoje em `pacientes_por_profissional_nomes`, no plano de `plano_realocacao` e
+  em `panorama_enxugamento`, este em dois níveis; vêm juntos ou não vêm). O bloco também traz `contem_dados_pacientes: true` no nível do bloco (a tela não usa).
   - `agrupar_por`: lista ordenada de chaves de `dados.colunas` (ex.: `["especialidade",
     "profissional"]`). `unidade_grupo` (opcional): `{"singular": "paciente", "plural": "pacientes"}`.
   - Só agrupa se `agrupar_por` for lista não vazia de textos distintos, todos em `colunas` (pela
@@ -104,13 +105,34 @@ repositório, e `npm run sync:contrato -- --check` confere se a cópia está em 
     "Opção 1"…), `passo` (inteiro), `paciente` ("Quem"), `terapia`, `profissional`, `de`, `para`,
     `observacao`; até 3 opções, linhas contíguas por opção na ordem de execução, com
     `agrupar_por: ["opcao"]` e `unidade_grupo: {"singular": "passo", "plural": "passos"}`. A tela
-    usa o modo agrupado sem nada específico: título **"Opção 1 (3 passos)"** (formato atual do
-    front; a documentação do agente cita "Opção 1 · 3 passos", ver Pendências). Excel: abas
+    usa o modo agrupado sem nada específico: título **"Opção 1 (3 passos)"**, o formato
+    "valor (N unidade)" que a documentação do agente passou a descrever (commit `08245ae`). Excel: abas
     "Passos" e "Resumo por opção". Sem opção: mesmas colunas, `linhas` vazia ou uma linha
     "Fora da janela pedida".
   - **Pergunta** ("Plano de realocação: qual paciente?", nome ambíguo): sem agrupamento, modo
     plano; colunas `candidata`, `paciente` ("Nome"), `terapia`, `profissional`, `dias`. Excel: aba
     "Candidatas".
+- **Panorama de enxugamento (`tabela_generica`, `dados.relatorio: "panorama_enxugamento"`, PR #18
+  do agente):** cenários de movimentação que liberam turnos com presença paga na grade semanal
+  vigente (tool `planejar_enxugamento`, só pelo chat; nada muda na planilha). **Tem nomes de
+  pacientes (coluna `paciente`, rótulo "Quem") e de profissionais (`turno_liberado`, `de`,
+  `para`): sensível de RH.** `contem_dados_pacientes: true` no nível do bloco e regra própria em
+  `chat/services/sensitive.py` (igualdade exata): só superusuários e o grupo `coordenacao`
+  recebem; para os outros o bloco é cortado e o texto da resposta (que traz a contagem de turnos
+  liberados) vira o texto fixo. `periodo` e `meta` são `null`.
+  - Colunas: `cenario` (texto, "Cenário 1 (E-5EB1) · equilibrado · libera 3 turnos", sem nomes),
+    `turno_liberado` (texto, "dia turno · profissional · terapia"), `passo` (inteiro), `paciente`
+    ("Quem"), `terapia`, `de`, `para`, `alavanca`, `observacao` (todas texto, menos `passo`).
+  - Agrupamento em **dois níveis**: `agrupar_por: ["cenario", "turno_liberado"]`, `unidade_grupo:
+    {"singular": "passo", "plural": "passos"}`. O front não tem nível aninhado: cada par (cenário,
+    turno liberado) contíguo é um grupo, com os dois valores unidos por " · " no título. No exemplo
+    oficial (11 linhas, 3 cenários) são 8 grupos (1, 2, 1, 1, 1, 2, 1 e 2 passos), sem valor nulo e
+    sem par repetido de forma não contígua; o primeiro título é "Cenário 1 (E-5EB1) · equilibrado ·
+    libera 3 turnos · Ter tarde · <profissional fictícia> · Terapia Alimentar (1 passo)". Ver
+    Pendências.
+  - Excel: abas "Passos" (mesmas colunas e linhas de `dados`, planas, com `cenario` e
+    `turno_liberado`) e "Resumo dos cenários" (`minutos_medio` decimal, `ocupacao_absorventes`
+    percentual, `null` = célula vazia). Até 5.000 linhas por tabela, como as demais.
 - **Listas longas:** no chat, as primeiras linhas e "Mostrar todas"; no PDF, tudo.
 - **Verificação:** `npm run check:blocks` valida as fixtures e todos os exemplos oficiais contra o
   schema copiado completo (inclusive `agrupar_por`, `unidade_grupo` e `contem_dados_pacientes`),
@@ -123,15 +145,27 @@ repositório, e `npm run sync:contrato -- --check` confere se a cópia está em 
   linhas e dos N dos títulos = total, ordem recebida na tela e no PDF, colunas de agrupamento fora
   do corpo, títulos sem "null", singular/plural, grupos não consecutivos separados, corte só entre
   grupos e `agrupar_por` inválido = HTML do modo plano), na fixture de 800 linhas e nos exemplos
-  oficiais de `pacientes_por_profissional_nomes` e `plano_realocacao` (com os grupos esperados
-  calculados à parte; o plano também com uma variante de 1 passo para o singular e os títulos
-  exatos "Opção N (3 passos)"); a pergunta do plano sai no modo plano.
+  oficiais de `pacientes_por_profissional_nomes`, `plano_realocacao` e `panorama_enxugamento` (com
+  os grupos esperados calculados à parte; o plano também com uma variante de 1 passo para o
+  singular e os títulos exatos "Opção N (3 passos)"; o panorama com os N 1, 2, 1, 1, 1, 2, 1, 2);
+  a pergunta do plano sai no modo plano.
 
 ### Pendências
 
-- **Separador do título do grupo no plano de realocação:** o front produz "Opção 1 (3 passos)";
-  a documentação do agente (PR #16) escreve "Opção 1 · 3 passos". Decisão em aberto com o time
-  do agente; o formato não mudou.
+- **Título do grupo em dois níveis (panorama de enxugamento):** o contrato do agente exemplifica um
+  título por cenário ("Cenário 1 (E-5EB1) · equilibrado · libera 3 turnos (4 passos)"), mas o front
+  faz um grupo por par (cenário, turno liberado) e junta os dois valores com " · ", o mesmo
+  separador usado dentro dos próprios valores ("… libera 3 turnos · Ter tarde · …"). O cenário se
+  repete em cada grupo e não há total por cenário. Decisão em aberto (título aninhado por cenário ou
+  separador próprio entre os níveis); o formato não mudou.
+- **Texto sem bloco do panorama:** sem cenário ou com pergunta de profissional (nome ambíguo ou fora
+  da grade), o agente responde só com texto, sem bloco; o backend não tem como identificá-lo e o
+  texto chega a qualquer usuário logado. Combinar com o agente um marcador para esses casos.
+- **Exportação do panorama:** o contrato do agente pede revisão de como o bloco sai no Excel e no
+  PDF antes de liberar. Hoje sai como os outros blocos sensíveis (só coordenação/superusuários; o
+  Excel completo com nomes de pacientes e de profissionais). Confirmar com o dono do produto.
+- ~~Separador do título do grupo no plano de realocação~~: resolvido; a documentação do agente
+  passou a usar "Opção 1 (3 passos)" (commit `08245ae`).
 
 ## Regras visuais
 
