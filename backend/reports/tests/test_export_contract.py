@@ -33,13 +33,14 @@ NEW_TYPES = {
 }
 ALL_EXAMPLES = [name for names in NEW_TYPES.values() for name in names]
 # Official tabela_generica examples with patient names (block-level contem_dados_pacientes;
-# the second and third also have dados.agrupar_por / unidade_grupo). Kept out of ALL_EXAMPLES, which
+# most also have dados.agrupar_por / unidade_grupo). Kept out of ALL_EXAMPLES, which
 # is sent in a single request capped at 10 blocks. The `api` user is in the coordination group.
 PATIENT_EXAMPLES = [
     "tabela_generica_pacientes_por_plano",
     "tabela_generica_pacientes_por_profissional_nomes",
     "tabela_generica_plano_realocacao",  # grouped by option (agent PR #16)
     "tabela_generica_plano_realocacao_pergunta",
+    "tabela_generica_panorama_enxugamento",  # two-level grouping (agent PR #18)
 ]
 FORBIDDEN_SHEET_CHARS = re.compile(r"[\\/?*\[\]:]")
 
