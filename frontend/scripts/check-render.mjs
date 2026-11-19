@@ -47,11 +47,13 @@ try {
   const { gerarExcel } = await server.ssrLoadModule('/src/reports/localExport.js');
   const { agruparLinhas } = await server.ssrLoadModule('/src/reports/TabelaGenerica.jsx');
   // Exemplos OFICIAIS do agente (cópia sincronizada, dados fictícios): os nomes por profissional e
-  // o plano de realocação com agrupar_por/unidade_grupo; a pergunta do plano sem agrupamento.
+  // o plano de realocação com agrupar_por/unidade_grupo; a pergunta do plano sem agrupamento; o
+  // panorama de enxugamento agrupado em dois níveis (cenario, turno_liberado).
   const exemplo = async (nome) => (await server.ssrLoadModule(`/src/reports/contrato/exemplos/${nome}.js`)).default;
   const nomesOficial = await exemplo('tabela_generica_pacientes_por_profissional_nomes');
   const realocacaoOficial = await exemplo('tabela_generica_plano_realocacao');
   const perguntaOficial = await exemplo('tabela_generica_plano_realocacao_pergunta');
+  const panoramaOficial = await exemplo('tabela_generica_panorama_enxugamento');
 
   // Captura todo o console durante as renderizações.
   const saida = [];
@@ -132,6 +134,7 @@ try {
   semPeriodo.pacientesNomesOficial = nomesOficial;
   semPeriodo.planoRealocacaoOficial = realocacaoOficial;
   semPeriodo.planoRealocacaoPerguntaOficial = perguntaOficial;
+  semPeriodo.panoramaEnxugamentoOficial = panoramaOficial;
   r.semPeriodo = Object.fromEntries(Object.entries(semPeriodo).map(([k, b]) => [k, { tela: render([b]), pdf: render([b], PrintReport) }]));
   r.comPeriodo = Object.fromEntries(
     ['ocupacaoProfissional', 'pacientesSemana', 'pacientesDia', 'ocupacaoAgregada', 'agendaPaciente', 'tabelaGenericaRanking', 'tabelaGenericaCapacidade'].map((k) => [k, render([amostras[k]])]),
@@ -181,6 +184,8 @@ try {
     ['oficial nomes', nomesOficial, { igualFixture: true, singularEPlural: true }],
     ['oficial plano_realocacao', realocacaoOficial, {}],
     ['oficial plano_realocacao (1 passo)', realocacaoSingular, { singularEPlural: true }],
+    // Dois níveis: o título junta cenário e turno liberado; já tem grupos de 1 e de 2 passos.
+    ['oficial panorama_enxugamento', panoramaOficial, { singularEPlural: true }],
   ].map(([tag, bloco, opcoes]) => ({ tag, bloco, opcoes, html: { tela: render([bloco]), pdf: render([bloco], PrintReport) } }));
   r.pergunta = { tela: render([perguntaOficial]), pdf: render([perguntaOficial], PrintReport) };
   r.agrVar = Object.fromEntries(Object.entries(variantes).map(([k, b]) => [k, { tela: render([b]), pdf: render([b], PrintReport) }]));
@@ -526,6 +531,17 @@ try {
     ok(igual(t, ['Opção 1 (3 passos)', 'Opção 2 (3 passos)', 'Opção 3 (3 passos)']), `plano_realocacao: títulos dos grupos ${JSON.stringify(t)}`);
     const t1 = titulosOficiais['oficial plano_realocacao (1 passo)'];
     ok(igual(t1, ['Opção 1 (1 passo)', 'Opção 2 (3 passos)']), `plano_realocacao: singular ${JSON.stringify(t1)}`);
+  }
+  // Panorama de enxugamento: um grupo por par (cenário, turno liberado) contíguo, título no formato
+  // atual "cenário · turno liberado (N passo/passos)". As mensagens só trazem contagens: o turno
+  // liberado tem nome de profissional (fictício no exemplo, mas sensível de RH).
+  {
+    const t = titulosOficiais['oficial panorama_enxugamento'];
+    const ns = t.map(nDoTitulo);
+    const cenarios = [...new Set(panoramaOficial.dados.linhas.map((l) => l.cenario))];
+    ok(t.length === 8 && igual(ns, [1, 2, 1, 1, 1, 2, 1, 2]), `panorama_enxugamento: 8 grupos com N ${JSON.stringify(ns)}`);
+    ok(t.every((x) => cenarios.some((c) => x.startsWith(`${c} · `))) && t.every((x) => / \(\d+ (passo|passos)\)$/.test(x)) && t.filter((x) => x.endsWith(' (1 passo)')).length === 5,
+      'panorama_enxugamento: título começa pelo cenário e termina em "(1 passo)" ou "(N passos)"');
   }
   // Pergunta do plano de realocação (sem agrupar_por): modo plano, todas as linhas, sem null.
   {
