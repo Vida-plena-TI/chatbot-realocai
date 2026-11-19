@@ -1,5 +1,5 @@
 // Exemplo real de bloco do RealocAI, copiado sem alteração. Dados FICTÍCIOS.
-// Origem: Vida-plena-TI/reallocaai-agente @ 431304065416441b13c735476ae0c53256d34d19 (main)
+// Origem: Vida-plena-TI/reallocaai-agente @ 66157c27ec55dd96c92ed0dfd49dbf46ff9e455a (main)
 // Arquivo: docs/exemplos-blocos/tabela_generica_personalizado.json. Atualize com scripts/sync-contrato.mjs; não edite à mão.
 export default {
   "versao": 1,
