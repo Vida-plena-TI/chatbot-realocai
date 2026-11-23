@@ -34,6 +34,10 @@
   font-weight: 800;
   color: var(--muted);
   white-space: nowrap;
+  /* Títulos longos (tabela genérica) com reticências; o completo fica no atributo title. */
+  max-width: min(260px, 70vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .tab:hover {
   color: var(--text);

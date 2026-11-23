@@ -57,6 +57,7 @@ function Grupo({ blocos, texto }) {
                 tabIndex={i === ativo ? 0 : -1}
                 className={`${s.tab} ${i === ativo ? s.tabOn : ''}`}
                 onClick={() => setAtivo(i)}
+                title={tituloAba(b)}
               >
                 {tituloAba(b)}
               </button>

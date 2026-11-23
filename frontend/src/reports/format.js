@@ -137,10 +137,13 @@ const TIPOS = {
 };
 export const rotuloTipo = (tipo) => TIPOS[tipo] || 'Relatório';
 
-// A aba nunca mostra o nome do paciente: em agenda_paciente fica só o tipo.
+// A aba nunca mostra o nome do paciente: em agenda_paciente fica só o tipo. Na tabela genérica, o
+// título do bloco (o mesmo do cabeçalho do cartão), para distinguir abas do mesmo tipo (ex.: o
+// comparativo e os passos do panorama); sem título, "Relatório". O corte com reticências é do CSS.
 export function tituloAba(b) {
   if (b.tipo === 'ocupacao_profissional') return b.dados?.profissional?.nome ? `Ocupação · ${b.dados.profissional.nome}` : rotuloTipo(b.tipo);
   if (b.tipo === 'disponibilidade') return b.dados?.minutos_por_janela > MINUTOS_POR_SLOT ? `Janelas de ${duracao(b.dados.minutos_por_janela)}` : 'Vagas livres';
+  if (b.tipo === 'tabela_generica' && typeof b.titulo === 'string' && b.titulo.trim()) return b.titulo.trim();
   return rotuloTipo(b.tipo);
 }
 
