@@ -170,6 +170,44 @@ PLANO_REALOCACAO_NEAR_MISSES = (
 )
 
 
+PANORAMA = "tabela_generica_panorama_enxugamento"
+
+
+def panorama_without_flag(relatorio="panorama_enxugamento"):
+    """The official panorama_enxugamento example (agent PR #18, fictitious patient and
+    professional names) without the block-level flag: only SENSITIVE_BLOCK_RULES applies."""
+    bloco = load_example(PANORAMA)
+    del bloco[PATIENT_DATA_FLAG]
+    return with_relatorio(bloco, relatorio)
+
+
+def panorama_with_similar_relatorio(relatorio="panorama_enxugamento_x"):
+    """The official panorama example, flag kept, with a `relatorio` no rule knows: only the
+    flag can make it sensitive."""
+    return with_relatorio(load_example(PANORAMA), relatorio)
+
+
+# Near misses of "panorama_enxugamento": equality is exact, never prefix, substring or case-folded.
+PANORAMA_NEAR_MISSES = (
+    "panorama_enxugamento_x",
+    "panorama_enxugamento ",
+    " panorama_enxugamento",
+    " panorama_enxugamento ",
+    "panorama enxugamento",
+    "panorama_enxugament",
+    "x_panorama_enxugamento",
+    "Panorama_enxugamento",
+    "PANORAMA_ENXUGAMENTO",
+    "panorama-enxugamento",
+)
+
+# What the agent writes next to the panorama: only counts and scenario codes, but they still
+# reveal how many paid shifts could be freed (sensitive HR data), so none of it may be stored.
+PANORAMA_ANSWER = (
+    "Encontrei 3 cenários; o recomendado (E-5EB1, equilibrado) libera 3 turnos com presença paga."
+)
+
+
 def flagged_unknown_report():
     """A block no rule knows (future `relatorio`), flagged by the agent as sensitive."""
     return with_relatorio(pacientes_por_profissional_nomes(), "relatorio_futuro") | {
@@ -186,12 +224,16 @@ OFFICIAL_SENSITIVE_EXAMPLES = {
     # agent PR #16: the grouped plan and the ambiguous-name question share the same relatorio.
     "plano_realocacao": "tabela_generica_plano_realocacao",
     "plano_realocacao:pergunta": "tabela_generica_plano_realocacao_pergunta",
+    # agent PR #18: patient AND professional names (sensitive HR data), grouped in two levels.
+    "panorama_enxugamento": PANORAMA,
 }
 
 SENSITIVE_EXAMPLES = {
     "pacientes_por_plano": pacientes_por_plano,
     "pacientes_por_profissional_nomes": pacientes_por_profissional_nomes,
     "contem_dados_pacientes": flagged_unknown_report,
+    "panorama_enxugamento sem flag": panorama_without_flag,
+    "panorama_enxugamento só pela flag": panorama_with_similar_relatorio,
     **{
         f"oficial:{kind}": (lambda name=name: load_example(name))
         for kind, name in OFFICIAL_SENSITIVE_EXAMPLES.items()
@@ -224,6 +266,12 @@ NOT_SENSITIVE_EXAMPLES = {
             lambda value=value: plano_realocacao_without_flag(value)
         )
         for value in PLANO_REALOCACAO_NEAR_MISSES
+    },
+    **{
+        f"panorama_enxugamento sem flag, relatorio={value!r}": (
+            lambda value=value: panorama_without_flag(value)
+        )
+        for value in PANORAMA_NEAR_MISSES
     },
 }
 
@@ -387,6 +435,43 @@ def test_plano_realocacao_with_a_similar_relatorio_is_sensitive_only_by_the_flag
     assert is_sensitive_block(plano_realocacao_without_flag(relatorio)) is False
 
 
+def test_panorama_enxugamento_is_in_the_list_by_exact_relatorio():
+    bloco = panorama_without_flag()
+
+    assert bloco["tipo"] == "tabela_generica"
+    assert bloco["dados"]["relatorio"] == "panorama_enxugamento"
+    assert {"tipo": "tabela_generica", "relatorio": "panorama_enxugamento"} in SENSITIVE_BLOCK_RULES
+    assert is_sensitive_block(bloco) is True
+
+
+def test_panorama_enxugamento_example_has_the_contract_shape():
+    """Block-level flag, null periodo/meta and the two-level grouping hint (agent PR #18)."""
+    bloco = load_example(PANORAMA)
+
+    assert bloco[PATIENT_DATA_FLAG] is True
+    assert bloco["periodo"] is None and bloco["meta"] is None
+    assert bloco["dados"]["agrupar_por"] == ["cenario", "turno_liberado"]
+    assert bloco["dados"]["unidade_grupo"] == {"singular": "passo", "plural": "passos"}
+    assert [t["nome"] for t in bloco["tabelas"]] == ["Passos", "Resumo dos cenários"]
+
+
+@pytest.mark.parametrize("relatorio", PANORAMA_NEAR_MISSES)
+def test_panorama_enxugamento_with_a_similar_relatorio_is_sensitive_only_by_the_flag(relatorio):
+    flagged = panorama_with_similar_relatorio(relatorio)
+
+    assert flagged[PATIENT_DATA_FLAG] is True
+    assert is_sensitive_block(flagged) is True
+    assert is_sensitive_block(panorama_without_flag(relatorio)) is False
+
+
+def test_restricted_message_wording():
+    """The exact text users outside the coordination group get (also for HR data)."""
+    assert PATIENT_REPORTS_RESTRICTED_MESSAGE == (
+        "Este relatório contém dados sensíveis e está disponível apenas para a coordenação. "
+        "Fale com a coordenação para solicitá-lo."
+    )
+
+
 @pytest.mark.parametrize("name", OFFICIAL_SENSITIVE_EXAMPLES.values())
 def test_flag_moved_inside_dados_of_official_example_counts_only_through_the_list(name):
     unknown = unknown_to_the_rules(load_example(name))
@@ -517,6 +602,56 @@ def test_group_members_and_superusers_get_the_block(
     assert Message.objects.get(conversation=conversation, role="assistant").blocos == [bloco]
 
 
+@pytest.mark.parametrize(
+    "make", [panorama_without_flag, panorama_with_similar_relatorio, lambda: load_example(PANORAMA)]
+)
+def test_panorama_answer_is_replaced_by_exactly_the_fixed_text(api, conversation, respx_mock, make):
+    """List-only, flag-only and official: nothing the agent wrote (counts, scenario codes) nor
+    anything of the block reaches the database or the API response."""
+    bloco = make()
+    mock_agent(respx_mock, [bloco], resposta=PANORAMA_ANSWER)
+
+    response = post_message(api, conversation, content="Quais turnos dá para liberar?")
+
+    assert response.status_code == 201
+    answer = response.json()["assistant_message"]
+    assert answer["content"] == PATIENT_REPORTS_RESTRICTED_MESSAGE
+    assert "blocos" not in answer
+    stored = Message.objects.get(conversation=conversation, role="assistant")
+    assert stored.content == PATIENT_REPORTS_RESTRICTED_MESSAGE
+    assert stored.blocos == []
+    leaked = (
+        PANORAMA_ANSWER,
+        "E-5EB1",
+        "libera 3 turnos",
+        "presença paga",
+        bloco["titulo"],
+        *sensitive_values(bloco),
+    )
+    body = response.content.decode()
+    history = api.get(messages_url(conversation)).content.decode()
+    text = stored_text(conversation)
+    for value in leaked:
+        assert value not in text
+        assert value not in body
+        assert value not in history
+
+
+@pytest.mark.parametrize("member", ["coordinator", "superuser"])
+def test_panorama_reaches_members_untouched(request, api, conversation, respx_mock, member):
+    request.getfixturevalue(member)
+    bloco = load_example(PANORAMA)
+    mock_agent(respx_mock, [bloco], resposta=PANORAMA_ANSWER)
+
+    answer = post_message(api, conversation).json()["assistant_message"]
+
+    assert answer["content"] == PANORAMA_ANSWER
+    assert answer["blocos"] == [load_example(PANORAMA)]
+    stored = Message.objects.get(conversation=conversation, role="assistant")
+    assert (stored.content, stored.blocos) == (PANORAMA_ANSWER, [load_example(PANORAMA)])
+    assert history_blocos(api, conversation) == [load_example(PANORAMA)]
+
+
 def test_mixed_answer_only_drops_the_sensitive_block(api, conversation, respx_mock):
     comum = load_example("disponibilidade_vagas")
     sensivel = load_example("agenda_paciente")
@@ -565,21 +700,25 @@ def test_dropping_logs_only_the_count(api, conversation, respx_mock, caplog):
         pacientes_por_profissional_nomes(),
         plano_realocacao_without_flag(),
         load_example("tabela_generica_plano_realocacao_pergunta"),
+        panorama_without_flag(),
+        panorama_with_similar_relatorio(),
     ]
-    mock_agent(respx_mock, blocos)
+    mock_agent(respx_mock, blocos, resposta=PANORAMA_ANSWER)
 
     with capture_all_logs(caplog):
         assert post_message(api, conversation).status_code == 201
 
     dropped = [r for r in caplog.records if "sensitive_blocks_dropped" in r.getMessage()]
-    assert [r.getMessage().split(" ")[0] for r in dropped] == ["sensitive_blocks_dropped=5"]
+    assert [r.getMessage().split(" ")[0] for r in dropped] == ["sensitive_blocks_dropped=7"]
     logged = all_log_text(caplog)
     for value in (
-        ANSWER,
+        PANORAMA_ANSWER,
+        "E-5EB1",
         "agenda_paciente",
         "pacientes_por_plano",
         "pacientes_por_profissional_nomes",
         "plano_realocacao",
+        "panorama_enxugamento",
         *(b["titulo"] for b in blocos),
         *(v for b in blocos for v in sensitive_values(b)),
     ):

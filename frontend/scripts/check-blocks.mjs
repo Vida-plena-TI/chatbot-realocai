@@ -13,6 +13,7 @@ import * as amostras from '../src/reports/sampleBlocks.js';
 import planoOficial from '../src/reports/contrato/exemplos/tabela_generica_plano_semanal.js';
 import nomesOficial from '../src/reports/contrato/exemplos/tabela_generica_pacientes_por_profissional_nomes.js';
 import realocacaoOficial from '../src/reports/contrato/exemplos/tabela_generica_plano_realocacao.js';
+import panoramaOficial from '../src/reports/contrato/exemplos/tabela_generica_panorama_enxugamento.js';
 
 const SCHEMA = JSON.parse(readFileSync(new URL('../src/reports/contrato/bloco_relatorio.schema.json', import.meta.url), 'utf8'));
 // ocupacao_profissional fica só com a conferência de forma: a fixture tem de propósito o dia
@@ -298,6 +299,8 @@ const AGRUPADOS = [
   ['tabelaGenericaPacientesNomesAgrupada', amostras.tabelaGenericaPacientesNomesAgrupada],
   ['oficial:tabela_generica_pacientes_por_profissional_nomes', nomesOficial],
   ['oficial:tabela_generica_plano_realocacao', realocacaoOficial],
+  // Dois níveis (cenario, turno_liberado): a combinação é que precisa ser contígua.
+  ['oficial:tabela_generica_panorama_enxugamento', panoramaOficial],
 ];
 for (const [nome, bloco] of AGRUPADOS) {
   const { agrupar_por: por, linhas } = bloco.dados;

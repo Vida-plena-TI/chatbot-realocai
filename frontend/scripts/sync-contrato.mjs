@@ -28,10 +28,10 @@ const destino = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'repo
 const PASTA = 'docs/exemplos-blocos';
 
 // Os exemplos dos tipos novos (o plano semanal, os pacientes por plano, os nomes de pacientes
-// por profissional e o plano de realocação vêm com periodo null; os três últimos com
-// contem_dados_pacientes; o de nomes e o plano de realocação com agrupar_por/unidade_grupo, e a
-// pergunta do plano de realocação sem eles). Os 3 tipos antigos seguem com as fixtures de
-// sampleBlocks.js.
+// por profissional, o plano de realocação e o panorama de enxugamento vêm com periodo null; os
+// quatro últimos com contem_dados_pacientes; o de nomes, o plano de realocação e o panorama (em dois
+// níveis) com agrupar_por/unidade_grupo, e a pergunta do plano de realocação sem eles). Os 3 tipos
+// antigos seguem com as fixtures de sampleBlocks.js.
 export const EXEMPLOS = [
   'disponibilidade_vagas',
   'disponibilidade_janelas',
@@ -46,6 +46,7 @@ export const EXEMPLOS = [
   'tabela_generica_pacientes_por_profissional_nomes',
   'tabela_generica_plano_realocacao',
   'tabela_generica_plano_realocacao_pergunta',
+  'tabela_generica_panorama_enxugamento',
 ];
 
 const git = (...a) => execFileSync('git', ['-C', repo, ...a], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
