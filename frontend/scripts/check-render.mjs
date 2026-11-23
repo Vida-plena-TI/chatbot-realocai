@@ -19,12 +19,17 @@
 //     o mesmo nos exemplos oficiais agrupados (nomes por profissional e plano de realocação, com
 //     os títulos "Opção N (M passos)" e uma variante com 1 passo para o singular); a pergunta do
 //     plano de realocação (sem agrupar_por) sai no modo plano;
+//   - panorama de enxugamento em dois blocos: comparativo no modo plano (recomendado booleano como
+//     "Sim"/"Não" na tela, no celular, no PDF e no Excel local), passos em um nível ("Cenário 1 · … (4
+//     passos)"), detalhe de outro cenário (saltos no passo, observacao "" como "—", avisos longos),
+//     os dois juntos (duas abas; PDF com os dois cartões, resumo próprio, thead, sem período);
 //   - nada vai para o console durante a renderização (LGPD: o nome do paciente nunca é logado);
 //   - com DOM (check-render-dom.mjs): bloco quebrado não derruba o grupo, os vizinhos nem a
 //     conversa; histórico com periodo null e com período.
 //
 // Uso: npm run check:render   (exit code 1 se alguma verificação falhar)
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 
@@ -48,12 +53,16 @@ try {
   const { agruparLinhas } = await server.ssrLoadModule('/src/reports/TabelaGenerica.jsx');
   // Exemplos OFICIAIS do agente (cópia sincronizada, dados fictícios): os nomes por profissional e
   // o plano de realocação com agrupar_por/unidade_grupo; a pergunta do plano sem agrupamento; o
-  // panorama de enxugamento agrupado em dois níveis (cenario, turno_liberado).
+  // panorama de enxugamento em dois blocos: o quadro comparativo (modo plano) e os passos agrupados
+  // em um nível (cenario); e a resposta completa do agente com os dois.
   const exemplo = async (nome) => (await server.ssrLoadModule(`/src/reports/contrato/exemplos/${nome}.js`)).default;
   const nomesOficial = await exemplo('tabela_generica_pacientes_por_profissional_nomes');
   const realocacaoOficial = await exemplo('tabela_generica_plano_realocacao');
   const perguntaOficial = await exemplo('tabela_generica_plano_realocacao_pergunta');
   const panoramaOficial = await exemplo('tabela_generica_panorama_enxugamento');
+  const comparativoOficial = await exemplo('tabela_generica_panorama_enxugamento_comparativo');
+  const respostaPanorama = (await server.ssrLoadModule('/src/reports/contrato/respostas/panorama_enxugamento.js')).default;
+  const detalhePanorama = amostras.tabelaGenericaPanoramaPassosDetalhe;
 
   // Captura todo o console durante as renderizações.
   const saida = [];
@@ -135,6 +144,8 @@ try {
   semPeriodo.planoRealocacaoOficial = realocacaoOficial;
   semPeriodo.planoRealocacaoPerguntaOficial = perguntaOficial;
   semPeriodo.panoramaEnxugamentoOficial = panoramaOficial;
+  semPeriodo.panoramaComparativoOficial = comparativoOficial;
+  semPeriodo.panoramaPassosDetalhe = detalhePanorama;
   r.semPeriodo = Object.fromEntries(Object.entries(semPeriodo).map(([k, b]) => [k, { tela: render([b]), pdf: render([b], PrintReport) }]));
   r.comPeriodo = Object.fromEntries(
     ['ocupacaoProfissional', 'pacientesSemana', 'pacientesDia', 'ocupacaoAgregada', 'agendaPaciente', 'tabelaGenericaRanking', 'tabelaGenericaCapacidade'].map((k) => [k, render([amostras[k]])]),
@@ -184,10 +195,15 @@ try {
     ['oficial nomes', nomesOficial, { igualFixture: true, singularEPlural: true }],
     ['oficial plano_realocacao', realocacaoOficial, {}],
     ['oficial plano_realocacao (1 passo)', realocacaoSingular, { singularEPlural: true }],
-    // Dois níveis: o título junta cenário e turno liberado; já tem grupos de 1 e de 2 passos.
-    ['oficial panorama_enxugamento', panoramaOficial, { singularEPlural: true }],
+    // Passos do panorama, um nível (cenario): um grupo de 4 passos; a variante com só o 1º passo
+    // testa o singular; o detalhe de outro cenário tem saltos no número do passo (1, 3, 4).
+    ['oficial panorama_enxugamento', panoramaOficial, {}],
+    ['oficial panorama_enxugamento (1 passo)', comDados(panoramaOficial, { linhas: panoramaOficial.dados.linhas.slice(0, 1) }), {}],
+    ['panorama detalhe de outro cenário', detalhePanorama, {}],
   ].map(([tag, bloco, opcoes]) => ({ tag, bloco, opcoes, html: { tela: render([bloco]), pdf: render([bloco], PrintReport) } }));
   r.pergunta = { tela: render([perguntaOficial]), pdf: render([perguntaOficial], PrintReport) };
+  r.comparativo = { tela: render([comparativoOficial]), pdf: render([comparativoOficial], PrintReport) };
+  r.panoramaPar = { tela: render(respostaPanorama.blocos), pdf: render(respostaPanorama.blocos, PrintReport) };
   r.agrVar = Object.fromEntries(Object.entries(variantes).map(([k, b]) => [k, { tela: render([b]), pdf: render([b], PrintReport) }]));
   // Volta ao modo plano: HTML idêntico ao do mesmo bloco sem agrupar_por/unidade_grupo.
   const plano0 = semCampos(agr, ['agrupar_por', 'unidade_grupo']);
@@ -532,16 +548,73 @@ try {
     const t1 = titulosOficiais['oficial plano_realocacao (1 passo)'];
     ok(igual(t1, ['Opção 1 (1 passo)', 'Opção 2 (3 passos)']), `plano_realocacao: singular ${JSON.stringify(t1)}`);
   }
-  // Panorama de enxugamento: um grupo por par (cenário, turno liberado) contíguo, título no formato
-  // atual "cenário · turno liberado (N passo/passos)". As mensagens só trazem contagens: o turno
-  // liberado tem nome de profissional (fictício no exemplo, mas sensível de RH).
+  // --- Panorama de enxugamento em dois blocos (resposta do agente desde 2026-11-23) -------------
+  // Mensagens só com títulos, contagens e "Sim"/"Não": nunca linhas (nomes fictícios, mas o bloco de
+  // passos é sensível de RH).
   {
-    const t = titulosOficiais['oficial panorama_enxugamento'];
-    const ns = t.map(nDoTitulo);
-    const cenarios = [...new Set(panoramaOficial.dados.linhas.map((l) => l.cenario))];
-    ok(t.length === 8 && igual(ns, [1, 2, 1, 1, 1, 2, 1, 2]), `panorama_enxugamento: 8 grupos com N ${JSON.stringify(ns)}`);
-    ok(t.every((x) => cenarios.some((c) => x.startsWith(`${c} · `))) && t.every((x) => / \(\d+ (passo|passos)\)$/.test(x)) && t.filter((x) => x.endsWith(' (1 passo)')).length === 5,
-      'panorama_enxugamento: título começa pelo cenário e termina em "(1 passo)" ou "(N passos)"');
+    // (b) Passos: um nível, título "cenário (N passos)", coluna do cenário fora do corpo.
+    ok(igual(panoramaOficial.dados.agrupar_por, ['cenario']), 'panorama passos: agrupar_por em um nível (["cenario"])');
+    ok(igual(titulosOficiais['oficial panorama_enxugamento'], ['Cenário 1 · equilibrado · libera 3 turnos (4 passos)']),
+      `panorama passos: título ${JSON.stringify(titulosOficiais['oficial panorama_enxugamento'])}`);
+    ok(igual(titulosOficiais['oficial panorama_enxugamento (1 passo)'], ['Cenário 1 · equilibrado · libera 3 turnos (1 passo)']), 'panorama passos: singular "(1 passo)"');
+    // (d) Detalhe de outro cenário: título do bloco inteiro, saltos no passo, observacao "" vira "—".
+    const det = tabelaAgrupada(r.semPeriodo.panoramaPassosDetalhe.pdf);
+    const corpoDet = detalhePanorama.dados.colunas.filter((c) => c.chave !== 'cenario').map((c) => c.chave);
+    const passosDet = det?.grupos.flatMap((g) => g.linhas.map((l) => l[corpoDet.indexOf('passo')])) ?? [];
+    const obsDet = det?.grupos.flatMap((g) => g.linhas.map((l) => l[corpoDet.indexOf('observacao')])) ?? [];
+    ok(igual(titulosOficiais['panorama detalhe de outro cenário'], ['Cenário 2 · mais turnos · libera 3 turnos (3 passos)']) && igual(passosDet, ['1', '3', '4']),
+      `panorama detalhe: grupo com 3 passos e números com saltos ${JSON.stringify(passosDet)}`);
+    ok(obsDet.length === 3 && obsDet.every((v) => v === '—'), 'panorama detalhe: observacao "" vira "—" (nunca vazio, "null" ou "undefined")');
+    for (const onde of ['tela', 'pdf']) {
+      const h = texto(r.semPeriodo.panoramaPassosDetalhe[onde]);
+      ok(h.includes(detalhePanorama.titulo) && detalhePanorama.avisos.every((a) => h.includes(a)), `panorama detalhe (${onde}): título "(apenas o que difere do Cenário 1)" e avisos longos inteiros`);
+    }
+
+    // (b)(c) Comparativo: sem agrupar_por, modo plano; recomendado (booleano em coluna "texto") vira Sim/Não.
+    const { colunas, linhas } = comparativoOficial.dados;
+    const iRec = colunas.findIndex((c) => c.chave === 'recomendado');
+    const esperadoComp = linhas.map((l) => colunas.map((c) => formatarValor(l[c.chave], c.formato)));
+    const recEsperado = linhas.map((l) => (l.recomendado ? 'Sim' : 'Não'));
+    ok(linhas.every((l) => typeof l.recomendado === 'boolean') && colunas[iRec]?.formato === 'texto' && igual(recEsperado, ['Sim', 'Não', 'Não']),
+      'comparativo: recomendado é booleano JSON em coluna "texto" (true, false, false)');
+    for (const [onde, html] of [['tela', r.comparativo.tela], ['PDF', r.comparativo.pdf]]) {
+      const cel = celulasTabela(html);
+      ok(!html.startsWith('ERRO') && !html.includes(css.groupTable) && igual(cel, esperadoComp), `comparativo (${onde}): modo plano, ${cel.length} linhas na ordem recebida, todas as colunas`);
+      ok(igual(cel.map((l) => l[iRec]), recEsperado), `comparativo (${onde}): coluna Recomendado ${JSON.stringify(cel.map((l) => l[iRec]))}`);
+      ok(!/\b(true|false|null|undefined|NaN)\b/.test(texto(html)), `comparativo (${onde}): nenhum "true", "false", "null" ou "undefined"`);
+    }
+    // Celular: "recomendado" é coluna de texto, então entra no rótulo do cartão (sem a palavra "Recomendado").
+    const cartoesComp = [...r.comparativo.tela.matchAll(/class="[^"]*dayCard[^"]*"><strong>(.*?)<\/strong>/g)].map((m) => texto(m[1]).trim());
+    ok(igual(cartoesComp, linhas.map((l, i) => `${l.cenario} · ${recEsperado[i]}`)), `comparativo (celular): cartões na ordem, com Sim/Não ${JSON.stringify(cartoesComp)}`);
+    // Excel local: aba "Cenários", Sim/Não como texto; com os dois blocos, "Cenários (1)" e "Passos (2)".
+    const xlsComp = await gerarExcel([comparativoOficial]).text();
+    const linhasXlsComp = [...xlsComp.split('ss:Name="Cenários"')[1].split('</Worksheet>')[0].matchAll(/<Row>(.*?)<\/Row>/gs)].slice(1)
+      .map((m) => m[1].match(/<Cell[^>]*?(?:\/>|>.*?<\/Cell>)/g).map((c) => c.match(/>([^<]*)<\/Data>/)?.[1] ?? ''));
+    ok(igual(linhasXlsComp.map((l) => l[iRec]), recEsperado) && !/>(true|false)</.test(xlsComp), `Excel local do comparativo: Recomendado ${JSON.stringify(linhasXlsComp.map((l) => l[iRec]))}`);
+    const xlsPar = await gerarExcel(respostaPanorama.blocos).text();
+    const abasPar = [...xlsPar.matchAll(/<Worksheet ss:Name="([^"]*)"/g)].map((m) => m[1]);
+    ok(igual(abasPar, ['Resumo', 'Cenários (1)', 'Passos (2)']), `Excel local dos dois blocos: abas únicas com sufixo ${JSON.stringify(abasPar)}`);
+    const linhaVaziaXls = [...xlsPar.split('ss:Name="Passos (2)"')[1].split('</Worksheet>')[0].matchAll(/<Row>(.*?)<\/Row>/gs)].slice(1);
+    ok(linhaVaziaXls.length === 4 && linhaVaziaXls.every((m) => m[1].trim().endsWith('<Cell ss:StyleID="txt"/>')), 'Excel local dos passos: observacao "" vira célula vazia');
+
+    // (a) Os dois blocos na mesma mensagem: duas abas na ordem recebida, cartão do comparativo ativo.
+    const tela = r.panoramaPar.tela;
+    ok(abas(tela) === 2 && tela.includes('Exportar os 2 relatórios juntos?') && texto(tela).includes(comparativoOficial.titulo), 'panorama (tela): dois blocos viram duas abas, a 1ª (comparativo) aberta');
+    // (e)(h) PDF com os dois: dois artigos na ordem, cada um com o seu resumo (KPIs), tabela com thead
+    // (repetido em cada página por .printDoc .dense thead), título do grupo junto da 1ª linha, sem período.
+    const pdf = r.panoramaPar.pdf;
+    const artigos = pdf.split('<article').slice(1);
+    const resumos = artigos.map((a) => [...(a.match(new RegExp(`<dl class="${css.stats}">(.*?)</dl>`))?.[1] ?? '').matchAll(/<dt>(.*?)<\/dt>/g)].map((m) => texto(m[1]).trim()));
+    ok(artigos.length === 2 && artigos.map((a) => texto(a).includes(comparativoOficial.titulo) ? 'c' : texto(a).includes(panoramaOficial.titulo) ? 'p' : '?').join('') === 'cp',
+      'panorama (PDF): dois cartões, comparativo e depois passos');
+    ok(igual(resumos, respostaPanorama.blocos.map((b) => b.resumo.map((x) => x.rotulo))), `panorama (PDF): cada bloco com o seu resumo (${resumos.map((x) => x.length).join(' + ')} KPIs)`);
+    ok(artigos.every((a) => /<table class="[^"]*dense[^"]*"[^>]*>(<caption[^>]*>.*?<\/caption>)?<thead>/.test(a)), 'panorama (PDF): as duas tabelas são densas e com cabeçalho (thead)');
+    ok(artigos.every((a) => subtitulos(a).length === 0) && !/\b(null|undefined|NaN|true|false)\b|Invalid Date/.test(texto(pdf)), 'panorama (PDF): sem linha de período/meta e sem "null"/"true"/"false"');
+    const pdfPassos = tabelaAgrupada(artigos[1]);
+    ok(pdfPassos && !pdfPassos.grupos.some((g) => g.erro) && pdfPassos.grupos.length === 1, 'panorama (PDF): título do grupo e a 1ª linha no mesmo tbody');
+    const cssBruto = readFileSync(new URL('../src/reports/reports.module.css', import.meta.url), 'utf8');
+    ok(/\.printDoc \.dense thead\s*\{\s*display: table-header-group;/.test(cssBruto) && /\.printDoc \.specHead\s*\{\s*break-inside: avoid;/.test(cssBruto),
+      'CSS de impressão: thead repetido em cada página e título do grupo que não quebra');
   }
   // Pergunta do plano de realocação (sem agrupar_por): modo plano, todas as linhas, sem null.
   {

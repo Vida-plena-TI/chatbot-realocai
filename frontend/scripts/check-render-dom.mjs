@@ -4,6 +4,7 @@
 //     bloco nem texto da exceção, e não desmonta o grupo, os blocos vizinhos nem as outras mensagens;
 //   - histórico: uma conversa salva com um bloco de periodo null e outro antigo com período mostra os dois;
 //   - tabela genérica agrupada (agrupar_por) que quebra fica dentro do mesmo boundary;
+//   - panorama de enxugamento: os dois blocos na mesma mensagem; um quebrado não derruba o outro;
 //   - nada do bloco vai para o console (LGPD).
 //
 // Roda em processo próprio (os globais de DOM mudariam o SSR do check-render). Chamado pelo
@@ -103,10 +104,37 @@ try {
     'agrupada: mensagem vizinha desenha os grupos e o botão normalmente');
   flushSync(() => agrupada.root.unmount());
 
+  // Panorama de enxugamento: dois tabela_generica na mesma mensagem (comparativo e passos, nomes
+  // fictícios). Sem eventos no DOM mínimo: a 1ª aba fica aberta, então cada posição do bloco quebrado
+  // é testada numa mensagem própria; o histórico usa o mesmo MessageBubble.
+  const comp = amostras.tabelaGenericaPanoramaComparativo;
+  const passos = amostras.tabelaGenericaPanoramaPassos;
+  const compQuebrado = { ...comp, dados: { ...comp.dados, linhas: [null, ...comp.dados.linhas] } };
+  const passosQuebrado = { ...passos, dados: { ...passos.dados, linhas: [passos.dados.linhas[0], null] } };
+  const panorama = montar([
+    msg('p1', 'assistant', 'Panorama.', [comp, passos]),
+    msg('p2', 'assistant', 'Comparativo quebrado.', [compQuebrado, passos]),
+    msg('p3', 'assistant', 'Passos quebrados.', [comp, passosQuebrado]),
+    msg('p4', 'assistant', 'Passos quebrados primeiro.', [passosQuebrado, comp]),
+    msg('p5', 'assistant', 'Só os passos.', [passos]),
+  ]);
+  const [p1 = '', p2 = '', p3 = '', p4 = '', p5 = ''] = fragmentos(panorama.el);
+  const doisCartoes = (t) => t.includes('Exportar os 2 relatórios juntos?');
+  ok(fragmentos(panorama.el).length === 5, 'panorama: as 5 mensagens continuam montadas');
+  ok(doisCartoes(p1) && p1.includes(comp.titulo) && p1.includes('Cenário 3 · menos mudança') && p1.includes('Sim') && !/\b(true|false)\b/.test(p1) && !p1.includes('Não foi possível'),
+    'panorama: dois blocos na mesma mensagem, 1ª aba com o comparativo e Recomendado como Sim/Não');
+  ok(doisCartoes(p2) && p2.includes('Não foi possível mostrar este relatório.') && p2.includes(comp.titulo) && !/TypeError|Cannot read/.test(p2),
+    'panorama: comparativo quebrado vira "não foi possível mostrar"; abas e "Exportar todos" continuam');
+  ok(doisCartoes(p3) && p3.includes(comp.titulo) && !p3.includes('Não foi possível'), 'panorama: passos quebrados na 2ª aba não afetam o comparativo');
+  ok(doisCartoes(p4) && p4.includes('Não foi possível mostrar este relatório.') && !p4.includes('Paciente Ficticio') && !/TypeError|Cannot read/.test(p4),
+    'panorama: passos quebrados na 1ª aba, sem nomes de pacientes nem texto da exceção');
+  ok(p5.includes('Cenário 1 · equilibrado · libera 3 turnos (4 passos)') && p5.includes(passos.titulo) && !p5.includes('Não foi possível'), 'panorama: cartão de passos com o título do grupo em um nível');
+  flushSync(() => panorama.root.unmount());
+
   Object.assign(console, originais);
   if (process.env.DEBUG_DOM) saida.forEach((l) => process.stdout.write(`--- ${l.slice(0, 160)}\n`));
   // O React (dev) avisa que um boundary capturou um erro, com a pilha de componentes.
-  ok(!saida.some((l) => l.includes(segredo) || l.includes('Cannot read') || l.includes('Paciente Fictício')), `console sem conteúdo do bloco nem texto da exceção (${saida.length} aviso(s) do React)`);
+  ok(!saida.some((l) => l.includes(segredo) || l.includes('Cannot read') || l.includes('Paciente Fictício') || l.includes('Paciente Ficticio')), `console sem conteúdo do bloco nem texto da exceção (${saida.length} aviso(s) do React)`);
 } finally {
   await server.close();
 }
