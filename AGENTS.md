@@ -374,17 +374,38 @@ administrador atribuir.
 Para quem não pode ver:
 
 - **Geração** (`agent._restrict_patient_reports`, entre a resposta do RealocAI e o
-  `record_exchange`): os blocos sensíveis são descartados (os outros da mesma resposta
-  ficam) e o texto do assistente vira `PATIENT_REPORTS_RESTRICTED_MESSAGE` ("Este relatório
-  contém dados sensíveis e está disponível apenas para a coordenação. Fale com a
-  coordenação para solicitá-lo."), que é o que fica gravado (também na `preview`). A troca
-  só acontece quando algum bloco sensível é cortado. Nada do bloco descartado vai para o
-  banco. Log INFO só com `sensitive_blocks_dropped=<n>` e o id da conversa.
-- **Limite conhecido (texto sem bloco):** quando a tool do panorama não acha cenário ou pergunta
-  qual profissional (nome ambíguo ou fora da grade), o RealocAI responde **sem bloco**, e o texto
-  do agente chega a qualquer usuário logado (não há como detectar sem um sinal do agente; o texto
-  da tool só traz contagens, mas o LLM pode repetir o nome que o usuário digitou). Pendente:
-  combinar com o agente um marcador na resposta para esses casos.
+  `record_exchange`): a resposta é **sensível** se o RealocAI mandou `resposta_sensivel: true`
+  (ver [marcador](#marcador-resposta_sensivel)) **ou** se algum bloco é sensível. Resposta
+  sensível: os blocos sensíveis são descartados (os outros da mesma resposta ficam) e o texto
+  do assistente vira `PATIENT_REPORTS_RESTRICTED_MESSAGE` ("Este relatório contém dados
+  sensíveis e está disponível apenas para a coordenação. Fale com a coordenação para
+  solicitá-lo."), que é o **único texto** gravado (também na `preview`) e devolvido pela API
+  (POST e histórico). Nada do texto original nem do bloco descartado vai para o banco.
+  Resposta não sensível: nada muda. Log INFO só com contagens e o id da conversa:
+  `sensitive_blocks_dropped=<n>` (se cortou bloco) e `sensitive_text_replaced=1` (sempre
+  que o texto é trocado).
+- **Marcador com bloco comum:** `resposta_sensivel: true` com blocos só não sensíveis → texto
+  trocado pelo fixo e os blocos comuns **mantidos** (o cartão aparece abaixo do texto fixo).
+
+### Marcador `resposta_sensivel`
+
+Campo **opcional** da resposta do `POST /agenda/chat`, no **nível da resposta** (fora de
+qualquer bloco; contrato v1). O agente o envia só com o valor `true`, sempre que a rodada usou
+uma tool restrita (panorama de enxugamento, plano de realocação, relatórios com nomes de
+pacientes), **com ou sem bloco**: cobre as respostas só de texto (cenário ausente, profissional
+ambígua ou fora da grade), que antes chegavam a qualquer usuário logado.
+
+- Lido em `realocai_client.read_sensitive_marker` (`ChatSuccess.resposta_sensivel`). Só o
+  booleano JSON `true` vale; `false`, `"true"`, `1`, `1.0`, `null`, lista e objeto contam como
+  ausente. Campo com esse nome **dentro de um bloco ou de `dados` não conta**.
+- Ausente = comportamento anterior (só os blocos decidem). As regras dos blocos
+  (`SENSITIVE_BLOCK_RULES` e `contem_dados_pacientes`) continuam obrigatórias: o marcador é
+  uma proteção a mais, não as substitui.
+- O fake (`REALOCAI_USE_FAKE`) nunca marca a resposta.
+- **Pendência (fora desta versão, exige migração):** o texto é trocado só na geração. Uma
+  resposta gravada para quem **estava** no grupo continua com o texto original no histórico
+  se a permissão for revogada (os blocos já são escondidos na leitura). Futuro: gravar um
+  marcador em `Message` (ex.: `metadata`/campo próprio) para trocar o texto também na leitura.
 - **Histórico**: `MessageSerializer` omite os blocos sensíveis (contexto
   `can_view_patient_reports`, ausente = não pode). Cobre mensagens gravadas antes da regra
   e quem saiu do grupo.
@@ -457,7 +478,9 @@ Sem `REALOCAI_BASE_URL`/`REALOCAI_API_KEY` (e sem o fake), o envio de mensagens 
 
 Contrato do RealocAI (`POST {REALOCAI_BASE_URL}/agenda/chat`, header `X-API-Key`): envia
 `{conversa_id, mensagem, renderiza_relatorios: true}`; recebe `{conversa_id, resposta,
-blocos}` (`blocos` ausente → `[]`).
+blocos, resposta_sensivel?}` (`blocos` ausente → `[]`; `resposta_sensivel` opcional, só o
+booleano `true` conta, ver [marcador](#marcador-resposta_sensivel)). Outros campos
+desconhecidos são ignorados.
 
 Fluxo de uma mensagem:
 
@@ -476,8 +499,9 @@ navegador ──POST /api/conversations/{id}/messages/──▶ Django (view)
         conversa_id=null (o RealocAI começa sem o histórico anterior)
         falha → log ERROR (conversation.id, tipo, status, duração) e AgentUnavailableError
         (502); NADA é gravado e o external_conversation_id não muda
-     d. sucesso → sem o grupo `coordenacao`, descarta blocos com dados de pacientes e troca
-        o texto pela mensagem fixa; record_exchange: UMA transação grava user + assistant
+     d. sucesso → sem o grupo `coordenacao` e com resposta sensível (resposta_sensivel true
+        ou bloco sensível), descarta blocos com dados de pacientes e troca o texto pela
+        mensagem fixa; record_exchange: UMA transação grava user + assistant
         (seq consecutivos, blocos), preview, título automático e o novo conversa_id
      e. finally: libera a reivindicação (só se ainda for a nossa)
      f. memory_extraction.extract_memories(conversation) — nunca levanta exceção
@@ -488,7 +512,7 @@ Módulos:
 
 - `chat/services/realocai_client.py` — `send_chat_message(conversa_id, mensagem)` é a
   **única interface** (HTTP ou fake). Devolve `ChatSuccess(conversa_id, resposta, blocos,
-  blocos_descartados)` ou `ChatFailure(kind, status_code)`, com `kind` em
+  blocos_descartados, resposta_sensivel)` ou `ChatFailure(kind, status_code)`, com `kind` em
   `ChatErrorKind`: `expired` (404), `invalid` (422), `upstream_error` (5xx, status
   inesperado ou resposta malformada), `network_error` (timeout/conexão), `config_error`
   (401 ou settings ausentes). Não levanta exceção para erros HTTP e não loga. **Nunca lê o
