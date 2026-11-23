@@ -525,6 +525,8 @@ try {
     if (opcoes.igualFixture) ok(igual(colunas, agr.dados.colunas) && igual(por, agr.dados.agrupar_por) && igual(un, agr.dados.unidade_grupo), `${tag}: mesmas colunas, agrupar_por e unidade_grupo da fixture`);
     if (opcoes.singularEPlural) ok(esperados.some((g) => g.linhas.length === 1) && esperados.some((g) => g.linhas.length > 1), `${tag}: tem grupo com 1 e com várias linhas (singular e plural testados)`);
     titulosOficiais[nomeOficial] = pdf?.grupos.map((g) => g.titulo) ?? [];
+    // Sem modo agrupado (falha registrada acima): as invariantes seguintes não se aplicam.
+    if (!pdf || !tela) continue;
     for (const [onde, t] of [['PDF', pdf], ['tela', tela]]) {
       ok(t.grupos.reduce((a, g) => a + g.linhas.length, 0) === totalOf, `${tag}: (a) ${onde}: soma das linhas dos grupos = total`);
       ok(t.grupos.reduce((a, g) => a + nDoTitulo(g.titulo), 0) === totalOf && t.grupos.every((g) => nDoTitulo(g.titulo) === g.linhas.length), `${tag}: (b) ${onde}: soma dos N dos títulos = total e cada N = linhas do grupo`);
