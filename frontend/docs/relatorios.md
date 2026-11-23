@@ -45,17 +45,25 @@ Aditivos na versão 1 do contrato. A fonte da verdade é o repositório do agent
 `EXEMPLOS` em `scripts/sync-contrato.mjs`) para `src/reports/contrato/` sem alterar aquele
 repositório, e `npm run sync:contrato -- --check` confere se a cópia está em dia.
 
-**Contrato sincronizado** com `Vida-plena-TI/reallocaai-agente` @ `66157c27ec55dd96c92ed0dfd49dbf46ff9e455a`
-(main, merge do PR #18): schema com `dados.agrupar_por`, `dados.unidade_grupo` e
+**Contrato sincronizado** com `Vida-plena-TI/reallocaai-agente` @ `eccc4c8292c001b8b1d7e0a60f95d5943d3e3e04`
+(main, merge do PR #20, panorama em dois blocos): schema com `dados.agrupar_por`, `dados.unidade_grupo` e
 `contem_dados_pacientes` no nível do bloco (igual ao do PR #15); exemplos oficiais incluindo
 `tabela_generica_pacientes_por_plano`, `tabela_generica_pacientes_por_profissional_nomes`,
-`tabela_generica_plano_realocacao`, `tabela_generica_plano_realocacao_pergunta` e
-`tabela_generica_panorama_enxugamento`.
+`tabela_generica_plano_realocacao`, `tabela_generica_plano_realocacao_pergunta`,
+`tabela_generica_panorama_enxugamento_comparativo` e `tabela_generica_panorama_enxugamento`. O sync
+também copia a **resposta completa** de exemplo do panorama (bloco json marcado com
+`<!-- exemplo-resposta-panorama -->` em `docs/api-relatorios.md` do agente) para
+`src/reports/contrato/respostas/panorama_enxugamento.js` (cópia no backend:
+`chat/tests/fixtures/resposta_panorama_enxugamento.json`, conferida pelo `check:fixtures`).
 
 - **Tipo desconhecido é ignorado** (`blocoSuportado` em `ReportCard.jsx`): sem cartão, sem aba e
   fora do "Exportar todos". Um erro ao desenhar um bloco fica no próprio cartão.
 - **Comuns:** cartões do `resumo` mostram `exibicao`; aviso âmbar de parcial lista `dias_nao_lidos`;
   `meta: null` não desenha marca nem selo de meta; booleanos viram "Sim"/"Não".
+- **Booleano em coluna de formato `"texto"`** (ex.: `recomendado` do comparativo do panorama): o
+  booleano JSON `true`/`false` vira "Sim"/"Não" na tela (tabela e cartão do celular), no PDF, no
+  Excel local (`gerarExcel`) e no Excel do backend (célula de texto). A string `"true"` fica como veio;
+  `null` e `""` viram "—" na tela e célula vazia no Excel. Nunca "true", "false" nem vazio para um booleano.
 - **`disponibilidade`:** resumo por dia (manhã/tarde) e faixas livres por dia, com profissional,
   sala e posto (a partir de 1). Com `minutos_por_janela` > 30, mostra quantos atendimentos cabem.
 - **`convenio`:** só contagens, barras de uma cor (sem meta) e a lista de aguardando autorização.
@@ -69,7 +77,7 @@ repositório, e `npm run sync:contrato -- --check` confere se a cópia está em 
   `linhas_omitidas` > 0 mostra "+N linhas não exibidas".
 - **`tabela_generica` agrupada (`dados.agrupar_por`, opcional):** campos aditivos na `versao` 1, no
   schema sincronizado (hoje em `pacientes_por_profissional_nomes`, no plano de `plano_realocacao` e
-  em `panorama_enxugamento`, este em dois níveis; vêm juntos ou não vêm). O bloco também traz `contem_dados_pacientes: true` no nível do bloco (a tela não usa).
+  nos passos de `panorama_enxugamento`, este em um nível desde o PR #20 do agente; vêm juntos ou não vêm). O bloco também traz `contem_dados_pacientes: true` no nível do bloco (a tela não usa).
   - `agrupar_por`: lista ordenada de chaves de `dados.colunas` (ex.: `["especialidade",
     "profissional"]`). `unidade_grupo` (opcional): `{"singular": "paciente", "plural": "pacientes"}`.
   - Só agrupa se `agrupar_por` for lista não vazia de textos distintos, todos em `colunas` (pela
@@ -112,27 +120,35 @@ repositório, e `npm run sync:contrato -- --check` confere se a cópia está em 
   - **Pergunta** ("Plano de realocação: qual paciente?", nome ambíguo): sem agrupamento, modo
     plano; colunas `candidata`, `paciente` ("Nome"), `terapia`, `profissional`, `dias`. Excel: aba
     "Candidatas".
-- **Panorama de enxugamento (`tabela_generica`, `dados.relatorio: "panorama_enxugamento"`, PR #18
-  do agente):** cenários de movimentação que liberam turnos com presença paga na grade semanal
-  vigente (tool `planejar_enxugamento`, só pelo chat; nada muda na planilha). **Tem nomes de
-  pacientes (coluna `paciente`, rótulo "Quem") e de profissionais (`turno_liberado`, `de`,
-  `para`): sensível de RH.** `contem_dados_pacientes: true` no nível do bloco e regra própria em
-  `chat/services/sensitive.py` (igualdade exata): só superusuários e o grupo `coordenacao`
-  recebem; para os outros o bloco é cortado e o texto da resposta (que traz a contagem de turnos
-  liberados) vira o texto fixo. `periodo` e `meta` são `null`.
-  - Colunas: `cenario` (texto, "Cenário 1 (E-5EB1) · equilibrado · libera 3 turnos", sem nomes),
-    `turno_liberado` (texto, "dia turno · profissional · terapia"), `passo` (inteiro), `paciente`
-    ("Quem"), `terapia`, `de`, `para`, `alavanca`, `observacao` (todas texto, menos `passo`).
-  - Agrupamento em **dois níveis**: `agrupar_por: ["cenario", "turno_liberado"]`, `unidade_grupo:
-    {"singular": "passo", "plural": "passos"}`. O front não tem nível aninhado: cada par (cenário,
-    turno liberado) contíguo é um grupo, com os dois valores unidos por " · " no título. No exemplo
-    oficial (11 linhas, 3 cenários) são 8 grupos (1, 2, 1, 1, 1, 2, 1 e 2 passos), sem valor nulo e
-    sem par repetido de forma não contígua; o primeiro título é "Cenário 1 (E-5EB1) · equilibrado ·
-    libera 3 turnos · Ter tarde · <profissional fictícia> · Terapia Alimentar (1 passo)". Ver
-    Pendências.
-  - Excel: abas "Passos" (mesmas colunas e linhas de `dados`, planas, com `cenario` e
-    `turno_liberado`) e "Resumo dos cenários" (`minutos_medio` decimal, `ocupacao_absorventes`
-    percentual, `null` = célula vazia). Até 5.000 linhas por tabela, como as demais.
+- **Panorama de enxugamento (`tabela_generica`, `dados.relatorio: "panorama_enxugamento"`, PR #18 e
+  PR #20 do agente):** cenários de movimentação que liberam turnos com presença paga na grade
+  semanal vigente (tool `planejar_enxugamento`, só pelo chat; nada muda na planilha). Desde
+  2026-11-23 a resposta traz **dois blocos `tabela_generica`, nesta ordem**, os dois com o mesmo
+  `relatorio`, `contem_dados_pacientes: true`, `periodo`/`meta` `null`, `total` `{}`, e a resposta
+  com `resposta_sensivel: true`. A tela desenha um cartão por bloco (duas abas, na ordem recebida),
+  cada um com o seu resumo (KPIs). **O bloco de passos tem nomes de pacientes (coluna `paciente`,
+  rótulo "Quem") e de profissionais (`turno_liberado`, `de`, `para`): sensível de RH.** A regra em
+  `chat/services/sensitive.py` (igualdade exata do `relatorio`) cobre os dois blocos: só
+  superusuários e o grupo `coordenacao` recebem; para os outros os dois blocos são cortados e o texto
+  vira o texto fixo (também quando o agente responde só com texto e `resposta_sensivel: true`).
+  1. **Comparativo** ("Comparativo de cenários"): uma linha por cenário, só números, **sem
+     `agrupar_por`** (modo plano). Colunas `cenario` (texto, "Cenário 1 · equilibrado"),
+     `turnos_liberados`, `passos`, `profissionais_afetadas`, `pacientes_movidos`,
+     `trocam_de_profissional`, `trocam_de_dia`, `passos_iguais_ao_recomendado` (inteiros) e
+     `recomendado` (booleano JSON em coluna `"texto"`: "Sim"/"Não"). Excel: aba **"Cenários"**.
+  2. **Passos** ("Passos do cenário recomendado"): agrupamento em **um nível**, `agrupar_por:
+     ["cenario"]`, `unidade_grupo: {"singular": "passo", "plural": "passos"}`. Colunas `cenario`
+     ("Cenário 1 · equilibrado · libera 3 turnos", sem o código interno), `turno_liberado`, `passo`
+     (inteiro), `paciente` ("Quem"), `terapia`, `de`, `para`, `tipo_de_movimento` (antes `alavanca`) e
+     `observacao` (`""` no caso padrão: "—" na tela, célula vazia no Excel). Título do grupo
+     "Cenário 1 · equilibrado · libera 3 turnos (4 passos)"; a coluna do cenário sai do corpo.
+     Excel: aba **"Passos"** (plana, com `cenario`).
+     - **Detalhe de outro cenário:** o título do bloco pode vir "Passos do Cenário N (apenas o que
+       difere do Cenário 1)" (ou "Passos do Cenário N", com os passos completos) e os números de passo
+       podem ter saltos (1, 3, 4): são os do cenário inteiro. A tela mostra como vieram. Fixture fictícia
+       `tabelaGenericaPanoramaPassosDetalhe` (cópia no backend).
+  - A aba "Resumo dos cenários" deixou de existir (substituída pelo comparativo). Exportando os dois
+    blocos juntos, as abas são "Cenários (1)" e "Passos (2)" (sufixo por bloco, como sempre).
 - **Listas longas:** no chat, as primeiras linhas e "Mostrar todas"; no PDF, tudo.
 - **Verificação:** `npm run check:blocks` valida as fixtures e todos os exemplos oficiais contra o
   schema copiado completo (inclusive `agrupar_por`, `unidade_grupo` e `contem_dados_pacientes`),
@@ -145,22 +161,29 @@ repositório, e `npm run sync:contrato -- --check` confere se a cópia está em 
   linhas e dos N dos títulos = total, ordem recebida na tela e no PDF, colunas de agrupamento fora
   do corpo, títulos sem "null", singular/plural, grupos não consecutivos separados, corte só entre
   grupos e `agrupar_por` inválido = HTML do modo plano), na fixture de 800 linhas e nos exemplos
-  oficiais de `pacientes_por_profissional_nomes`, `plano_realocacao` e `panorama_enxugamento` (com
+  oficiais de `pacientes_por_profissional_nomes`, `plano_realocacao` e dos passos do panorama (com
   os grupos esperados calculados à parte; o plano também com uma variante de 1 passo para o
-  singular e os títulos exatos "Opção N (3 passos)"; o panorama com os N 1, 2, 1, 1, 1, 2, 1, 2);
-  a pergunta do plano sai no modo plano.
+  singular e os títulos exatos "Opção N (3 passos)"; o panorama com o título exato "Cenário 1 ·
+  equilibrado · libera 3 turnos (4 passos)", a variante de 1 passo e o detalhe de outro cenário);
+  a pergunta do plano e o comparativo do panorama saem no modo plano (o comparativo com
+  "Sim"/"Não" na tela, no celular, no PDF e no Excel local); a resposta completa do panorama sai em
+  duas abas e no PDF com os dois cartões, cada um com o seu resumo, `thead` e sem período. Com DOM
+  (`check-render-dom.mjs`), um bloco do panorama quebrado em qualquer posição não derruba o outro.
+  `check:blocks` também confere a resposta completa (dois blocos iguais aos exemplos, na ordem, com
+  `resposta_sensivel: true`).
 
 ### Pendências
 
-- **Título do grupo em dois níveis (panorama de enxugamento):** o contrato do agente exemplifica um
-  título por cenário ("Cenário 1 (E-5EB1) · equilibrado · libera 3 turnos (4 passos)"), mas o front
-  faz um grupo por par (cenário, turno liberado) e junta os dois valores com " · ", o mesmo
-  separador usado dentro dos próprios valores ("… libera 3 turnos · Ter tarde · …"). O cenário se
-  repete em cada grupo e não há total por cenário. Decisão em aberto (título aninhado por cenário ou
-  separador próprio entre os níveis); o formato não mudou.
-- **Texto sem bloco do panorama:** sem cenário ou com pergunta de profissional (nome ambíguo ou fora
-  da grade), o agente responde só com texto, sem bloco; o backend não tem como identificá-lo e o
-  texto chega a qualquer usuário logado. Combinar com o agente um marcador para esses casos.
+- ~~Título do grupo em dois níveis (panorama de enxugamento)~~: resolvido pelo agente (PR #20): os
+  passos agrupam em um nível, com o título por cenário "… libera 3 turnos (4 passos)".
+- ~~Texto sem bloco do panorama~~: resolvido com o marcador `resposta_sensivel` (ver AGENTS.md).
+- **Abas com o mesmo rótulo:** os dois blocos do panorama são `tabela_generica`, então as duas abas
+  saem como "Relatório" (`tituloAba` usa só o tipo). Proposta (não aplicada; muda código de
+  produção): para `tabela_generica`, usar o `titulo` do bloco na aba, como já aparece no cabeçalho do
+  cartão (agenda_paciente continua só com o tipo).
+- **Recomendado no celular:** no cartão compacto, `recomendado` é coluna de texto e entra no rótulo
+  ("Cenário 1 · equilibrado · Sim"), sem a palavra "Recomendado". Proposta (não aplicada): tratar
+  colunas booleanas como métrica no cartão (rótulo + "Sim"/"Não").
 - **Exportação do panorama:** o contrato do agente pede revisão de como o bloco sai no Excel e no
   PDF antes de liberar. Hoje sai como os outros blocos sensíveis (só coordenação/superusuários; o
   Excel completo com nomes de pacientes e de profissionais). Confirmar com o dono do produto.

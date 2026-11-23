@@ -1,5 +1,5 @@
-// Copia o contrato dos blocos (schema + exemplos com dados FICTÍCIOS) do repositório do agente
-// para src/reports/contrato/, com a origem e o commit no cabeçalho. Só lê o outro repositório
+// Copia o contrato dos blocos (schema + exemplos com dados FICTÍCIOS + respostas completas de
+// exemplo da documentação) do repositório do agente para src/reports/contrato/, com a origem e o commit no cabeçalho. Só lê o outro repositório
 // (`git show`); nunca faz checkout, commit ou push nele.
 //
 // Uso: node scripts/sync-contrato.mjs [--check] [caminho-do-clone] [ref]
@@ -29,9 +29,9 @@ const PASTA = 'docs/exemplos-blocos';
 
 // Os exemplos dos tipos novos (o plano semanal, os pacientes por plano, os nomes de pacientes
 // por profissional, o plano de realocação e o panorama de enxugamento vêm com periodo null; os
-// quatro últimos com contem_dados_pacientes; o de nomes, o plano de realocação e o panorama (em dois
-// níveis) com agrupar_por/unidade_grupo, e a pergunta do plano de realocação sem eles). Os 3 tipos
-// antigos seguem com as fixtures de sampleBlocks.js.
+// quatro últimos com contem_dados_pacientes; o de nomes, o plano de realocação e os passos do
+// panorama (um nível, por cenário) com agrupar_por/unidade_grupo; a pergunta do plano de realocação e o
+// quadro comparativo do panorama sem eles). Os 3 tipos antigos seguem com as fixtures de sampleBlocks.js.
 export const EXEMPLOS = [
   'disponibilidade_vagas',
   'disponibilidade_janelas',
@@ -46,6 +46,7 @@ export const EXEMPLOS = [
   'tabela_generica_pacientes_por_profissional_nomes',
   'tabela_generica_plano_realocacao',
   'tabela_generica_plano_realocacao_pergunta',
+  'tabela_generica_panorama_enxugamento_comparativo',
   'tabela_generica_panorama_enxugamento',
 ];
 
@@ -66,6 +67,22 @@ for (const nome of EXEMPLOS) {
 // Origem: ${origem}
 // Arquivo: ${PASTA}/${nome}.json. Atualize com scripts/sync-contrato.mjs; não edite à mão.
 export default ${JSON.stringify(bloco, null, 2)};
+`;
+}
+
+// Respostas completas do POST /agenda/chat (texto + blocos + resposta_sensivel), tiradas dos blocos
+// ```json marcados com <!-- marcador --> na documentação do agente. Dados FICTÍCIOS.
+export const RESPOSTAS = [['panorama_enxugamento', 'docs/api-relatorios.md', 'exemplo-resposta-panorama']];
+for (const [nome, doc, marcador] of RESPOSTAS) {
+  const md = git('show', `${commit}:${doc}`);
+  const inicio = md.indexOf(`<!-- ${marcador} -->`);
+  const bloco = inicio < 0 ? null : md.slice(inicio).match(/```json\n([\s\S]*?)\n```/);
+  if (!bloco) throw new Error(`${doc}: exemplo <!-- ${marcador} --> não encontrado em ${ref}`);
+  arquivos[`respostas/${nome}.js`] = `// Exemplo real de resposta do POST /agenda/chat do RealocAI, copiado sem alteração. Dados FICTÍCIOS.
+// Origem: ${origem}
+// Arquivo: ${doc} (bloco json marcado com <!-- ${marcador} -->). Atualize com scripts/sync-contrato.mjs;
+// não edite à mão.
+export default ${JSON.stringify(JSON.parse(bloco[1]), null, 2)};
 `;
 }
 
