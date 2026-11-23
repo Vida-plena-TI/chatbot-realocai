@@ -127,7 +127,13 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   ordem, ambos com o mesmo `relatorio`, `contem_dados_pacientes: true` e `periodo`/`meta` `null`, e
   `resposta_sensivel: true`; um cartão por bloco (duas abas), cada um com o seu resumo. (1)
   **Comparativo** ("Comparativo de cenários"): uma linha por cenário, só números, sem `agrupar_por`
-  (modo plano), `recomendado` booleano JSON em coluna `"texto"` ("Sim"/"Não"); Excel "Cenários". (2)
+  (modo plano), `recomendado` booleano JSON em coluna `"texto"` ("Sim"/"Não"); Excel "Cenários". Na
+  tela vira um **painel** (`PanoramaComparativo.jsx`, só com `relatorio` "panorama_enxugamento" e as
+  colunas `cenario`, `turnos_liberados`, `passos` e `pacientes_movidos`; senão, a tabela comum): selo
+  "Recomendado" só com `true`, destaque por borda/fundo, barras em CSS puro na escala do maior valor
+  com o número ao lado, chips com os rótulos do contrato (inclui `profissionais_sem_atendimento` e
+  `turnos_sem_profissional` quando vierem) e a tabela atrás de "Ver tabela completa"; no PDF, painel
+  sem chips + tabela. (2)
   **Passos** ("Passos do cenário recomendado"; **nomes de pacientes e de profissionais, sensível de
   RH**): agrupamento em **um nível** (`agrupar_por: ["cenario"]`, unidade passo/passos), título
   "Cenário 1 · equilibrado · libera 3 turnos (4 passos)", coluna `tipo_de_movimento` (antes
@@ -154,6 +160,9 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   `src/reports/localExport.js`), no mock e na API real. O PDF é uma cópia visual do cartão:
   os mesmos `ReportCard` (`impressao`) num iframe com os estilos do app copiados, sempre no
   tema claro, A4 paisagem (layout largo), com o texto da resposta no topo (`texto`, só no navegador).
+  A tela só monta a aba ativa: com 2 ou mais blocos, o PDF do cartão imprime **todos os blocos da
+  resposta** (o Excel do cartão continua só com o bloco dele). Bloco com mais de 4 avisos mostra 3 e
+  "Ver mais N avisos" (`aria-expanded`); no PDF, todos numa lista compacta.
 - **Selo "Sem escala":** dia ou item com `escalados === 0` e `ocupados > 0` é
   inconsistência de dados (na ocupação agregada: `slots_escalados`/`slots_ocupados`); em vez de "Meta atingida" mostra selo e barra neutros (texto +
   ícone, tokens existentes), percentual "—" se não for número finito (`semEscala` e
