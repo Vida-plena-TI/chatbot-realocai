@@ -297,6 +297,18 @@ try {
 
   // --- periodo null: nada de "null"/"Invalid Date" nem separador sobrando; cartão alinhado --
   const css = await server.ssrLoadModule('/src/reports/reports.module.css').then((m) => m.default);
+  // Avisos: até 4, todos em caixas; mais de 4, a tela mostra os 3 primeiros e "Ver mais N avisos"
+  // (aria-expanded="false", aria-controls); o PDF mostra todos numa lista compacta (ul.noticeList).
+  const avisosOk = (avisos, { tela, pdf }) => {
+    const t = texto(tela);
+    const p = texto(pdf);
+    if (avisos.length <= 4) return avisos.every((a) => t.includes(a) && p.includes(a)) && !t.includes('Ver mais');
+    const botao = tela.match(/<button[^>]*aria-expanded="false"[^>]*>Ver mais (\d+) avisos<\/button>/);
+    const alvo = botao?.[0].match(/aria-controls="([^"]+)"/)?.[1];
+    const lista = pdf.match(new RegExp(`<ul class="${css.noticeList}"[^>]*>(.*?)</ul>`))?.[1] ?? '';
+    return avisos.slice(0, 3).every((a) => t.includes(a)) && avisos.slice(3).every((a) => !t.includes(a)) && Number(botao?.[1]) === avisos.length - 3 &&
+      Boolean(alvo) && tela.includes(`id="${alvo}"`) && avisos.every((a) => p.includes(a)) && (lista.match(/<li>/g) || []).length === avisos.length && !pdf.includes('Ver mais');
+  };
   // Cartões compactos (celular) do modo plano: rótulo (strong) e pares [dt, dd].
   const cartoesCompactos = (html) =>
     [...html.matchAll(/class="[^"]*dayCard[^"]*"><strong>(.*?)<\/strong><dl[^>]*>(.*?)<\/dl>/g)].map(([, rot, dl]) => ({
@@ -546,7 +558,7 @@ try {
       `${tag}: (c)(d) celular: mesmos títulos, um cartão por linha na ordem, sem colunas de agrupamento`);
     ok(![html.tela, html.pdf].some((h) => /\b(null|undefined|NaN)\b|Invalid Date/.test(texto(h))), `${tag}: (e) nenhum "null", "undefined", "NaN" ou "Invalid Date" na tela nem no PDF`);
     ok(totalOf > 15 || (!texto(html.tela).includes('Mostrar todas') && !texto(html.pdf).includes('Mostrar todas')), `${tag}: cabe sem "Mostrar todas"`);
-    ok(oficial.avisos.every((a) => texto(html.tela).includes(a) && texto(html.pdf).includes(a)), `${tag}: avisos na tela e no PDF`);
+    ok(avisosOk(oficial.avisos, html), `${tag}: avisos na tela (3 + "Ver mais" se passar de 4) e todos no PDF`);
   }
   // Título do grupo do plano de realocação: formato atual "valores (N unidade)". Só "Opção N" e
   // contagens; nunca nomes.
@@ -627,6 +639,19 @@ try {
     const cssBruto = readFileSync(new URL('../src/reports/reports.module.css', import.meta.url), 'utf8');
     ok(/\.printDoc \.dense thead\s*\{\s*display: table-header-group;/.test(cssBruto) && /\.printDoc \.specHead\s*\{\s*break-inside: avoid;/.test(cssBruto),
       'CSS de impressão: thead repetido em cada página e título do grupo que não quebra');
+  }
+  // --- Avisos recolhidos (mais de 4) ------------------------------------------------------------
+  {
+    const avisosComp = comparativoOficial.avisos;
+    ok(avisosComp.length === 7 && avisosOk(avisosComp, r.comparativo), 'comparativo (7 avisos): 3 na tela + "Ver mais 4 avisos"; todos no PDF em lista compacta');
+    const cinco = { ...comparativoOficial, avisos: avisosComp.slice(0, 5) };
+    const quatro = { ...comparativoOficial, avisos: avisosComp.slice(0, 4) };
+    const h5 = { tela: render([cinco]), pdf: render([cinco], PrintReport) };
+    const h4 = { tela: render([quatro]), pdf: render([quatro], PrintReport) };
+    ok(avisosOk(cinco.avisos, h5) && texto(h5.tela).includes('Ver mais 2 avisos'), '5 avisos: "Ver mais 2 avisos"');
+    ok(avisosOk(quatro.avisos, h4) && !h4.pdf.includes(css.noticeList), '4 avisos: todos em caixas, sem botão nem lista compacta');
+    const repetidos = { ...comparativoOficial, avisos: ['Aviso fictício igual.', 'Aviso fictício igual.', 'Outro.', 'Outro.', 'Mais um.'] };
+    ok((render([repetidos], PrintReport).match(/<li>/g) || []).length === 5, 'avisos repetidos não somem (chave pela posição)');
   }
   // --- Rótulos das abas e booleanos no celular (fix/panorama-rotulos) ----------------------------
   {

@@ -2,7 +2,7 @@ import { Component, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CircleAlert, Maximize2, RotateCw, X } from 'lucide-react';
 import s from './reports.module.css';
-import { Notice } from './parts';
+import { Avisos, Notice } from './parts';
 import { ExportBar } from './ExportBar';
 import { OcupacaoProfissional } from './OcupacaoProfissional';
 import { PacientesPorProfissional } from './PacientesPorProfissional';
@@ -213,9 +213,7 @@ function Cartao({ bloco, blocosResposta, texto, exportavel = true, expandido = f
         </CorpoSeguro>
       )}
 
-      {bloco.avisos?.map((a) => (
-        <Notice key={a}>{a}</Notice>
-      ))}
+      <Avisos avisos={bloco.avisos} impressao={impressao} />
 
       {exportavel && !impressao && Corpo && !semDados && (
         <ExportBar

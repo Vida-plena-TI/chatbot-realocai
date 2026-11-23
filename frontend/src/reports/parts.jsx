@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { ArrowDown, CalendarX, Check, Info, TriangleAlert } from 'lucide-react';
 import s from './reports.module.css';
 import { faixa, int } from './format';
@@ -39,6 +39,42 @@ export function Notice({ children, warn = false }) {
       <Icon size={15} strokeWidth={2.2} aria-hidden="true" />
       <span>{children}</span>
     </div>
+  );
+}
+
+// Avisos do bloco: com mais de LIMITE_AVISOS, a tela mostra os AVISOS_VISIVEIS primeiros e o resto
+// atrás de "Ver mais N avisos"; a impressão mostra todos, numa lista compacta (uma linha cada).
+export const LIMITE_AVISOS = 4;
+const AVISOS_VISIVEIS = 3;
+
+/** @param {{avisos?: string[], impressao?: boolean}} props */
+export function Avisos({ avisos, impressao = false }) {
+  const [abertos, setAbertos] = useState(false);
+  const id = useId();
+  const lista = Array.isArray(avisos) ? avisos : [];
+  if (!lista.length) return null;
+  const caixas = (itens, inicio = 0) => itens.map((a, i) => <Notice key={inicio + i}>{a}</Notice>);
+  if (lista.length <= LIMITE_AVISOS) return caixas(lista);
+  if (impressao) {
+    return (
+      <ul className={s.noticeList} aria-label="Avisos">
+        {lista.map((a, i) => (
+          <li key={i}>{a}</li>
+        ))}
+      </ul>
+    );
+  }
+  const resto = lista.length - AVISOS_VISIVEIS;
+  return (
+    <>
+      {caixas(lista.slice(0, AVISOS_VISIVEIS))}
+      <div id={id} className={s.noticeRest}>{abertos && caixas(lista.slice(AVISOS_VISIVEIS), AVISOS_VISIVEIS)}</div>
+      <div className={s.noticeMore}>
+        <button type="button" className={s.linkBtn} aria-expanded={abertos} aria-controls={id} onClick={() => setAbertos((v) => !v)}>
+          {abertos ? 'Ver menos avisos' : `Ver mais ${resto} avisos`}
+        </button>
+      </div>
+    </>
   );
 }
 
