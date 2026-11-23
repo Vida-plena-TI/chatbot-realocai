@@ -1,5 +1,5 @@
 // Exemplo real de resposta do POST /agenda/chat do RealocAI, copiado sem alteração. Dados FICTÍCIOS.
-// Origem: Vida-plena-TI/reallocaai-agente @ eccc4c8292c001b8b1d7e0a60f95d5943d3e3e04 (main)
+// Origem: Vida-plena-TI/reallocaai-agente @ 610f663303ea5ae1dffcee5d93ce99004e902888 (main)
 // Arquivo: docs/api-relatorios.md (bloco json marcado com <!-- exemplo-resposta-panorama -->). Atualize com scripts/sync-contrato.mjs;
 // não edite à mão.
 export default {
@@ -19,9 +19,7 @@ export default {
         "Não considera a disponibilidade dos pacientes.",
         "Vagas livres na grade podem estar reservadas (reuniões, supervisão); confira antes de mudar.",
         "Cada mudança precisa ser confirmada com a família e feita manualmente na planilha.",
-        "Cenário 1: 2 turnos de terapia ficariam sem nenhum profissional atendendo, num dia em que hoje tem.",
-        "Cenário 2: 2 turnos de terapia ficariam sem nenhum profissional atendendo, num dia em que hoje tem.",
-        "Cenário 3: 1 turno de terapia ficaria sem nenhum profissional atendendo, num dia em que hoje tem."
+        "Profissionais sem atendimento: ficam sem nenhum paciente na semana. Turnos sem profissional: turnos de uma terapia em que ninguém atenderia, num dia em que hoje há atendimento."
       ],
       "resumo": [
         {
@@ -91,6 +89,16 @@ export default {
             "formato": "inteiro"
           },
           {
+            "chave": "profissionais_sem_atendimento",
+            "rotulo": "Profissionais sem atendimento",
+            "formato": "inteiro"
+          },
+          {
+            "chave": "turnos_sem_profissional",
+            "rotulo": "Turnos sem profissional",
+            "formato": "inteiro"
+          },
+          {
             "chave": "passos_iguais_ao_recomendado",
             "rotulo": "Passos iguais ao recomendado",
             "formato": "inteiro"
@@ -110,6 +118,8 @@ export default {
             "pacientes_movidos": 4,
             "trocam_de_profissional": 3,
             "trocam_de_dia": 0,
+            "profissionais_sem_atendimento": 0,
+            "turnos_sem_profissional": 2,
             "passos_iguais_ao_recomendado": 0,
             "recomendado": true
           },
@@ -121,6 +131,8 @@ export default {
             "pacientes_movidos": 4,
             "trocam_de_profissional": 3,
             "trocam_de_dia": 0,
+            "profissionais_sem_atendimento": 0,
+            "turnos_sem_profissional": 2,
             "passos_iguais_ao_recomendado": 3,
             "recomendado": false
           },
@@ -132,6 +144,8 @@ export default {
             "pacientes_movidos": 3,
             "trocam_de_profissional": 2,
             "trocam_de_dia": 0,
+            "profissionais_sem_atendimento": 0,
+            "turnos_sem_profissional": 1,
             "passos_iguais_ao_recomendado": 3,
             "recomendado": false
           }
@@ -179,6 +193,16 @@ export default {
               "formato": "inteiro"
             },
             {
+              "chave": "profissionais_sem_atendimento",
+              "rotulo": "Profissionais sem atendimento",
+              "formato": "inteiro"
+            },
+            {
+              "chave": "turnos_sem_profissional",
+              "rotulo": "Turnos sem profissional",
+              "formato": "inteiro"
+            },
+            {
               "chave": "passos_iguais_ao_recomendado",
               "rotulo": "Passos iguais ao recomendado",
               "formato": "inteiro"
@@ -198,6 +222,8 @@ export default {
               "pacientes_movidos": 4,
               "trocam_de_profissional": 3,
               "trocam_de_dia": 0,
+              "profissionais_sem_atendimento": 0,
+              "turnos_sem_profissional": 2,
               "passos_iguais_ao_recomendado": 0,
               "recomendado": true
             },
@@ -209,6 +235,8 @@ export default {
               "pacientes_movidos": 4,
               "trocam_de_profissional": 3,
               "trocam_de_dia": 0,
+              "profissionais_sem_atendimento": 0,
+              "turnos_sem_profissional": 2,
               "passos_iguais_ao_recomendado": 3,
               "recomendado": false
             },
@@ -220,6 +248,8 @@ export default {
               "pacientes_movidos": 3,
               "trocam_de_profissional": 2,
               "trocam_de_dia": 0,
+              "profissionais_sem_atendimento": 0,
+              "turnos_sem_profissional": 1,
               "passos_iguais_ao_recomendado": 3,
               "recomendado": false
             }

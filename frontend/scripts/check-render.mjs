@@ -619,6 +619,25 @@ try {
     const linhasXlsComp = [...xlsComp.split('ss:Name="Cenários"')[1].split('</Worksheet>')[0].matchAll(/<Row>(.*?)<\/Row>/gs)].slice(1)
       .map((m) => m[1].match(/<Cell[^>]*?(?:\/>|>.*?<\/Cell>)/g).map((c) => c.match(/>([^<]*)<\/Data>/)?.[1] ?? ''));
     ok(igual(linhasXlsComp.map((l) => l[iRec]), recEsperado) && !/>(true|false)</.test(xlsComp), `Excel local do comparativo: Recomendado ${JSON.stringify(linhasXlsComp.map((l) => l[iRec]))}`);
+    // Colunas de cobertura (PR #21 do agente): entre trocam_de_dia e passos_iguais_ao_recomendado,
+    // inteiras; a tabela completa e a aba "Cenários" seguem a ordem do contrato.
+    const ordem = colunas.map((c) => c.chave);
+    const iDia = ordem.indexOf('trocam_de_dia');
+    ok(igual(ordem.slice(iDia, iDia + 4), ['trocam_de_dia', 'profissionais_sem_atendimento', 'turnos_sem_profissional', 'passos_iguais_ao_recomendado']) &&
+      colunas.filter((c) => ['profissionais_sem_atendimento', 'turnos_sem_profissional'].includes(c.chave)).every((c) => c.formato === 'inteiro') &&
+      igual(colunas.map((c) => c.chave), comparativoOficial.tabelas[0].colunas.map((c) => c.chave)),
+      'comparativo: colunas de cobertura inteiras, entre trocam_de_dia e passos_iguais_ao_recomendado, iguais em dados e tabelas');
+    const cabecalho = (html) => texto(html.split('<table').find((t) => t.includes('<caption'))?.match(/<thead>(.*?)<\/thead>/)?.[1]?.replace(/<\/th>/g, '</th>|') ?? '').split('|').map((x) => x.trim()).filter(Boolean);
+    for (const [onde, html] of [['tela (tabela comum)', r.comparativoTabela.tela], ['PDF (tabela completa)', r.comparativo.pdf]]) {
+      ok(igual(cabecalho(html), colunas.map((c) => c.rotulo)), `comparativo (${onde}): cabeçalho na ordem do contrato ${JSON.stringify(cabecalho(html))}`);
+    }
+    const abaComp = xlsComp.split('ss:Name="Cenários"')[1].split('</Worksheet>')[0];
+    const cabXls = [...abaComp.match(/<Row>(.*?)<\/Row>/s)[1].matchAll(/<Data ss:Type="String">([^<]*)<\/Data>/g)].map((m) => m[1]);
+    ok(igual(cabXls, comparativoOficial.tabelas[0].colunas.map((c) => c.rotulo)), `Excel local do comparativo: aba "Cenários" com as colunas na ordem do contrato (${cabXls.length})`);
+    const tiposXls = [...abaComp.matchAll(/<Row>(.*?)<\/Row>/gs)].slice(1).map((m) => [...m[1].matchAll(/<Data ss:Type="(\w+)">([^<]*)<\/Data>/g)].map(([, tp, v]) => [tp, v]));
+    const iCob = ['profissionais_sem_atendimento', 'turnos_sem_profissional'].map((k) => comparativoOficial.tabelas[0].colunas.findIndex((c) => c.chave === k));
+    ok(igual(tiposXls.map((l) => iCob.map((i) => l[i])), comparativoOficial.tabelas[0].linhas.map((l) => [['Number', String(l.profissionais_sem_atendimento)], ['Number', String(l.turnos_sem_profissional)]])),
+      'Excel local do comparativo: profissionais sem atendimento e turnos sem profissional como números');
     const xlsPar = await gerarExcel(respostaPanorama.blocos).text();
     const abasPar = [...xlsPar.matchAll(/<Worksheet ss:Name="([^"]*)"/g)].map((m) => m[1]);
     ok(igual(abasPar, ['Resumo', 'Cenários (1)', 'Passos (2)']), `Excel local dos dois blocos: abas únicas com sufixo ${JSON.stringify(abasPar)}`);
@@ -671,8 +690,10 @@ try {
     ok(igual(larg('turnos_liberados'), [100, 100, 67]) && igual(vals('turnos_liberados'), ['3', '3', '2']), `painel: barra de turnos liberados na escala do maior (3) ${JSON.stringify(larg('turnos_liberados'))}`);
     ok(igual(larg('pacientes_movidos'), [100, 100, 75]) && igual(vals('pacientes_movidos'), ['4', '4', '3']), `painel: barra de pacientes movidos na escala do maior (4) ${JSON.stringify(larg('pacientes_movidos'))}`);
     ok(p.every((x) => x.barras.every((b) => b.aria.startsWith(`${b.rotulo}: ${b.valor}`))), 'painel: cada barra com rótulo acessível e o número escrito ao lado');
-    const chipsEsperados = ['passos', 'profissionais_afetadas', 'trocam_de_profissional', 'trocam_de_dia'];
+    const chipsEsperados = ['passos', 'profissionais_afetadas', 'trocam_de_profissional', 'trocam_de_dia', 'profissionais_sem_atendimento', 'turnos_sem_profissional'];
     ok(p.every((x, i) => igual(x.chips, chipsEsperados.map((k) => [rot(k), String(comp.dados.linhas[i][k])]))), 'painel: chips com os rótulos das colunas do contrato e os valores');
+    ok(p.every((x) => igual(x.chips.slice(-2).map(([k]) => k), ['Profissionais sem atendimento', 'Turnos sem profissional'])),
+      'painel: chips "Profissionais sem atendimento" e "Turnos sem profissional" (rótulos do exemplo oficial)');
     const botaoTabela = r.comparativo.tela.match(/<button[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"[^>]*>Ver tabela completa<\/button>/);
     ok(Boolean(botaoTabela) && r.comparativo.tela.includes(`id="${botaoTabela[1]}"`) && !r.comparativo.tela.includes('<table'), 'painel (tela): tabela completa recolhida atrás de "Ver tabela completa" (aria-expanded/aria-controls)');
     ok(!ruim(r.comparativo.tela) && !ruim(r.comparativo.pdf), 'painel: nenhum "NaN", "undefined", "null", "true" ou "false" na tela nem no PDF');
@@ -680,11 +701,12 @@ try {
     ok(pp?.length === 3 && pp.every((x) => x.chips.length === 0 && x.barras.length === 2) && pp[0].selo === 'Recomendado' && r.comparativo.pdf.includes('<thead>') && texto(r.comparativo.pdf).includes('Tabela completa') && !r.comparativo.pdf.includes('Ver tabela completa'),
       'painel (PDF): painel com barras e selo, sem chips (a tabela completa vem logo abaixo, sem botão)');
 
-    const novas = amostras.tabelaGenericaPanoramaComparativoColunasNovas;
-    const pn = painel(render([novas]));
-    const rotN = (k) => novas.dados.colunas.find((c) => c.chave === k).rotulo;
-    ok(pn?.every((x, i) => igual(x.chips.slice(-2), [[rotN('profissionais_sem_atendimento'), String(novas.dados.linhas[i].profissionais_sem_atendimento)], [rotN('turnos_sem_profissional'), String(novas.dados.linhas[i].turnos_sem_profissional)]])) && pn[0].chips.length === 6,
-      'painel com as colunas novas: dois chips a mais, com os rótulos do contrato');
+    const antigo = amostras.tabelaGenericaPanoramaComparativoSemCobertura;
+    const hAntigo = render([antigo]);
+    const pn = painel(hAntigo);
+    ok(antigo.dados.colunas.length === comp.dados.colunas.length - 2 && pn?.length === 3 &&
+      pn.every((x, i) => igual(x.chips, chipsEsperados.slice(0, 4).map((k) => [rot(k), String(comp.dados.linhas[i][k])]))) && !ruim(hAntigo),
+      'painel sem as colunas de cobertura (agente sem o deploy): só os quatro chips de antes, sem "undefined"');
 
     const varia = (linhas, extra = {}) => ({ ...comp, ...extra, dados: { ...comp.dados, linhas, ...(extra.dados ?? {}) } });
     const [l1, l2, l3] = comp.dados.linhas;
@@ -712,12 +734,16 @@ try {
   // --- Avisos recolhidos (mais de 4) ------------------------------------------------------------
   {
     const avisosComp = comparativoOficial.avisos;
-    ok(avisosComp.length === 7 && avisosOk(avisosComp, r.comparativo), 'comparativo (7 avisos): 3 na tela + "Ver mais 4 avisos"; todos no PDF em lista compacta');
-    const cinco = { ...comparativoOficial, avisos: avisosComp.slice(0, 5) };
+    const legenda = avisosComp.at(-1);
+    ok(avisosComp.length === 5 && avisosOk(avisosComp, r.comparativo) && texto(r.comparativo.tela).includes('Ver mais 2 avisos'),
+      'comparativo (5 avisos): 3 na tela + "Ver mais 2 avisos"; todos no PDF em lista compacta');
+    ok(/^Profissionais sem atendimento: .* Turnos sem profissional: /.test(legenda) && !texto(r.comparativo.tela).includes(legenda) && texto(r.comparativo.pdf).includes(legenda),
+      'comparativo: a legenda das colunas de cobertura é o último aviso, recolhida na tela e listada no PDF');
+    const seis = { ...comparativoOficial, avisos: [...avisosComp, 'Aviso fictício a mais.'] };
     const quatro = { ...comparativoOficial, avisos: avisosComp.slice(0, 4) };
-    const h5 = { tela: render([cinco]), pdf: render([cinco], PrintReport) };
+    const h6 = { tela: render([seis]), pdf: render([seis], PrintReport) };
     const h4 = { tela: render([quatro]), pdf: render([quatro], PrintReport) };
-    ok(avisosOk(cinco.avisos, h5) && texto(h5.tela).includes('Ver mais 2 avisos'), '5 avisos: "Ver mais 2 avisos"');
+    ok(avisosOk(seis.avisos, h6) && texto(h6.tela).includes('Ver mais 3 avisos'), '6 avisos: "Ver mais 3 avisos"');
     ok(avisosOk(quatro.avisos, h4) && !h4.pdf.includes(css.noticeList), '4 avisos: todos em caixas, sem botão nem lista compacta');
     const repetidos = { ...comparativoOficial, avisos: ['Aviso fictício igual.', 'Aviso fictício igual.', 'Outro.', 'Outro.', 'Mais um.'] };
     ok((render([repetidos], PrintReport).match(/<li>/g) || []).length === 5, 'avisos repetidos não somem (chave pela posição)');
