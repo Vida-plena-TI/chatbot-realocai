@@ -48,7 +48,7 @@ try {
   const { PrintReport } = await server.ssrLoadModule('/src/reports/PrintReport.jsx');
   const amostras = await server.ssrLoadModule('/src/reports/sampleBlocks.js');
   const { agruparFaixas, subtotal } = await server.ssrLoadModule('/src/reports/Disponibilidade.jsx');
-  const { diaCompleto: diaCompletoSsr, formatarValor, int } = await server.ssrLoadModule('/src/reports/format.js');
+  const { diaCompleto: diaCompletoSsr, formatarValor, int, rotuloTipo } = await server.ssrLoadModule('/src/reports/format.js');
   const { gerarExcel } = await server.ssrLoadModule('/src/reports/localExport.js');
   const { agruparLinhas } = await server.ssrLoadModule('/src/reports/TabelaGenerica.jsx');
   // Exemplos OFICIAIS do agente (cópia sincronizada, dados fictícios): os nomes por profissional e
@@ -297,6 +297,12 @@ try {
 
   // --- periodo null: nada de "null"/"Invalid Date" nem separador sobrando; cartão alinhado --
   const css = await server.ssrLoadModule('/src/reports/reports.module.css').then((m) => m.default);
+  // Cartões compactos (celular) do modo plano: rótulo (strong) e pares [dt, dd].
+  const cartoesCompactos = (html) =>
+    [...html.matchAll(/class="[^"]*dayCard[^"]*"><strong>(.*?)<\/strong><dl[^>]*>(.*?)<\/dl>/g)].map(([, rot, dl]) => ({
+      rotulo: texto(rot).trim(),
+      pares: [...dl.matchAll(/<dt>(.*?)<\/dt><dd>(.*?)<\/dd>/g)].map((m) => [texto(m[1]).trim(), texto(m[2]).trim()]),
+    }));
   // Texto do cabeçalho do cartão (div headText): tipo, título e o subtítulo, se houver.
   const cabecalhos = (html) => [...html.matchAll(new RegExp(`<div class="${css.headText}">(.*?)</div>`, 'g'))].map((m) => m[1]);
   const subtitulos = (html) =>
@@ -585,9 +591,13 @@ try {
       ok(igual(cel.map((l) => l[iRec]), recEsperado), `comparativo (${onde}): coluna Recomendado ${JSON.stringify(cel.map((l) => l[iRec]))}`);
       ok(!/\b(true|false|null|undefined|NaN)\b/.test(texto(html)), `comparativo (${onde}): nenhum "true", "false", "null" ou "undefined"`);
     }
-    // Celular: "recomendado" é coluna de texto, então entra no rótulo do cartão (sem a palavra "Recomendado").
-    const cartoesComp = [...r.comparativo.tela.matchAll(/class="[^"]*dayCard[^"]*"><strong>(.*?)<\/strong>/g)].map((m) => texto(m[1]).trim());
-    ok(igual(cartoesComp, linhas.map((l, i) => `${l.cenario} · ${recEsperado[i]}`)), `comparativo (celular): cartões na ordem, com Sim/Não ${JSON.stringify(cartoesComp)}`);
+    // Celular: a coluna booleana sai do rótulo do cartão e aparece com o rótulo ("Recomendado: Sim").
+    const cartoesComp = cartoesCompactos(r.comparativo.tela);
+    ok(igual(cartoesComp.map((c) => c.rotulo), linhas.map((l) => l.cenario)), `comparativo (celular): rótulo do cartão só com o cenário ${JSON.stringify(cartoesComp.map((c) => c.rotulo))}`);
+    const recCel = cartoesComp.map((c) => c.pares.find(([k]) => k === 'Recomendado')?.join(': '));
+    ok(igual(recCel, recEsperado.map((v) => `Recomendado: ${v}`)), `comparativo (celular): ${JSON.stringify(recCel)}`);
+    ok(cartoesComp.every((c) => c.pares.length === colunas.length - 1) && !/\b(true|false|null|undefined|NaN)\b/.test(cartoesComp.flatMap((c) => c.pares.flat()).join(' ')),
+      'comparativo (celular): todas as colunas fora o cenário como "rótulo: valor", sem "true"/"null"/"undefined"');
     // Excel local: aba "Cenários", Sim/Não como texto; com os dois blocos, "Cenários (1)" e "Passos (2)".
     const xlsComp = await gerarExcel([comparativoOficial]).text();
     const linhasXlsComp = [...xlsComp.split('ss:Name="Cenários"')[1].split('</Worksheet>')[0].matchAll(/<Row>(.*?)<\/Row>/gs)].slice(1)
@@ -617,6 +627,35 @@ try {
     const cssBruto = readFileSync(new URL('../src/reports/reports.module.css', import.meta.url), 'utf8');
     ok(/\.printDoc \.dense thead\s*\{\s*display: table-header-group;/.test(cssBruto) && /\.printDoc \.specHead\s*\{\s*break-inside: avoid;/.test(cssBruto),
       'CSS de impressão: thead repetido em cada página e título do grupo que não quebra');
+  }
+  // --- Rótulos das abas e booleanos no celular (fix/panorama-rotulos) ----------------------------
+  {
+    const botoes = (html) => [...html.matchAll(/<button[^>]*role="tab"[^>]*>(.*?)<\/button>/g)].map(([b, t]) => ({ texto: texto(t).trim(), title: b.match(/ title="([^"]*)"/)?.[1] }));
+    const desesc = (t) => t?.replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&amp;/g, '&');
+    const par = botoes(r.panoramaPar.tela);
+    ok(igual(par.map((b) => b.texto), ['Comparativo de cenários', 'Passos do cenário recomendado']) && par.every((b) => desesc(b.title) === b.texto),
+      `abas do panorama com rótulos distintos, na ordem, com title ${JSON.stringify(par.map((b) => b.texto))}`);
+    const longo = amostras.tabelaGenericaPlanoSemanal;
+    const abasLongo = botoes(render([longo, comparativoOficial]));
+    ok(abasLongo[0]?.texto === longo.titulo && desesc(abasLongo[0]?.title) === longo.titulo && longo.titulo.length > 60, `título longo inteiro na aba e no title (${longo.titulo.length} caracteres; o corte é do CSS)`);
+    const vazios = [{ ...comparativoOficial, titulo: '' }, { ...comparativoOficial, titulo: '   ' }, (({ titulo: _t, ...b }) => b)(comparativoOficial), { ...comparativoOficial, titulo: null }];
+    const abasVazias = vazios.map((b) => botoes(render([b, panoramaOficial]))[0]);
+    ok(abasVazias.every((b) => b?.texto === 'Relatório' && b.title === 'Relatório'), `título vazio, só espaços, ausente ou null: aba "Relatório" ${JSON.stringify(abasVazias.map((b) => b?.texto))}`);
+    const misto = botoes(r.misto3);
+    ok(igual(misto.map((b) => b.texto), [rotuloTipo('convenio'), rotuloTipo('agenda_paciente')]) && misto.every((b) => b.texto !== amostras.agendaPaciente.titulo),
+      `outros tipos mantêm o rótulo de antes (só o tipo) ${JSON.stringify(misto.map((b) => b.texto))}`);
+    const cssTab = readFileSync(new URL('../src/reports/reports.module.css', import.meta.url), 'utf8').match(/\n\.tab \{([^}]*)\}/)?.[1] ?? '';
+    ok(/max-width:/.test(cssTab) && /overflow: hidden;/.test(cssTab) && /text-overflow: ellipsis;/.test(cssTab) && /white-space: nowrap;/.test(cssTab) && /flex-shrink: 0;/.test(cssTab),
+      'CSS da aba: largura máxima, reticências e sem quebra de linha (a barra rola na tela estreita)');
+    // abaixo_da_meta continua métrica: no celular com rótulo; com meta vira selo, sem meta "Sim"/"Não".
+    const rank = amostras.tabelaGenericaRanking;
+    const rotuloMeta = rank.dados.colunas.find((c) => c.chave === 'abaixo_da_meta').rotulo;
+    const linhasCel = (html) => cartoesCompactos(html).filter((c) => c.rotulo !== 'Total');
+    const semMetaCel = linhasCel(r.metaNulaRanking).map((c) => c.pares.find(([k]) => k === rotuloMeta)?.[1]);
+    ok(semMetaCel.length === rank.dados.linhas.length && igual(semMetaCel, rank.dados.linhas.map((l) => (l.abaixo_da_meta ? 'Sim' : 'Não'))), `abaixo_da_meta sem meta (celular): "${rotuloMeta}: Sim/Não"`);
+    const comMetaCel = linhasCel(r.ranking).map((c) => c.pares.find(([k]) => k === rotuloMeta)?.[1]);
+    ok(comMetaCel.length === rank.dados.linhas.length && comMetaCel.every((v) => v && !/^(Sim|Não)$/.test(v)) && linhasCel(r.ranking).every((c) => !/\b(Sim|Não)\b/.test(c.rotulo)),
+      'abaixo_da_meta com meta (celular): selo com rótulo, nunca no rótulo do cartão');
   }
   // Pergunta do plano de realocação (sem agrupar_por): modo plano, todas as linhas, sem null.
   {
