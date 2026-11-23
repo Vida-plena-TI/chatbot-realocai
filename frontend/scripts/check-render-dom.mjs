@@ -123,6 +123,15 @@ try {
   ok(fragmentos(panorama.el).length === 5, 'panorama: as 5 mensagens continuam montadas');
   ok(doisCartoes(p1) && p1.includes(comp.titulo) && p1.includes('Cenário 3 · menos mudança') && p1.includes('Sim') && !/\b(true|false)\b/.test(p1) && !p1.includes('Não foi possível'),
     'panorama: dois blocos na mesma mensagem, 1ª aba com o comparativo e Recomendado como Sim/Não');
+  // Abas com o título de cada bloco (antes, as duas eram "Relatório"); celular com "Recomendado".
+  const abas = (no) => [
+    ...(no.getAttribute?.('role') === 'tab' ? [{ texto: no.textContent, title: no.getAttribute('title') }] : []),
+    ...[...(no.childNodes ?? [])].flatMap(abas),
+  ];
+  const abasP1 = abas(panorama.el.childNodes[0].childNodes[0]);
+  ok(JSON.stringify(abasP1.map((a) => [a.texto, a.title])) === JSON.stringify([['Comparativo de cenários', 'Comparativo de cenários'], ['Passos do cenário recomendado', 'Passos do cenário recomendado']]),
+    `panorama: abas com os títulos dos dois blocos e title (${abasP1.map((a) => a.texto).join(' | ')})`);
+  ok(p1.includes('RecomendadoSim') && p1.includes('RecomendadoNão'), 'panorama: cartão compacto com "Recomendado" e o valor');
   ok(doisCartoes(p2) && p2.includes('Não foi possível mostrar este relatório.') && p2.includes(comp.titulo) && !/TypeError|Cannot read/.test(p2),
     'panorama: comparativo quebrado vira "não foi possível mostrar"; abas e "Exportar todos" continuam');
   ok(doisCartoes(p3) && p3.includes(comp.titulo) && !p3.includes('Não foi possível'), 'panorama: passos quebrados na 2ª aba não afetam o comparativo');

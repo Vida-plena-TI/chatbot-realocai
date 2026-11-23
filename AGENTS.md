@@ -135,11 +135,14 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   No detalhe de outro cenário, o título pode vir "Passos do Cenário N (apenas o que difere do Cenário
   1)" e os números de passo podem ter saltos (fixture `tabelaGenericaPanoramaPassosDetalhe`). A aba
   "Resumo dos cenários" saiu. Usa o modo agrupado e o modo plano existentes, sem código próprio.
-  Pendências de UX (abas com o mesmo rótulo "Relatório"; "Recomendado" sem rótulo no celular) em
-  `frontend/docs/relatorios.md`.
+  As abas mostram o título de cada bloco ("Comparativo de cenários", "Passos do cenário
+  recomendado") e o celular mostra "Recomendado: Sim/Não" (ver abaixo).
 - **Booleano em coluna `"texto"`:** `true`/`false` do JSON vira "Sim"/"Não" na tela, no PDF, no Excel
   local e no Excel do backend; a string `"true"` fica como veio (`formatarValor`/`simNao` em
-  `format.js`, `celula` em `localExport.js`, `_as_text` em `reports/excel.py`).
+  `format.js`, `celula` em `localExport.js`, `_as_text` em `reports/excel.py`). No cartão compacto
+  (celular), coluna booleana aparece com o rótulo ("Recomendado: Sim"), fora do rótulo do cartão.
+- **Rótulo da aba** (`tituloAba`): `tabela_generica` usa o `titulo` do bloco (vazio/ausente →
+  "Relatório"), cortado com reticências pelo CSS e inteiro no `title`; os outros tipos não mudam.
 - Os blocos (componentes, `src/reports/types.js` e fixtures) seguem os nomes de campo dos
   exemplos reais do RealocAI, sem camada de adaptação; `npm run check:blocks` valida as
   fixtures de `sampleBlocks.js` contra os campos obrigatórios do contrato real (só lê
