@@ -157,7 +157,9 @@ export function ReportError({ onRetry }) {
 /**
  * Cartão de relatório: cabeçalho, corpo do tipo, avisos e exportação.
  * `impressao`: versão do PDF, sem exportação nem controles. `texto`: destaque da mensagem, vai para o PDF.
- * @param {{bloco: import('./types').Bloco, texto?: string, exportavel?: boolean, expandido?: boolean, impressao?: boolean, onExpand?: () => void}} props
+ * `blocosResposta`: todos os blocos da resposta, quando ela tem mais de um (abas). O PDF do cartão
+ * imprime todos, na ordem; o Excel do cartão continua só com este bloco.
+ * @param {{bloco: import('./types').Bloco, blocosResposta?: import('./types').Bloco[], texto?: string, exportavel?: boolean, expandido?: boolean, impressao?: boolean, onExpand?: () => void}} props
  */
 export function ReportCard(props) {
   return (
@@ -167,7 +169,7 @@ export function ReportCard(props) {
   );
 }
 
-function Cartao({ bloco, texto, exportavel = true, expandido = false, impressao = false, onExpand }) {
+function Cartao({ bloco, blocosResposta, texto, exportavel = true, expandido = false, impressao = false, onExpand }) {
   const Corpo = CORPOS[bloco.tipo];
   const h = cabecalho(bloco);
   const semDados = vazio(bloco);
@@ -215,12 +217,19 @@ function Cartao({ bloco, texto, exportavel = true, expandido = false, impressao 
         <Notice key={a}>{a}</Notice>
       ))}
 
-      {exportavel && !impressao && Corpo && !semDados && <ExportBar blocos={[bloco]} texto={texto} />}
+      {exportavel && !impressao && Corpo && !semDados && (
+        <ExportBar
+          blocos={[bloco]}
+          blocosPdf={blocosResposta?.length > 1 ? blocosResposta : [bloco]}
+          texto={texto}
+          pergunta={blocosResposta?.length > 1 ? `Exportar? O PDF inclui os ${blocosResposta.length} relatórios desta resposta; o Excel, só este.` : undefined}
+        />
+      )}
     </section>
   );
 }
 
-export function ReportModal({ bloco, texto, onClose }) {
+export function ReportModal({ bloco, blocosResposta, texto, onClose }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
@@ -235,7 +244,7 @@ export function ReportModal({ bloco, texto, onClose }) {
     <div className={s.backdrop} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={s.modal} role="dialog" aria-modal="true" aria-label={bloco.titulo}>
         <IconButton className={s.modalClose} label="Fechar" icon={X} onClick={onClose} autoFocus />
-        <ReportCard bloco={bloco} texto={texto} expandido />
+        <ReportCard bloco={bloco} blocosResposta={blocosResposta} texto={texto} expandido />
       </div>
     </div>,
     document.body,

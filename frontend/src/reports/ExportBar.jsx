@@ -6,9 +6,12 @@ import { exportarBlocos } from './exporters';
 const NOME = { pdf: 'PDF', excel: 'Excel' };
 
 /**
- * @param {{blocos: import('./types').Bloco[], texto?: string, pergunta?: string, compact?: boolean}} props
+ * `blocosPdf` (opcional): o que o PDF imprime, quando difere do Excel. No cartão de uma resposta
+ * com várias abas, o PDF sai com todos os blocos da resposta (a tela só monta a aba ativa) e o
+ * Excel só com o bloco do cartão.
+ * @param {{blocos: import('./types').Bloco[], blocosPdf?: import('./types').Bloco[], texto?: string, pergunta?: string, compact?: boolean}} props
  */
-export function ExportBar({ blocos, texto, pergunta = 'Deseja exportar este relatório?' }) {
+export function ExportBar({ blocos, blocosPdf = blocos, texto, pergunta = 'Deseja exportar este relatório?' }) {
   const [estado, setEstado] = useState({ fase: 'ocioso', formato: null, arquivo: '' });
   const ativo = useRef(false);
 
@@ -17,7 +20,7 @@ export function ExportBar({ blocos, texto, pergunta = 'Deseja exportar este rela
     ativo.current = true;
     setEstado({ fase: 'gerando', formato, arquivo: '' });
     try {
-      const r = await exportarBlocos(blocos, formato, { texto });
+      const r = await exportarBlocos(formato === 'pdf' ? blocosPdf : blocos, formato, { texto });
       setEstado({ fase: 'concluido', formato, arquivo: r.arquivo, impressao: r.impressao });
     } catch {
       setEstado({ fase: 'erro', formato, arquivo: '' });

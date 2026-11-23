@@ -140,6 +140,45 @@ try {
   ok(p5.includes('Cenário 1 · equilibrado · libera 3 turnos (4 passos)') && p5.includes(passos.titulo) && !p5.includes('Não foi possível'), 'panorama: cartão de passos com o título do grupo em um nível');
   flushSync(() => panorama.root.unmount());
 
+  // Impressão das abas: a tela só monta a aba ativa, então o PDF do cartão precisa levar todos os
+  // blocos da resposta (na ordem); o Excel do cartão continua só com o bloco dele. O clique usa as
+  // props que o React grava no nó (o DOM mínimo não tem eventos) e api.exportReports é trocado por um
+  // registro (nada é impresso nem enviado).
+  const { api } = await server.ssrLoadModule('/src/api/client.js');
+  const exportOriginal = api.exportReports;
+  const chamadas = [];
+  api.exportReports = async ({ blocos, formato }) => {
+    chamadas.push({ formato, titulos: blocos.map((b) => b.titulo) });
+    return formato === 'pdf' ? { impressao: true } : { blob: new Blob(['x']), arquivo: 'x.xlsx' };
+  };
+  const botoesDe = (no, rotulo) => [
+    ...(no.tagName === 'BUTTON' && no.textContent === rotulo ? [no] : []),
+    ...[...(no.childNodes ?? [])].flatMap((c) => botoesDe(c, rotulo)),
+  ];
+  const clicar = async (botao) => {
+    const props = botao[Object.keys(botao).find((k) => k.startsWith('__reactProps$'))];
+    props.onClick();
+    await new Promise((r) => setTimeout(r, 0));
+  };
+  const urlOriginal = globalThis.URL.createObjectURL;
+  globalThis.URL.createObjectURL = () => 'blob:x';
+  const exp = montar([msg('e1', 'assistant', 'Panorama.', [comp, passos]), msg('e2', 'assistant', 'Só os passos.', [passos])]);
+  const [m1, m2] = exp.el.childNodes[0].childNodes;
+  const [pdfCartao, pdfGrupo] = botoesDe(m1, 'PDF');
+  await clicar(pdfCartao);
+  await clicar(botoesDe(m1, 'Excel')[0]);
+  await clicar(pdfGrupo);
+  await clicar(botoesDe(m2, 'PDF')[0]);
+  const ambos = [comp.titulo, passos.titulo];
+  ok(JSON.stringify(chamadas[0]) === JSON.stringify({ formato: 'pdf', titulos: ambos }), `impressão: PDF do cartão (aba ativa) leva os 2 blocos da resposta, na ordem ${JSON.stringify(chamadas[0]?.titulos)}`);
+  ok(JSON.stringify(chamadas[1]) === JSON.stringify({ formato: 'excel', titulos: [comp.titulo] }), 'impressão: Excel do cartão continua só com o bloco do cartão');
+  ok(JSON.stringify(chamadas[2]) === JSON.stringify({ formato: 'pdf', titulos: ambos }), 'impressão: "Exportar os 2 juntos" continua com os 2 blocos');
+  ok(JSON.stringify(chamadas[3]) === JSON.stringify({ formato: 'pdf', titulos: [passos.titulo] }) && !m2.textContent.includes('O PDF inclui'), 'impressão: resposta com 1 bloco imprime só ele, com a pergunta de antes');
+  ok(m1.textContent.includes('O PDF inclui os 2 relatórios desta resposta'), 'impressão: o cartão avisa que o PDF inclui os 2 relatórios');
+  flushSync(() => exp.root.unmount());
+  api.exportReports = exportOriginal;
+  globalThis.URL.createObjectURL = urlOriginal;
+
   Object.assign(console, originais);
   if (process.env.DEBUG_DOM) saida.forEach((l) => process.stdout.write(`--- ${l.slice(0, 160)}\n`));
   // O React (dev) avisa que um boundary capturou um erro, com a pilha de componentes.
