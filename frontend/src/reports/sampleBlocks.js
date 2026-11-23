@@ -627,26 +627,18 @@ export const tabelaGenericaPanoramaPassosDetalhe = {
 };
 
 /**
- * Comparativo com as duas colunas numéricas opcionais que o agente vai acrescentar
- * (profissionais_sem_atendimento e turnos_sem_profissional). Valores fictícios; o resto é o
- * exemplo oficial. A visão do panorama mostra as duas como chips, com os rótulos das colunas.
+ * Comparativo na forma anterior ao PR #21 do agente, sem as colunas opcionais
+ * profissionais_sem_atendimento e turnos_sem_profissional (o exemplo oficial já as traz). Cobre
+ * respostas de um agente ainda sem o deploy: o painel mostra só os outros quatro chips.
  */
-const COLUNAS_NOVAS = [
-  { chave: 'profissionais_sem_atendimento', rotulo: 'Profissionais sem atendimento', formato: 'inteiro' },
-  { chave: 'turnos_sem_profissional', rotulo: 'Turnos sem profissional', formato: 'inteiro' },
-];
-const valoresNovos = [
-  [0, 2],
-  [1, 2],
-  [0, 1],
-];
-const comColunasNovas = (linhas) => linhas.map((l, i) => ({ ...l, profissionais_sem_atendimento: valoresNovos[i][0], turnos_sem_profissional: valoresNovos[i][1] }));
-export const tabelaGenericaPanoramaComparativoColunasNovas = {
+const COLUNAS_COBERTURA = ['profissionais_sem_atendimento', 'turnos_sem_profissional'];
+const semCobertura = (t) => ({
+  ...t,
+  colunas: t.colunas.filter((c) => !COLUNAS_COBERTURA.includes(c.chave)),
+  linhas: t.linhas.map((l) => Object.fromEntries(Object.entries(l).filter(([k]) => !COLUNAS_COBERTURA.includes(k)))),
+});
+export const tabelaGenericaPanoramaComparativoSemCobertura = {
   ...tabelaGenericaPanoramaComparativo,
-  dados: {
-    ...tabelaGenericaPanoramaComparativo.dados,
-    colunas: [...tabelaGenericaPanoramaComparativo.dados.colunas, ...COLUNAS_NOVAS],
-    linhas: comColunasNovas(tabelaGenericaPanoramaComparativo.dados.linhas),
-  },
-  tabelas: tabelaGenericaPanoramaComparativo.tabelas.map((t) => ({ ...t, colunas: [...t.colunas, ...COLUNAS_NOVAS], linhas: comColunasNovas(t.linhas) })),
+  dados: semCobertura(tabelaGenericaPanoramaComparativo.dados),
+  tabelas: tabelaGenericaPanoramaComparativo.tabelas.map(semCobertura),
 };

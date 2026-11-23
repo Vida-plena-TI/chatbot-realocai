@@ -192,18 +192,18 @@ try {
   api.exportReports = exportOriginal;
   globalThis.URL.createObjectURL = urlOriginal;
 
-  // Avisos: com 7, a tela abre com 3 e "Ver mais 4 avisos" (aria-expanded false); clicar mostra
+  // Avisos: com 5, a tela abre com 3 e "Ver mais 2 avisos" (aria-expanded false); clicar mostra
   // todos e troca para "Ver menos avisos" (aria-expanded true); clicar de novo recolhe.
   const av = montar([msg('v1', 'assistant', 'Comparativo.', [comp])]);
-  const verMais = () => botoesDe(av.el, 'Ver mais 4 avisos')[0] ?? botoesDe(av.el, 'Ver menos avisos')[0];
+  const verMais = () => botoesDe(av.el, 'Ver mais 2 avisos')[0] ?? botoesDe(av.el, 'Ver menos avisos')[0];
   const visiveis = () => comp.avisos.filter((a) => av.el.textContent.includes(a)).length;
   const antes = [visiveis(), verMais()?.getAttribute('aria-expanded'), verMais()?.textContent];
   await clicar(verMais());
   const aberto = [visiveis(), verMais()?.getAttribute('aria-expanded'), verMais()?.textContent];
   await clicar(verMais());
   const fechado = [visiveis(), verMais()?.getAttribute('aria-expanded')];
-  ok(JSON.stringify(antes) === JSON.stringify([3, 'false', 'Ver mais 4 avisos']) && JSON.stringify(aberto) === JSON.stringify([7, 'true', 'Ver menos avisos']) && JSON.stringify(fechado) === JSON.stringify([3, 'false']),
-    `avisos: 3 → "Ver mais 4 avisos" → 7 (aria-expanded true) → 3 ${JSON.stringify([antes, aberto, fechado])}`);
+  ok(JSON.stringify(antes) === JSON.stringify([3, 'false', 'Ver mais 2 avisos']) && JSON.stringify(aberto) === JSON.stringify([5, 'true', 'Ver menos avisos']) && JSON.stringify(fechado) === JSON.stringify([3, 'false']),
+    `avisos: 3 → "Ver mais 2 avisos" → 5 (aria-expanded true) → 3 ${JSON.stringify([antes, aberto, fechado])}`);
   flushSync(() => av.root.unmount());
 
   Object.assign(console, originais);

@@ -1,5 +1,5 @@
 // Exemplo real de bloco do RealocAI, copiado sem alteração. Dados FICTÍCIOS.
-// Origem: Vida-plena-TI/reallocaai-agente @ eccc4c8292c001b8b1d7e0a60f95d5943d3e3e04 (main)
+// Origem: Vida-plena-TI/reallocaai-agente @ 610f663303ea5ae1dffcee5d93ce99004e902888 (main)
 // Arquivo: docs/exemplos-blocos/tabela_generica_ranking.json. Atualize com scripts/sync-contrato.mjs; não edite à mão.
 export default {
   "versao": 1,
