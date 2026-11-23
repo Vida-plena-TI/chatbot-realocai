@@ -112,7 +112,7 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   exemplo oficial (`check:blocks` compara; especialidade ausente = `"—"`, como o agente manda);
   detalhes em `frontend/docs/relatorios.md`.
 - **Contrato sincronizado** (`src/reports/contrato/`, gerado por `npm run sync:contrato`; nunca
-  editar à mão) com `Vida-plena-TI/reallocaai-agente` @ `eccc4c8` (main, PR #20). `check:blocks`
+  editar à mão) com `Vida-plena-TI/reallocaai-agente` @ `610f663` (main, PR #21). `check:blocks`
   valida fixtures e exemplos oficiais contra o schema completo. O sync também copia a resposta
   completa de exemplo do panorama (`contrato/respostas/panorama_enxugamento.js`, tirada do bloco
   `<!-- exemplo-resposta-panorama -->` de `docs/api-relatorios.md` do agente; cópia no backend em
@@ -122,8 +122,8 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   (`agrupar_por: ["opcao"]`, unidade passo/passos) e pergunta de nome ambíguo (modo plano), ambos
   com `periodo`/`meta` `null`. Usa o modo agrupado existente, sem código próprio: título
   "Opção 1 (3 passos)", o formato que a documentação do agente adotou (commit `08245ae`).
-- **Panorama de enxugamento** (`tabela_generica`, `dados.relatorio: "panorama_enxugamento"`, PR #18
-  e PR #20 do agente; restrito à coordenação): a resposta traz **dois blocos `tabela_generica`**, nesta
+- **Panorama de enxugamento** (`tabela_generica`, `dados.relatorio: "panorama_enxugamento"`, PR #18,
+  #20 e #21 do agente; restrito à coordenação): a resposta traz **dois blocos `tabela_generica`**, nesta
   ordem, ambos com o mesmo `relatorio`, `contem_dados_pacientes: true` e `periodo`/`meta` `null`, e
   `resposta_sensivel: true`; um cartão por bloco (duas abas), cada um com o seu resumo. (1)
   **Comparativo** ("Comparativo de cenários"): uma linha por cenário, só números, sem `agrupar_por`
@@ -132,7 +132,9 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   colunas `cenario`, `turnos_liberados`, `passos` e `pacientes_movidos`; senão, a tabela comum): selo
   "Recomendado" só com `true`, destaque por borda/fundo, barras em CSS puro na escala do maior valor
   com o número ao lado, chips com os rótulos do contrato (inclui `profissionais_sem_atendimento` e
-  `turnos_sem_profissional` quando vierem) e a tabela atrás de "Ver tabela completa"; no PDF, painel
+  `turnos_sem_profissional`, colunas inteiras entre `trocam_de_dia` e `passos_iguais_ao_recomendado`
+  desde o PR #21, também no Excel; sem elas, só os outros chips) e a tabela atrás de "Ver tabela
+  completa"; avisos só gerais (5 no exemplo, o último é a legenda das duas colunas); no PDF, painel
   sem chips + tabela. (2)
   **Passos** ("Passos do cenário recomendado"; **nomes de pacientes e de profissionais, sensível de
   RH**): agrupamento em **um nível** (`agrupar_por: ["cenario"]`, unidade passo/passos), título

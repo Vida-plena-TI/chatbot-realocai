@@ -56,8 +56,8 @@ Aditivos na versão 1 do contrato. A fonte da verdade é o repositório do agent
 `EXEMPLOS` em `scripts/sync-contrato.mjs`) para `src/reports/contrato/` sem alterar aquele
 repositório, e `npm run sync:contrato -- --check` confere se a cópia está em dia.
 
-**Contrato sincronizado** com `Vida-plena-TI/reallocaai-agente` @ `eccc4c8292c001b8b1d7e0a60f95d5943d3e3e04`
-(main, merge do PR #20, panorama em dois blocos): schema com `dados.agrupar_por`, `dados.unidade_grupo` e
+**Contrato sincronizado** com `Vida-plena-TI/reallocaai-agente` @ `610f663303ea5ae1dffcee5d93ce99004e902888`
+(main, merge do PR #21, colunas de cobertura no comparativo do panorama): schema com `dados.agrupar_por`, `dados.unidade_grupo` e
 `contem_dados_pacientes` no nível do bloco (igual ao do PR #15); exemplos oficiais incluindo
 `tabela_generica_pacientes_por_plano`, `tabela_generica_pacientes_por_profissional_nomes`,
 `tabela_generica_plano_realocacao`, `tabela_generica_plano_realocacao_pergunta`,
@@ -142,8 +142,8 @@ também copia a **resposta completa** de exemplo do panorama (bloco json marcado
   - **Pergunta** ("Plano de realocação: qual paciente?", nome ambíguo): sem agrupamento, modo
     plano; colunas `candidata`, `paciente` ("Nome"), `terapia`, `profissional`, `dias`. Excel: aba
     "Candidatas".
-- **Panorama de enxugamento (`tabela_generica`, `dados.relatorio: "panorama_enxugamento"`, PR #18 e
-  PR #20 do agente):** cenários de movimentação que liberam turnos com presença paga na grade
+- **Panorama de enxugamento (`tabela_generica`, `dados.relatorio: "panorama_enxugamento"`, PR #18,
+  PR #20 e PR #21 do agente):** cenários de movimentação que liberam turnos com presença paga na grade
   semanal vigente (tool `planejar_enxugamento`, só pelo chat; nada muda na planilha). Desde
   2026-11-23 a resposta traz **dois blocos `tabela_generica`, nesta ordem**, os dois com o mesmo
   `relatorio`, `contem_dados_pacientes: true`, `periodo`/`meta` `null`, `total` `{}`, e a resposta
@@ -156,8 +156,14 @@ também copia a **resposta completa** de exemplo do panorama (bloco json marcado
   1. **Comparativo** ("Comparativo de cenários"): uma linha por cenário, só números, **sem
      `agrupar_por`** (modo plano). Colunas `cenario` (texto, "Cenário 1 · equilibrado"),
      `turnos_liberados`, `passos`, `profissionais_afetadas`, `pacientes_movidos`,
-     `trocam_de_profissional`, `trocam_de_dia`, `passos_iguais_ao_recomendado` (inteiros) e
-     `recomendado` (booleano JSON em coluna `"texto"`: "Sim"/"Não"). Excel: aba **"Cenários"**.
+     `trocam_de_profissional`, `trocam_de_dia`, `profissionais_sem_atendimento` ("Profissionais sem
+     atendimento"), `turnos_sem_profissional` ("Turnos sem profissional"), `passos_iguais_ao_recomendado`
+     (inteiros) e `recomendado` (booleano JSON em coluna `"texto"`: "Sim"/"Não"). As duas colunas de
+     cobertura vieram no PR #21 do agente; resposta sem elas (agente anterior) continua válida: o painel
+     mostra só os outros chips e o Excel sai com duas colunas a menos. Excel: aba **"Cenários"**, com as
+     mesmas colunas, na ordem do contrato. **Avisos:** só os gerais (nenhum aviso por cenário); no
+     exemplo oficial são 5, e o último é a legenda das duas colunas de cobertura. A tela mostra 3 e
+     "Ver mais 2 avisos" (a legenda fica recolhida); o PDF lista os 5.
      - **Painel** (`PanoramaComparativo.jsx`, só com `relatorio === "panorama_enxugamento"` e as
        colunas `cenario`, `turnos_liberados`, `passos` e `pacientes_movidos`; sem elas, a tabela comum):
        uma linha por cenário com o nome, selo **"Recomendado"** (texto + ícone, só com o booleano JSON
@@ -165,8 +171,9 @@ também copia a **resposta completa** de exemplo do panorama (bloco json marcado
        cor); barras horizontais em CSS puro de "Turnos liberados" e "Pacientes movidos", cada uma na
        escala do maior valor entre os cenários, com o número escrito ao lado e `role="img"`
        (valor ausente/não numérico: "—" e barra vazia; máximo 0: barras vazias); chips com passos,
-       profissionais afetadas, trocam de profissional, trocam de dia e, quando as colunas existirem,
-       `profissionais_sem_atendimento` e `turnos_sem_profissional`, sempre com o `rotulo` da coluna.
+       profissionais afetadas, trocam de profissional, trocam de dia, profissionais sem atendimento e
+       turnos sem profissional (as duas últimas só quando as colunas existem), sempre com o `rotulo` da
+       coluna.
        `passos_iguais_ao_recomendado` fica só na tabela. A tabela completa fica atrás de "Ver tabela
        completa" (`aria-expanded`). No celular as barras empilham na largura toda, sem rolagem lateral.
      - **PDF do painel:** o painel (nome, selo, barras) e, abaixo, a tabela completa. Os chips **não**
@@ -174,8 +181,8 @@ também copia a **resposta completa** de exemplo do panorama (bloco json marcado
        é uma borda (`border-top`), que os navegadores imprimem mesmo sem "gráficos de fundo", com
        `print-color-adjust: exact`; o número escrito é o fallback.
      - Error boundary próprio: se o painel quebrar, aparece a tabela comum; se ela também quebrar,
-       o "não foi possível mostrar" do cartão. Fixture `tabelaGenericaPanoramaComparativoColunasNovas`
-       (colunas opcionais, valores fictícios).
+       o "não foi possível mostrar" do cartão. Fixture `tabelaGenericaPanoramaComparativoSemCobertura`
+       (exemplo oficial sem as duas colunas de cobertura, a forma anterior ao PR #21).
   2. **Passos** ("Passos do cenário recomendado"): agrupamento em **um nível**, `agrupar_por:
      ["cenario"]`, `unidade_grupo: {"singular": "passo", "plural": "passos"}`. Colunas `cenario`
      ("Cenário 1 · equilibrado · libera 3 turnos", sem o código interno), `turno_liberado`, `passo`
