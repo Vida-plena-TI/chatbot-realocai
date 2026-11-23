@@ -42,6 +42,16 @@ try {
     return { el, root };
   };
   const msg = (id, role, content, blocos) => ({ id, role, content, created_at: '2026-10-27T13:00:00Z', ...(blocos && { blocos }) });
+  // Clique sem eventos no DOM mínimo: chama o onClick que o React grava nas props do nó.
+  const botoesDe = (no, rotulo) => [
+    ...(no.tagName === 'BUTTON' && no.textContent === rotulo ? [no] : []),
+    ...[...(no.childNodes ?? [])].flatMap((c) => botoesDe(c, rotulo)),
+  ];
+  const clicar = async (botao) => {
+    const props = botao[Object.keys(botao).find((k) => k.startsWith('__reactProps$'))];
+    props.onClick();
+    await new Promise((r) => setTimeout(r, 0));
+  };
   const fragmentos = (el) => [...(el.childNodes[0]?.childNodes ?? [])].map((n) => n.textContent ?? '');
 
   const saida = [];
@@ -109,7 +119,9 @@ try {
   // é testada numa mensagem própria; o histórico usa o mesmo MessageBubble.
   const comp = amostras.tabelaGenericaPanoramaComparativo;
   const passos = amostras.tabelaGenericaPanoramaPassos;
-  const compQuebrado = { ...comp, dados: { ...comp.dados, linhas: [null, ...comp.dados.linhas] } };
+  // Linha que lança erro ao ser lida: quebra o painel do comparativo e a tabela comum de reserva.
+  const linhaQuebrada = Object.defineProperty({}, 'cenario', { enumerable: true, get() { throw new Error('Paciente Fictício Quebrado'); } });
+  const compQuebrado = { ...comp, dados: { ...comp.dados, linhas: [linhaQuebrada, ...comp.dados.linhas] } };
   const passosQuebrado = { ...passos, dados: { ...passos.dados, linhas: [passos.dados.linhas[0], null] } };
   const panorama = montar([
     msg('p1', 'assistant', 'Panorama.', [comp, passos]),
@@ -121,8 +133,8 @@ try {
   const [p1 = '', p2 = '', p3 = '', p4 = '', p5 = ''] = fragmentos(panorama.el);
   const doisCartoes = (t) => t.includes('Exportar os 2 relatórios juntos?');
   ok(fragmentos(panorama.el).length === 5, 'panorama: as 5 mensagens continuam montadas');
-  ok(doisCartoes(p1) && p1.includes(comp.titulo) && p1.includes('Cenário 3 · menos mudança') && p1.includes('Sim') && !/\b(true|false)\b/.test(p1) && !p1.includes('Não foi possível'),
-    'panorama: dois blocos na mesma mensagem, 1ª aba com o comparativo e Recomendado como Sim/Não');
+  ok(doisCartoes(p1) && p1.includes(comp.titulo) && p1.includes('Cenário 3 · menos mudança') && p1.includes('Recomendado') && p1.includes('Ver tabela completa') && !/\b(true|false)\b/.test(p1) && !p1.includes('Não foi possível'),
+    'panorama: dois blocos na mesma mensagem, 1ª aba com o painel do comparativo (selo "Recomendado")');
   // Abas com o título de cada bloco (antes, as duas eram "Relatório"); celular com "Recomendado".
   const abas = (no) => [
     ...(no.getAttribute?.('role') === 'tab' ? [{ texto: no.textContent, title: no.getAttribute('title') }] : []),
@@ -131,14 +143,68 @@ try {
   const abasP1 = abas(panorama.el.childNodes[0].childNodes[0]);
   ok(JSON.stringify(abasP1.map((a) => [a.texto, a.title])) === JSON.stringify([['Comparativo de cenários', 'Comparativo de cenários'], ['Passos do cenário recomendado', 'Passos do cenário recomendado']]),
     `panorama: abas com os títulos dos dois blocos e title (${abasP1.map((a) => a.texto).join(' | ')})`);
-  ok(p1.includes('RecomendadoSim') && p1.includes('RecomendadoNão'), 'panorama: cartão compacto com "Recomendado" e o valor');
+  // "Ver tabela completa": abre a tabela (com o cartão compacto "Recomendado: Sim/Não") e recolhe de novo.
+  const msgPanorama = panorama.el.childNodes[0].childNodes[0];
+  const verTabela = botoesDe(msgPanorama, 'Ver tabela completa')[0];
+  const antesTabela = [verTabela?.getAttribute('aria-expanded'), msgPanorama.textContent.includes('RecomendadoSim')];
+  await clicar(verTabela);
+  const ocultar = botoesDe(msgPanorama, 'Ocultar tabela completa')[0];
+  const abertaTabela = [ocultar?.getAttribute('aria-expanded'), msgPanorama.textContent.includes('RecomendadoSim') && msgPanorama.textContent.includes('RecomendadoNão')];
+  await clicar(ocultar);
+  const fechadaTabela = [botoesDe(msgPanorama, 'Ver tabela completa')[0]?.getAttribute('aria-expanded'), msgPanorama.textContent.includes('RecomendadoSim')];
+  ok(JSON.stringify([antesTabela, abertaTabela, fechadaTabela]) === JSON.stringify([['false', false], ['true', true], ['false', false]]),
+    `panorama: "Ver tabela completa" abre a tabela (celular com "Recomendado: Sim/Não") e recolhe ${JSON.stringify([antesTabela, abertaTabela, fechadaTabela])}`);
   ok(doisCartoes(p2) && p2.includes('Não foi possível mostrar este relatório.') && p2.includes(comp.titulo) && !/TypeError|Cannot read/.test(p2),
-    'panorama: comparativo quebrado vira "não foi possível mostrar"; abas e "Exportar todos" continuam');
+    'panorama: comparativo quebrado (painel e tabela de reserva) vira "não foi possível mostrar"; abas e "Exportar todos" continuam');
   ok(doisCartoes(p3) && p3.includes(comp.titulo) && !p3.includes('Não foi possível'), 'panorama: passos quebrados na 2ª aba não afetam o comparativo');
   ok(doisCartoes(p4) && p4.includes('Não foi possível mostrar este relatório.') && !p4.includes('Paciente Ficticio') && !/TypeError|Cannot read/.test(p4),
     'panorama: passos quebrados na 1ª aba, sem nomes de pacientes nem texto da exceção');
   ok(p5.includes('Cenário 1 · equilibrado · libera 3 turnos (4 passos)') && p5.includes(passos.titulo) && !p5.includes('Não foi possível'), 'panorama: cartão de passos com o título do grupo em um nível');
   flushSync(() => panorama.root.unmount());
+
+  // Impressão das abas: a tela só monta a aba ativa, então o PDF do cartão precisa levar todos os
+  // blocos da resposta (na ordem); o Excel do cartão continua só com o bloco dele. O clique usa as
+  // props que o React grava no nó (o DOM mínimo não tem eventos) e api.exportReports é trocado por um
+  // registro (nada é impresso nem enviado).
+  const { api } = await server.ssrLoadModule('/src/api/client.js');
+  const exportOriginal = api.exportReports;
+  const chamadas = [];
+  api.exportReports = async ({ blocos, formato }) => {
+    chamadas.push({ formato, titulos: blocos.map((b) => b.titulo) });
+    return formato === 'pdf' ? { impressao: true } : { blob: new Blob(['x']), arquivo: 'x.xlsx' };
+  };
+  const urlOriginal = globalThis.URL.createObjectURL;
+  globalThis.URL.createObjectURL = () => 'blob:x';
+  const exp = montar([msg('e1', 'assistant', 'Panorama.', [comp, passos]), msg('e2', 'assistant', 'Só os passos.', [passos])]);
+  const [m1, m2] = exp.el.childNodes[0].childNodes;
+  const [pdfCartao, pdfGrupo] = botoesDe(m1, 'PDF');
+  await clicar(pdfCartao);
+  await clicar(botoesDe(m1, 'Excel')[0]);
+  await clicar(pdfGrupo);
+  await clicar(botoesDe(m2, 'PDF')[0]);
+  const ambos = [comp.titulo, passos.titulo];
+  ok(JSON.stringify(chamadas[0]) === JSON.stringify({ formato: 'pdf', titulos: ambos }), `impressão: PDF do cartão (aba ativa) leva os 2 blocos da resposta, na ordem ${JSON.stringify(chamadas[0]?.titulos)}`);
+  ok(JSON.stringify(chamadas[1]) === JSON.stringify({ formato: 'excel', titulos: [comp.titulo] }), 'impressão: Excel do cartão continua só com o bloco do cartão');
+  ok(JSON.stringify(chamadas[2]) === JSON.stringify({ formato: 'pdf', titulos: ambos }), 'impressão: "Exportar os 2 juntos" continua com os 2 blocos');
+  ok(JSON.stringify(chamadas[3]) === JSON.stringify({ formato: 'pdf', titulos: [passos.titulo] }) && !m2.textContent.includes('O PDF inclui'), 'impressão: resposta com 1 bloco imprime só ele, com a pergunta de antes');
+  ok(m1.textContent.includes('O PDF inclui os 2 relatórios desta resposta'), 'impressão: o cartão avisa que o PDF inclui os 2 relatórios');
+  flushSync(() => exp.root.unmount());
+  api.exportReports = exportOriginal;
+  globalThis.URL.createObjectURL = urlOriginal;
+
+  // Avisos: com 7, a tela abre com 3 e "Ver mais 4 avisos" (aria-expanded false); clicar mostra
+  // todos e troca para "Ver menos avisos" (aria-expanded true); clicar de novo recolhe.
+  const av = montar([msg('v1', 'assistant', 'Comparativo.', [comp])]);
+  const verMais = () => botoesDe(av.el, 'Ver mais 4 avisos')[0] ?? botoesDe(av.el, 'Ver menos avisos')[0];
+  const visiveis = () => comp.avisos.filter((a) => av.el.textContent.includes(a)).length;
+  const antes = [visiveis(), verMais()?.getAttribute('aria-expanded'), verMais()?.textContent];
+  await clicar(verMais());
+  const aberto = [visiveis(), verMais()?.getAttribute('aria-expanded'), verMais()?.textContent];
+  await clicar(verMais());
+  const fechado = [visiveis(), verMais()?.getAttribute('aria-expanded')];
+  ok(JSON.stringify(antes) === JSON.stringify([3, 'false', 'Ver mais 4 avisos']) && JSON.stringify(aberto) === JSON.stringify([7, 'true', 'Ver menos avisos']) && JSON.stringify(fechado) === JSON.stringify([3, 'false']),
+    `avisos: 3 → "Ver mais 4 avisos" → 7 (aria-expanded true) → 3 ${JSON.stringify([antes, aberto, fechado])}`);
+  flushSync(() => av.root.unmount());
 
   Object.assign(console, originais);
   if (process.env.DEBUG_DOM) saida.forEach((l) => process.stdout.write(`--- ${l.slice(0, 160)}\n`));

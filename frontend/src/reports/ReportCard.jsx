@@ -1,8 +1,8 @@
-import { Component, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CircleAlert, Maximize2, RotateCw, X } from 'lucide-react';
 import s from './reports.module.css';
-import { Notice } from './parts';
+import { Avisos, Notice, Seguro } from './parts';
 import { ExportBar } from './ExportBar';
 import { OcupacaoProfissional } from './OcupacaoProfissional';
 import { PacientesPorProfissional } from './PacientesPorProfissional';
@@ -67,15 +67,8 @@ const TEXTO_VAZIO = {
  * Error boundary: um erro ao desenhar fica contido e vira `fallback`; não derruba a conversa.
  * Não registra nada (nem o bloco nem a exceção) e o fallback não mostra conteúdo do bloco.
  */
-export class Seguro extends Component {
-  state = { erro: false };
-  static getDerivedStateFromError() {
-    return { erro: true };
-  }
-  render() {
-    return this.state.erro ? this.props.fallback : this.props.children;
-  }
-}
+// Error boundary dos cartões; fica em parts.jsx para os corpos também usarem (sem import circular).
+export { Seguro };
 
 const FALHA_CORPO = (
   <div className={s.stateBox}>
@@ -157,7 +150,9 @@ export function ReportError({ onRetry }) {
 /**
  * Cartão de relatório: cabeçalho, corpo do tipo, avisos e exportação.
  * `impressao`: versão do PDF, sem exportação nem controles. `texto`: destaque da mensagem, vai para o PDF.
- * @param {{bloco: import('./types').Bloco, texto?: string, exportavel?: boolean, expandido?: boolean, impressao?: boolean, onExpand?: () => void}} props
+ * `blocosResposta`: todos os blocos da resposta, quando ela tem mais de um (abas). O PDF do cartão
+ * imprime todos, na ordem; o Excel do cartão continua só com este bloco.
+ * @param {{bloco: import('./types').Bloco, blocosResposta?: import('./types').Bloco[], texto?: string, exportavel?: boolean, expandido?: boolean, impressao?: boolean, onExpand?: () => void}} props
  */
 export function ReportCard(props) {
   return (
@@ -167,7 +162,7 @@ export function ReportCard(props) {
   );
 }
 
-function Cartao({ bloco, texto, exportavel = true, expandido = false, impressao = false, onExpand }) {
+function Cartao({ bloco, blocosResposta, texto, exportavel = true, expandido = false, impressao = false, onExpand }) {
   const Corpo = CORPOS[bloco.tipo];
   const h = cabecalho(bloco);
   const semDados = vazio(bloco);
@@ -211,16 +206,21 @@ function Cartao({ bloco, texto, exportavel = true, expandido = false, impressao 
         </CorpoSeguro>
       )}
 
-      {bloco.avisos?.map((a) => (
-        <Notice key={a}>{a}</Notice>
-      ))}
+      <Avisos avisos={bloco.avisos} impressao={impressao} />
 
-      {exportavel && !impressao && Corpo && !semDados && <ExportBar blocos={[bloco]} texto={texto} />}
+      {exportavel && !impressao && Corpo && !semDados && (
+        <ExportBar
+          blocos={[bloco]}
+          blocosPdf={blocosResposta?.length > 1 ? blocosResposta : [bloco]}
+          texto={texto}
+          pergunta={blocosResposta?.length > 1 ? `Exportar? O PDF inclui os ${blocosResposta.length} relatórios desta resposta; o Excel, só este.` : undefined}
+        />
+      )}
     </section>
   );
 }
 
-export function ReportModal({ bloco, texto, onClose }) {
+export function ReportModal({ bloco, blocosResposta, texto, onClose }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
@@ -235,7 +235,7 @@ export function ReportModal({ bloco, texto, onClose }) {
     <div className={s.backdrop} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={s.modal} role="dialog" aria-modal="true" aria-label={bloco.titulo}>
         <IconButton className={s.modalClose} label="Fechar" icon={X} onClick={onClose} autoFocus />
-        <ReportCard bloco={bloco} texto={texto} expandido />
+        <ReportCard bloco={bloco} blocosResposta={blocosResposta} texto={texto} expandido />
       </div>
     </div>,
     document.body,

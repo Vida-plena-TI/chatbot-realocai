@@ -398,6 +398,24 @@
   background: var(--warn-bg);
   color: var(--warn-ink);
 }
+/* Mais de 4 avisos: o resto fica atrás de "Ver mais N avisos" (tela) ou numa lista compacta (PDF). */
+.noticeRest:empty {
+  display: none;
+}
+.noticeMore {
+  margin: -6px 18px 12px;
+}
+.noticeList {
+  margin: 0 18px 14px;
+  padding: 8px 12px 8px 28px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+.noticeList li + li {
+  margin-top: 2px;
+}
 
 /* Mapa de calor (pacientes): uma única cor, sem meta */
 .legend {
@@ -1336,4 +1354,123 @@
 }
 .printDoc .tlDays {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Panorama de enxugamento: comparativo de cenários (PanoramaComparativo.jsx). Barras em CSS puro:
+   o preenchimento é uma borda (sai na impressão mesmo sem "gráficos de fundo") e o número fica
+   escrito ao lado. O recomendado tem borda, fundo e o selo com texto (nunca só a cor). */
+.panList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px 18px 6px;
+  list-style: none;
+}
+.panItem {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  break-inside: avoid;
+}
+.panRec {
+  border: 2px solid var(--brand);
+  background: var(--mint);
+}
+.panHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 8px;
+}
+.panName {
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 900;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.panBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border: 1.5px solid var(--brand);
+  border-radius: var(--pill);
+  background: var(--surface);
+  color: var(--brand-ink);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.panBars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 18px;
+}
+.panBar {
+  display: grid;
+  grid-template-columns: minmax(0, 9.5em) minmax(0, 1fr) 2.5em;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.panBarLabel {
+  overflow-wrap: anywhere;
+}
+.panTrack {
+  height: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--pill);
+  background: var(--track);
+  overflow: hidden;
+}
+.panFill {
+  height: 0;
+  border-top: 10px solid var(--brand);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.panBarValue {
+  text-align: right;
+  color: var(--text);
+  font-weight: 900;
+}
+.panChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.panChip {
+  padding: 3px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--pill);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+}
+.panChip b {
+  color: var(--text);
+  font-weight: 900;
+}
+.panTable {
+  margin-top: 4px;
+}
+@container rpt (max-width: 600px) {
+  .panBars {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .panBar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .panBarLabel {
+    grid-column: 1 / -1;
+  }
 }

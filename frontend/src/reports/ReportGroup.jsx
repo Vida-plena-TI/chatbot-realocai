@@ -67,7 +67,7 @@ function Grupo({ blocos, texto }) {
       )}
 
       <div role={lista.length > 1 ? 'tabpanel' : undefined} id={`${id}-panel`} aria-labelledby={lista.length > 1 ? `${id}-tab-${ativo}` : undefined}>
-        <ReportCard key={ativo} bloco={atual} texto={texto} onExpand={() => abrir(atual)} />
+        <ReportCard key={ativo} bloco={atual} blocosResposta={lista} texto={texto} onExpand={() => abrir(atual)} />
       </div>
 
       {lista.length > 1 && (
@@ -76,7 +76,7 @@ function Grupo({ blocos, texto }) {
         </div>
       )}
 
-      {aberto && <ReportModal bloco={aberto} texto={texto} onClose={fechar} />}
+      {aberto && <ReportModal bloco={aberto} blocosResposta={lista} texto={texto} onClose={fechar} />}
     </div>
   );
 }

@@ -6,6 +6,15 @@ Mockups para revisão: `Relatorios realocAI.dc.html`, no projeto de design. O c�
 
 - A mensagem do assistente pode trazer `blocos` (de 1 a 10) além do `content`. O `content` deve ter de 1 a 3 frases de destaque; o cartão mostra o resto.
 - Com 1 bloco, o cartão aparece direto. Com 2 ou mais, os cartões ficam em **abas** (as setas ← → do teclado trocam a aba), e uma barra abaixo oferece **Exportar os N relatórios juntos**.
+  A tela só monta o cartão da aba ativa; por isso, com 2 ou mais blocos, o **PDF do próprio cartão**
+  (e do modal Expandir) imprime **todos os blocos da resposta**, na ordem, cada um com o seu título, e
+  a pergunta avisa ("O PDF inclui os N relatórios desta resposta; o Excel, só este"). O Excel do
+  cartão continua só com o bloco dele. Antes, o PDF do cartão saía só com a aba ativa (no panorama,
+  só o comparativo).
+- **Avisos:** até 4, todos em caixas. Com mais de 4, a tela mostra os 3 primeiros e o resto atrás de
+  "Ver mais N avisos" (botão, `aria-expanded`/`aria-controls`; "Ver menos avisos" recolhe); no PDF
+  saem todos numa lista compacta, uma linha cada (`.noticeList`). Vale para todo bloco (hoje: o
+  comparativo do panorama com 7, pacientes por plano com 7, nomes por profissional com 5).
 - O cartão se adapta à **largura do próprio container** (`@container`): até 600 px, usa cartões por dia; acima disso, usa tabela. O mesmo componente serve no widget (380 a 420 px) e na página.
 - **Expandir** abre o cartão num modal de até 1100 px de largura.
 - Enquanto o agente responde, um esqueleto do cartão aparece se a pergunta parecer um pedido de relatório (`pareceRelatorio`).
@@ -17,6 +26,8 @@ Mockups para revisão: `Relatorios realocAI.dc.html`, no projeto de design. O c�
 | `format.js` | `pct`, `dec1`, datas dd/mm, faixas, nome do arquivo |
 | `ReportGroup.jsx` | Abas, Exportar todos, modal |
 | `ReportCard.jsx` | Cabeçalho, avisos, estados (esqueleto, erro, vazio, parcial), exportação |
+| `parts.jsx` | Peças comuns: `Seguro` (error boundary), `Avisos`, `ResumoCards`, `Meter`, "Mostrar todas" |
+| `PanoramaComparativo.jsx` | Painel do comparativo do panorama de enxugamento (dentro de `TabelaGenerica`) |
 | `OcupacaoProfissional.jsx`, `PacientesPorProfissional.jsx`, `OcupacaoAgregada.jsx` | Corpo de cada tipo |
 | `Disponibilidade.jsx`, `Convenio.jsx`, `AgendaPaciente.jsx`, `QualidadeAgenda.jsx`, `TabelaGenerica.jsx` | Corpo dos tipos novos (ver [Tipos novos](#tipos-novos)) |
 | `contrato/` | Cópia do schema e dos 8 exemplos reais dos tipos novos (dados fictícios), com origem e commit do agente no cabeçalho |
@@ -147,6 +158,24 @@ também copia a **resposta completa** de exemplo do panorama (bloco json marcado
      `turnos_liberados`, `passos`, `profissionais_afetadas`, `pacientes_movidos`,
      `trocam_de_profissional`, `trocam_de_dia`, `passos_iguais_ao_recomendado` (inteiros) e
      `recomendado` (booleano JSON em coluna `"texto"`: "Sim"/"Não"). Excel: aba **"Cenários"**.
+     - **Painel** (`PanoramaComparativo.jsx`, só com `relatorio === "panorama_enxugamento"` e as
+       colunas `cenario`, `turnos_liberados`, `passos` e `pacientes_movidos`; sem elas, a tabela comum):
+       uma linha por cenário com o nome, selo **"Recomendado"** (texto + ícone, só com o booleano JSON
+       `true`; `"true"`, `1` ou ausente não contam) e destaque por borda de 2 px e fundo menta (não só
+       cor); barras horizontais em CSS puro de "Turnos liberados" e "Pacientes movidos", cada uma na
+       escala do maior valor entre os cenários, com o número escrito ao lado e `role="img"`
+       (valor ausente/não numérico: "—" e barra vazia; máximo 0: barras vazias); chips com passos,
+       profissionais afetadas, trocam de profissional, trocam de dia e, quando as colunas existirem,
+       `profissionais_sem_atendimento` e `turnos_sem_profissional`, sempre com o `rotulo` da coluna.
+       `passos_iguais_ao_recomendado` fica só na tabela. A tabela completa fica atrás de "Ver tabela
+       completa" (`aria-expanded`). No celular as barras empilham na largura toda, sem rolagem lateral.
+     - **PDF do painel:** o painel (nome, selo, barras) e, abaixo, a tabela completa. Os chips **não**
+       saem no PDF: repetiriam os números da tabela e alongariam o documento. O preenchimento da barra
+       é uma borda (`border-top`), que os navegadores imprimem mesmo sem "gráficos de fundo", com
+       `print-color-adjust: exact`; o número escrito é o fallback.
+     - Error boundary próprio: se o painel quebrar, aparece a tabela comum; se ela também quebrar,
+       o "não foi possível mostrar" do cartão. Fixture `tabelaGenericaPanoramaComparativoColunasNovas`
+       (colunas opcionais, valores fictícios).
   2. **Passos** ("Passos do cenário recomendado"): agrupamento em **um nível**, `agrupar_por:
      ["cenario"]`, `unidade_grupo: {"singular": "passo", "plural": "passos"}`. Colunas `cenario`
      ("Cenário 1 · equilibrado · libera 3 turnos", sem o código interno), `turno_liberado`, `passo`
@@ -200,6 +229,11 @@ também copia a **resposta completa** de exemplo do panorama (bloco json marcado
 
 - Faixas de ocupação: 80% ou mais (a meta do bloco) em verde, de 60% a 79% em âmbar e abaixo de 60% em vermelho. O selo sempre tem texto e ícone (✓ ou ↓).
 - **Pacientes por profissional não tem meta.** Por isso usa uma única cor, com 5 intensidades relativas ao maior valor do bloco, sem selos.
+- **Contraste (tokens atuais, tema claro, sobre `--surface`):** `--text` 13,3:1, `--muted` 5,6:1,
+  `--brand-text` 5,5:1; `--brand-ink` sobre `--mint` 8,3:1 (selo "Recomendado" e texto do destaque);
+  barra `--brand` sobre `--track` 4,6:1 (gráfico: mínimo 3:1). Atenção: `--faint` sobre branco dá
+  4,4:1, um pouco abaixo de 4,5:1 (não usar em texto pequeno); `--mint-line` (1,5:1) e `--teal` sobre
+  `--track` (2,8:1) não servem como único indicador.
 - Os números usam `tabular-nums`, alinhados à direita. As barras têm `role="img"` e um texto como "Terça: 68,4%, abaixo da meta". As tabelas usam `caption`/`th scope`, e o foco é visível em todos os botões.
 
 ## PDF
@@ -209,6 +243,7 @@ também copia a **resposta completa** de exemplo do panorama (bloco json marcado
 - **A4 paisagem**, margem de 10 mm: a área útil (277 mm ≈ 1047 px) ativa o layout largo de tabela (> 600 px), como no Expandir. `print-color-adjust: exact` mantém barras, selos e fundos.
 - **Ocupação agregada:** sem as abas Especialidade/Sala, os dois agrupamentos saem um depois do outro. Detalhes recolhidos (salas por dia) não entram.
 - **Tipos novos:** tabelas inteiras (fonte menor, texto quebra em vez de cortar coluna), `thead` repetido, linhas, dias da agenda e cartões sem quebra no meio; sem "Mostrar todas".
+- **Respostas com abas:** o PDF do cartão leva todos os blocos da resposta (ver "Como funciona").
 - Cada bloco começa numa página nova, com o cabeçalho de registro (logo, "Vida Plena · Espaço Multidisciplinar", "Gerado em dd/mm/aaaa às hh:mm"). O texto de destaque da mensagem do assistente (sem o bloco de proposta; nunca a pergunta do usuário) vem uma vez, antes do primeiro bloco. Esse texto fica no navegador: não vai para o backend.
 - Bloco maior que uma página continua na seguinte: quebra só entre linhas de tabela (`break-inside: avoid`), com o `thead` repetido.
 - O `<title>` do documento é `realocai-<tipo>-<AAAA-MM-DD>` (ou `realocai-relatorios-…`), que os navegadores sugerem como nome do PDF.

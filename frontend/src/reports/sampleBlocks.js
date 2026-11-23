@@ -625,3 +625,28 @@ export const tabelaGenericaPanoramaPassosDetalhe = {
   dados: { ...tabelaGenericaPanoramaPassos.dados, linhas: linhasDetalhe },
   tabelas: [{ ...tabelaGenericaPanoramaPassos.tabelas[0], linhas: linhasDetalhe }],
 };
+
+/**
+ * Comparativo com as duas colunas numéricas opcionais que o agente vai acrescentar
+ * (profissionais_sem_atendimento e turnos_sem_profissional). Valores fictícios; o resto é o
+ * exemplo oficial. A visão do panorama mostra as duas como chips, com os rótulos das colunas.
+ */
+const COLUNAS_NOVAS = [
+  { chave: 'profissionais_sem_atendimento', rotulo: 'Profissionais sem atendimento', formato: 'inteiro' },
+  { chave: 'turnos_sem_profissional', rotulo: 'Turnos sem profissional', formato: 'inteiro' },
+];
+const valoresNovos = [
+  [0, 2],
+  [1, 2],
+  [0, 1],
+];
+const comColunasNovas = (linhas) => linhas.map((l, i) => ({ ...l, profissionais_sem_atendimento: valoresNovos[i][0], turnos_sem_profissional: valoresNovos[i][1] }));
+export const tabelaGenericaPanoramaComparativoColunasNovas = {
+  ...tabelaGenericaPanoramaComparativo,
+  dados: {
+    ...tabelaGenericaPanoramaComparativo.dados,
+    colunas: [...tabelaGenericaPanoramaComparativo.dados.colunas, ...COLUNAS_NOVAS],
+    linhas: comColunasNovas(tabelaGenericaPanoramaComparativo.dados.linhas),
+  },
+  tabelas: tabelaGenericaPanoramaComparativo.tabelas.map((t) => ({ ...t, colunas: [...t.colunas, ...COLUNAS_NOVAS], linhas: comColunasNovas(t.linhas) })),
+};

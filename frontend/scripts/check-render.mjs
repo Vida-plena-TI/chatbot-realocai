@@ -203,6 +203,10 @@ try {
   ].map(([tag, bloco, opcoes]) => ({ tag, bloco, opcoes, html: { tela: render([bloco]), pdf: render([bloco], PrintReport) } }));
   r.pergunta = { tela: render([perguntaOficial]), pdf: render([perguntaOficial], PrintReport) };
   r.comparativo = { tela: render([comparativoOficial]), pdf: render([comparativoOficial], PrintReport) };
+  // A mesma tabela comum que fica atrás de "Ver tabela completa" (o SSR não clica): o comparativo com
+  // outro `relatorio` cai na TabelaPlana de sempre.
+  const comparativoTabela = { ...comparativoOficial, dados: { ...comparativoOficial.dados, relatorio: 'panorama_enxugamento_tabela' } };
+  r.comparativoTabela = { tela: render([comparativoTabela]), pdf: render([comparativoTabela], PrintReport) };
   r.panoramaPar = { tela: render(respostaPanorama.blocos), pdf: render(respostaPanorama.blocos, PrintReport) };
   r.agrVar = Object.fromEntries(Object.entries(variantes).map(([k, b]) => [k, { tela: render([b]), pdf: render([b], PrintReport) }]));
   // Volta ao modo plano: HTML idêntico ao do mesmo bloco sem agrupar_por/unidade_grupo.
@@ -297,6 +301,18 @@ try {
 
   // --- periodo null: nada de "null"/"Invalid Date" nem separador sobrando; cartão alinhado --
   const css = await server.ssrLoadModule('/src/reports/reports.module.css').then((m) => m.default);
+  // Avisos: até 4, todos em caixas; mais de 4, a tela mostra os 3 primeiros e "Ver mais N avisos"
+  // (aria-expanded="false", aria-controls); o PDF mostra todos numa lista compacta (ul.noticeList).
+  const avisosOk = (avisos, { tela, pdf }) => {
+    const t = texto(tela);
+    const p = texto(pdf);
+    if (avisos.length <= 4) return avisos.every((a) => t.includes(a) && p.includes(a)) && !t.includes('Ver mais');
+    const botao = tela.match(/<button[^>]*aria-expanded="false"[^>]*>Ver mais (\d+) avisos<\/button>/);
+    const alvo = botao?.[0].match(/aria-controls="([^"]+)"/)?.[1];
+    const lista = pdf.match(new RegExp(`<ul class="${css.noticeList}"[^>]*>(.*?)</ul>`))?.[1] ?? '';
+    return avisos.slice(0, 3).every((a) => t.includes(a)) && avisos.slice(3).every((a) => !t.includes(a)) && Number(botao?.[1]) === avisos.length - 3 &&
+      Boolean(alvo) && tela.includes(`id="${alvo}"`) && avisos.every((a) => p.includes(a)) && (lista.match(/<li>/g) || []).length === avisos.length && !pdf.includes('Ver mais');
+  };
   // Cartões compactos (celular) do modo plano: rótulo (strong) e pares [dt, dd].
   const cartoesCompactos = (html) =>
     [...html.matchAll(/class="[^"]*dayCard[^"]*"><strong>(.*?)<\/strong><dl[^>]*>(.*?)<\/dl>/g)].map(([, rot, dl]) => ({
@@ -546,7 +562,7 @@ try {
       `${tag}: (c)(d) celular: mesmos títulos, um cartão por linha na ordem, sem colunas de agrupamento`);
     ok(![html.tela, html.pdf].some((h) => /\b(null|undefined|NaN)\b|Invalid Date/.test(texto(h))), `${tag}: (e) nenhum "null", "undefined", "NaN" ou "Invalid Date" na tela nem no PDF`);
     ok(totalOf > 15 || (!texto(html.tela).includes('Mostrar todas') && !texto(html.pdf).includes('Mostrar todas')), `${tag}: cabe sem "Mostrar todas"`);
-    ok(oficial.avisos.every((a) => texto(html.tela).includes(a) && texto(html.pdf).includes(a)), `${tag}: avisos na tela e no PDF`);
+    ok(avisosOk(oficial.avisos, html), `${tag}: avisos na tela (3 + "Ver mais" se passar de 4) e todos no PDF`);
   }
   // Título do grupo do plano de realocação: formato atual "valores (N unidade)". Só "Opção N" e
   // contagens; nunca nomes.
@@ -585,14 +601,14 @@ try {
     const recEsperado = linhas.map((l) => (l.recomendado ? 'Sim' : 'Não'));
     ok(linhas.every((l) => typeof l.recomendado === 'boolean') && colunas[iRec]?.formato === 'texto' && igual(recEsperado, ['Sim', 'Não', 'Não']),
       'comparativo: recomendado é booleano JSON em coluna "texto" (true, false, false)');
-    for (const [onde, html] of [['tela', r.comparativo.tela], ['PDF', r.comparativo.pdf]]) {
+    for (const [onde, html] of [['tela (tabela comum)', r.comparativoTabela.tela], ['PDF (tabela completa)', r.comparativo.pdf]]) {
       const cel = celulasTabela(html);
       ok(!html.startsWith('ERRO') && !html.includes(css.groupTable) && igual(cel, esperadoComp), `comparativo (${onde}): modo plano, ${cel.length} linhas na ordem recebida, todas as colunas`);
       ok(igual(cel.map((l) => l[iRec]), recEsperado), `comparativo (${onde}): coluna Recomendado ${JSON.stringify(cel.map((l) => l[iRec]))}`);
       ok(!/\b(true|false|null|undefined|NaN)\b/.test(texto(html)), `comparativo (${onde}): nenhum "true", "false", "null" ou "undefined"`);
     }
     // Celular: a coluna booleana sai do rótulo do cartão e aparece com o rótulo ("Recomendado: Sim").
-    const cartoesComp = cartoesCompactos(r.comparativo.tela);
+    const cartoesComp = cartoesCompactos(r.comparativoTabela.tela);
     ok(igual(cartoesComp.map((c) => c.rotulo), linhas.map((l) => l.cenario)), `comparativo (celular): rótulo do cartão só com o cenário ${JSON.stringify(cartoesComp.map((c) => c.rotulo))}`);
     const recCel = cartoesComp.map((c) => c.pares.find(([k]) => k === 'Recomendado')?.join(': '));
     ok(igual(recCel, recEsperado.map((v) => `Recomendado: ${v}`)), `comparativo (celular): ${JSON.stringify(recCel)}`);
@@ -627,6 +643,84 @@ try {
     const cssBruto = readFileSync(new URL('../src/reports/reports.module.css', import.meta.url), 'utf8');
     ok(/\.printDoc \.dense thead\s*\{\s*display: table-header-group;/.test(cssBruto) && /\.printDoc \.specHead\s*\{\s*break-inside: avoid;/.test(cssBruto),
       'CSS de impressão: thead repetido em cada página e título do grupo que não quebra');
+  }
+  // --- Visão do comparativo do panorama (PanoramaComparativo.jsx) ---------------------------------
+  {
+    const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Lê o painel: um item por cenário com nome, selo, destaque, barras (rótulo, largura, número) e chips.
+    const painel = (html) => {
+      const lista = html.match(new RegExp(`<ol class="${esc(css.panList)}"[^>]*>(.*?)</ol>`))?.[1];
+      if (lista == null) return null;
+      return [...lista.matchAll(new RegExp(`<li class="${esc(css.panItem)} ?([^"]*)">(.*?)</li>(?=<li class="${esc(css.panItem)}|$)`, 'g'))].map(([, extra, item]) => ({
+        nome: texto(item.match(new RegExp(`<strong class="${esc(css.panName)}">(.*?)</strong>`))?.[1] ?? '').trim(),
+        selo: texto(item.match(new RegExp(`<span class="${esc(css.panBadge)}">(.*?)</span>`))?.[1] ?? '').trim(),
+        destaque: extra.includes(css.panRec),
+        barras: [...item.matchAll(new RegExp(`<span class="${esc(css.panBarLabel)}">(.*?)</span><div class="${esc(css.panTrack)}" role="img" aria-label="([^"]*)"><div class="${esc(css.panFill)}" style="width:([^%"]*)%"></div></div><b class="${esc(css.panBarValue)}">(.*?)</b>`, 'g'))]
+          .map(([, rotulo, aria, largura, valor]) => ({ rotulo, aria, largura: Number(largura), valor })),
+        chips: [...item.matchAll(new RegExp(`<li class="${esc(css.panChip)}">(.*?)<b>(.*?)</b></li>`, 'g'))].map(([, k, v]) => [texto(k).trim(), v]),
+      }));
+    };
+    const comp = comparativoOficial;
+    const rot = (k) => comp.dados.colunas.find((c) => c.chave === k).rotulo;
+    const p = painel(r.comparativo.tela);
+    const ruim = (h) => /\b(NaN|undefined|null|true|false|Infinity)\b/.test(texto(h));
+    ok(p?.length === 3 && igual(p.map((x) => x.nome), comp.dados.linhas.map((l) => l.cenario)), `painel: um item por cenário, na ordem ${JSON.stringify(p?.map((x) => x.nome))}`);
+    ok(igual(p.map((x) => x.selo), ['Recomendado', '', '']) && igual(p.map((x) => x.destaque), [true, false, false]), 'painel: selo "Recomendado" com texto e destaque só no recomendado (true)');
+    const larg = (k) => p.map((x) => Math.round(x.barras.find((b) => b.rotulo === rot(k))?.largura ?? -1));
+    const vals = (k) => p.map((x) => x.barras.find((b) => b.rotulo === rot(k))?.valor);
+    ok(igual(larg('turnos_liberados'), [100, 100, 67]) && igual(vals('turnos_liberados'), ['3', '3', '2']), `painel: barra de turnos liberados na escala do maior (3) ${JSON.stringify(larg('turnos_liberados'))}`);
+    ok(igual(larg('pacientes_movidos'), [100, 100, 75]) && igual(vals('pacientes_movidos'), ['4', '4', '3']), `painel: barra de pacientes movidos na escala do maior (4) ${JSON.stringify(larg('pacientes_movidos'))}`);
+    ok(p.every((x) => x.barras.every((b) => b.aria.startsWith(`${b.rotulo}: ${b.valor}`))), 'painel: cada barra com rótulo acessível e o número escrito ao lado');
+    const chipsEsperados = ['passos', 'profissionais_afetadas', 'trocam_de_profissional', 'trocam_de_dia'];
+    ok(p.every((x, i) => igual(x.chips, chipsEsperados.map((k) => [rot(k), String(comp.dados.linhas[i][k])]))), 'painel: chips com os rótulos das colunas do contrato e os valores');
+    const botaoTabela = r.comparativo.tela.match(/<button[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"[^>]*>Ver tabela completa<\/button>/);
+    ok(Boolean(botaoTabela) && r.comparativo.tela.includes(`id="${botaoTabela[1]}"`) && !r.comparativo.tela.includes('<table'), 'painel (tela): tabela completa recolhida atrás de "Ver tabela completa" (aria-expanded/aria-controls)');
+    ok(!ruim(r.comparativo.tela) && !ruim(r.comparativo.pdf), 'painel: nenhum "NaN", "undefined", "null", "true" ou "false" na tela nem no PDF');
+    const pp = painel(r.comparativo.pdf);
+    ok(pp?.length === 3 && pp.every((x) => x.chips.length === 0 && x.barras.length === 2) && pp[0].selo === 'Recomendado' && r.comparativo.pdf.includes('<thead>') && texto(r.comparativo.pdf).includes('Tabela completa') && !r.comparativo.pdf.includes('Ver tabela completa'),
+      'painel (PDF): painel com barras e selo, sem chips (a tabela completa vem logo abaixo, sem botão)');
+
+    const novas = amostras.tabelaGenericaPanoramaComparativoColunasNovas;
+    const pn = painel(render([novas]));
+    const rotN = (k) => novas.dados.colunas.find((c) => c.chave === k).rotulo;
+    ok(pn?.every((x, i) => igual(x.chips.slice(-2), [[rotN('profissionais_sem_atendimento'), String(novas.dados.linhas[i].profissionais_sem_atendimento)], [rotN('turnos_sem_profissional'), String(novas.dados.linhas[i].turnos_sem_profissional)]])) && pn[0].chips.length === 6,
+      'painel com as colunas novas: dois chips a mais, com os rótulos do contrato');
+
+    const varia = (linhas, extra = {}) => ({ ...comp, ...extra, dados: { ...comp.dados, linhas, ...(extra.dados ?? {}) } });
+    const [l1, l2, l3] = comp.dados.linhas;
+    const { recomendado: _r, ...semRec } = l1;
+    const semSelo = painel(render([varia([semRec, { ...l2, recomendado: 'true' }, { ...l3, recomendado: 1 }])]));
+    ok(semSelo?.length === 3 && semSelo.every((x) => !x.selo && !x.destaque), 'booleano ausente, "true" (texto) ou 1: sem selo nem destaque');
+    const zeros = render([varia(comp.dados.linhas.map((l) => ({ ...l, turnos_liberados: 0, pacientes_movidos: 0 })))]);
+    const pz = painel(zeros);
+    ok(pz?.every((x) => x.barras.every((b) => b.largura === 0 && b.valor === '0')) && !ruim(zeros), 'máximo 0: barras vazias, número 0, sem NaN');
+    const ausente = render([varia([{ ...l1, turnos_liberados: null, pacientes_movidos: undefined }, l2, { ...l3, turnos_liberados: '2' }])]);
+    const pa = painel(ausente);
+    ok(pa?.[0].barras.every((b) => b.largura === 0 && b.valor === '—') && pa[2].barras[0].valor === '—' && pa[1].barras[0].largura === 100 && !ruim(ausente), 'valor ausente, null ou texto: "—" e barra vazia; a escala usa só os números');
+    const um = painel(render([varia([l2])]));
+    ok(um?.length === 1 && um[0].barras.every((b) => b.largura === 100) && !um[0].selo, 'um cenário só: um item, barras cheias');
+    const semColuna = { ...comp, dados: { ...comp.dados, colunas: comp.dados.colunas.filter((c) => c.chave !== 'passos') } };
+    const hSem = render([semColuna]);
+    ok(!hSem.includes(css.panList) && hSem.includes('<table') && !hSem.startsWith('ERRO'), 'coluna obrigatória faltando (passos): tabela comum, sem erro');
+    ok(!r.comparativoTabela.tela.includes(css.panList) && !painel(render([panoramaOficial])), 'outro relatorio ou o bloco de passos: sem painel');
+    const cssBrutoPan = readFileSync(new URL('../src/reports/reports.module.css', import.meta.url), 'utf8');
+    const regra = (sel) => cssBrutoPan.match(new RegExp(`\\n\\.${sel} \\{([^}]*)\\}`))?.[1] ?? '';
+    ok(/border-top: \d+px solid/.test(regra('panFill')) && /print-color-adjust: exact/.test(regra('panFill')) && /border: 2px solid/.test(regra('panRec')) && /minmax\(0, 1fr\)/.test(regra('panBar')),
+      'CSS do painel: preenchimento por borda (sai sem "gráficos de fundo"), destaque com borda, colunas que encolhem');
+    ok(/@container rpt \(max-width: 600px\) \{\s*\.panBars \{\s*grid-template-columns: minmax\(0, 1fr\);/.test(cssBrutoPan), 'CSS do painel: no celular as barras empilham e ocupam a largura toda');
+  }
+  // --- Avisos recolhidos (mais de 4) ------------------------------------------------------------
+  {
+    const avisosComp = comparativoOficial.avisos;
+    ok(avisosComp.length === 7 && avisosOk(avisosComp, r.comparativo), 'comparativo (7 avisos): 3 na tela + "Ver mais 4 avisos"; todos no PDF em lista compacta');
+    const cinco = { ...comparativoOficial, avisos: avisosComp.slice(0, 5) };
+    const quatro = { ...comparativoOficial, avisos: avisosComp.slice(0, 4) };
+    const h5 = { tela: render([cinco]), pdf: render([cinco], PrintReport) };
+    const h4 = { tela: render([quatro]), pdf: render([quatro], PrintReport) };
+    ok(avisosOk(cinco.avisos, h5) && texto(h5.tela).includes('Ver mais 2 avisos'), '5 avisos: "Ver mais 2 avisos"');
+    ok(avisosOk(quatro.avisos, h4) && !h4.pdf.includes(css.noticeList), '4 avisos: todos em caixas, sem botão nem lista compacta');
+    const repetidos = { ...comparativoOficial, avisos: ['Aviso fictício igual.', 'Aviso fictício igual.', 'Outro.', 'Outro.', 'Mais um.'] };
+    ok((render([repetidos], PrintReport).match(/<li>/g) || []).length === 5, 'avisos repetidos não somem (chave pela posição)');
   }
   // --- Rótulos das abas e booleanos no celular (fix/panorama-rotulos) ----------------------------
   {
