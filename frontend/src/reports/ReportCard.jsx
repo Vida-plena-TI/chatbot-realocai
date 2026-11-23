@@ -1,8 +1,8 @@
-import { Component, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CircleAlert, Maximize2, RotateCw, X } from 'lucide-react';
 import s from './reports.module.css';
-import { Avisos, Notice } from './parts';
+import { Avisos, Notice, Seguro } from './parts';
 import { ExportBar } from './ExportBar';
 import { OcupacaoProfissional } from './OcupacaoProfissional';
 import { PacientesPorProfissional } from './PacientesPorProfissional';
@@ -67,15 +67,8 @@ const TEXTO_VAZIO = {
  * Error boundary: um erro ao desenhar fica contido e vira `fallback`; não derruba a conversa.
  * Não registra nada (nem o bloco nem a exceção) e o fallback não mostra conteúdo do bloco.
  */
-export class Seguro extends Component {
-  state = { erro: false };
-  static getDerivedStateFromError() {
-    return { erro: true };
-  }
-  render() {
-    return this.state.erro ? this.props.fallback : this.props.children;
-  }
-}
+// Error boundary dos cartões; fica em parts.jsx para os corpos também usarem (sem import circular).
+export { Seguro };
 
 const FALHA_CORPO = (
   <div className={s.stateBox}>

@@ -1,6 +1,7 @@
 import { Fragment } from 'react';
 import s from './reports.module.css';
-import { MaisLinhas, Meter, ResumoCards, StatusBadge, useLimite, useLimiteGrupos } from './parts';
+import { MaisLinhas, Meter, ResumoCards, Seguro, StatusBadge, useLimite, useLimiteGrupos } from './parts';
+import { ehComparativoPanorama, PanoramaComparativo } from './PanoramaComparativo';
 import { formatarValor, int, pctOuTraco, rotuloStatus, semEscala } from './format';
 
 const LIMITE = 15;
@@ -170,18 +171,28 @@ function montarColunas(bloco, colunas) {
  * @param {{bloco: import('./types').BlocoTabelaGenerica, impressao?: boolean}} props
  */
 export function TabelaGenerica({ bloco, impressao = false }) {
+  // Comparativo do panorama: visão própria, com a tabela completa recolhida. Se a visão quebrar,
+  // o boundary dela mostra a tabela comum (o cartão nunca cai por causa do painel).
+  if (ehComparativoPanorama(bloco.dados)) {
+    const tabela = <TabelaPlana bloco={bloco} impressao={impressao} semResumo />;
+    return (
+      <Seguro fallback={<TabelaPlana bloco={bloco} impressao={impressao} />}>
+        <PanoramaComparativo bloco={bloco} impressao={impressao} tabela={tabela} />
+      </Seguro>
+    );
+  }
   const agrupado = agruparLinhas(bloco.dados);
   return agrupado ? <TabelaAgrupada bloco={bloco} agrupado={agrupado} impressao={impressao} /> : <TabelaPlana bloco={bloco} impressao={impressao} />;
 }
 
-function TabelaPlana({ bloco, impressao }) {
+function TabelaPlana({ bloco, impressao, semResumo = false }) {
   const { colunas = [], linhas = [], linhas_omitidas: omitidas } = bloco.dados;
   const { visiveis, botao } = useLimite(linhas, LIMITE, impressao);
   const { linhaTabela, cabecalho, rodape, cartao, cartaoTotal } = montarColunas(bloco, colunas);
 
   return (
     <>
-      <ResumoCards resumo={bloco.resumo} />
+      {!semResumo && <ResumoCards resumo={bloco.resumo} />}
 
       <div className={`${s.tableWrap} ${s.wideOnly}`}>
         <table className={`${s.table} ${s.dense}`}>

@@ -1,7 +1,18 @@
-import { useId, useState } from 'react';
+import { Component, useId, useState } from 'react';
 import { ArrowDown, CalendarX, Check, Info, TriangleAlert } from 'lucide-react';
 import s from './reports.module.css';
 import { faixa, int } from './format';
+
+/** Error boundary: com erro ao desenhar os filhos, mostra `fallback` (sem conteúdo nem log). */
+export class Seguro extends Component {
+  state = { erro: false };
+  static getDerivedStateFromError() {
+    return { erro: true };
+  }
+  render() {
+    return this.state.erro ? this.props.fallback : this.props.children;
+  }
+}
 
 /** Barra horizontal com a marca da meta. `neutro`: sem escala (inconsistência de dados). */
 export function Meter({ value, meta = 0.8, label, large = false, showMetaLabel = false, neutro = false }) {
