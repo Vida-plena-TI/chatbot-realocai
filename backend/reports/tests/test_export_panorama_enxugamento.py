@@ -69,6 +69,52 @@ def test_recommended_boolean_in_a_text_column_is_sim_nao_text(api):
     assert all(c.data_type == "n" and c.number_format == "0" for c in turnos)
 
 
+COVERAGE_COLUMNS = ["profissionais_sem_atendimento", "turnos_sem_profissional"]
+
+
+def test_scenarios_sheet_has_the_coverage_columns_as_integers_in_contract_order(api):
+    """Agent PR #21: two integer columns between trocam_de_dia and passos_iguais_ao_recomendado."""
+    bloco = load_example(COMPARATIVO)
+    (tabela,) = bloco["tabelas"]
+    keys = [c["chave"] for c in tabela["colunas"]]
+    start = keys.index("trocam_de_dia")
+    assert keys[start : start + 4] == [
+        "trocam_de_dia",
+        *COVERAGE_COLUMNS,
+        "passos_iguais_ao_recomendado",
+    ]
+
+    sheet = open_xlsx(export(api, [bloco]))["Cenários"]
+
+    header = [c.value for c in sheet[1]]
+    assert header[start + 1 : start + 3] == [
+        "Profissionais sem atendimento",
+        "Turnos sem profissional",
+    ]
+    for chave in COVERAGE_COLUMNS:
+        cells = column(sheet, tabela, chave)
+        assert [c.value for c in cells] == [linha[chave] for linha in tabela["linhas"]]
+        assert all(type(c.value) is int and c.data_type == "n" for c in cells)
+        assert all(c.number_format == "0" for c in cells)
+
+
+def test_scenarios_sheet_without_the_coverage_columns_still_exports(api):
+    """An agent without PR #21 sends the older shape: the sheet just has two columns fewer."""
+    bloco = load_example(COMPARATIVO)
+    for tabela in (bloco["tabelas"][0], bloco["dados"]):
+        tabela["colunas"] = [c for c in tabela["colunas"] if c["chave"] not in COVERAGE_COLUMNS]
+        for linha in tabela["linhas"]:
+            for chave in COVERAGE_COLUMNS:
+                linha.pop(chave)
+    (tabela,) = bloco["tabelas"]
+
+    sheet = open_xlsx(export(api, [bloco]))["Cenários"]
+
+    assert [c.value for c in sheet[1]] == [c["rotulo"] for c in tabela["colunas"]]
+    assert "Turnos sem profissional" not in [c.value for c in sheet[1]]
+    assert rows(sheet)[1:] == expected_rows(tabela)
+
+
 def test_steps_sheet_has_tipo_de_movimento_and_empty_observacao(api):
     bloco = load_example(PASSOS)
     (tabela,) = bloco["tabelas"]
