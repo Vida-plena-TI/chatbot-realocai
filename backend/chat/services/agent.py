@@ -9,8 +9,9 @@ Flow of a turn:
    another turn is in flight, raise ConversationBusyError (409);
 3. call RealocAI with no transaction open (a 404 for a known conversa_id is retried
    once as a new conversation);
-4. on success only, drop the blocks with patient data the owner may not see (see
-   chat.services.sensitive), then store the user message and the answer in one
+4. on success only, if the answer is sensitive (`resposta_sensivel: true` or a sensitive
+   block) and the owner may not see it, drop the sensitive blocks and replace the text
+   (see chat.services.sensitive), then store the user message and the answer in one
    transaction (record_exchange); on failure nothing is stored;
 5. release the claim, then extract long-term memories (never raises).
 
@@ -120,7 +121,9 @@ def exchange_messages(conversation, content) -> Exchange:
                 "RealocAI sent invalid report blocks; storing none (conversation=%s)",
                 conversation.id,
             )
-        resposta, blocos = _restrict_patient_reports(conversation, result.resposta, result.blocos)
+        resposta, blocos = _restrict_patient_reports(
+            conversation, result.resposta, result.blocos, result.resposta_sensivel
+        )
         user_message, assistant_message = record_exchange(
             conversation,
             content,
@@ -146,19 +149,24 @@ def proposal_reply(content):
     return None
 
 
-def _restrict_patient_reports(conversation, resposta, blocos):
-    """Drop blocks with patient data the conversation owner may not see.
+def _restrict_patient_reports(conversation, resposta, blocos, resposta_sensivel=False):
+    """Keep sensitive answers away from users who may not see them.
 
-    When any is dropped, the answer is replaced by a fixed text (it may describe the
-    dropped report), so nothing of those blocks is ever stored. Other blocks stay.
+    The answer is sensitive when RealocAI marked it (`resposta_sensivel: true`, sent with
+    or without blocks whenever a restricted tool ran) or when any block is sensitive. For
+    an owner outside the coordination group, the sensitive blocks are dropped and the text
+    is replaced by a fixed one (it may name patients or professionals, or describe the
+    dropped report), so nothing of it is ever stored. Other blocks stay.
     """
     if can_view_patient_reports(conversation.user):
         return resposta, blocos
     kept, dropped = split_sensitive_blocks(blocos)
-    if not dropped:
+    if not dropped and not resposta_sensivel:
         return resposta, blocos
-    # Only the count: the type, title or contents of a block are health data.
-    logger.info("sensitive_blocks_dropped=%d (conversation=%s)", dropped, conversation.id)
+    # Only counts: the text, type, title or contents of a block are health data.
+    if dropped:
+        logger.info("sensitive_blocks_dropped=%d (conversation=%s)", dropped, conversation.id)
+    logger.info("sensitive_text_replaced=1 (conversation=%s)", conversation.id)
     return PATIENT_REPORTS_RESTRICTED_MESSAGE, kept
 
 

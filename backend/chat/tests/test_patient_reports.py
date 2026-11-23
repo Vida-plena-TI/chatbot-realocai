@@ -827,3 +827,222 @@ def test_export_of_non_sensitive_tabela_generica_and_counts_works_without_group(
 
     assert response.status_code == 200
     assert response["Content-Disposition"].startswith("attachment;")
+
+
+# --- response-level marker (`resposta_sensivel`) -------------------------------------
+
+# What the agent may write with no block at all (scenario not found, ambiguous professional):
+# it can repeat a fictitious professional name typed by the user, so none of it may be stored.
+SENSITIVE_TEXT_ANSWER = (
+    "Encontrei duas profissionais chamadas Profissional Ficticia Ômega; qual delas você quer?"
+)
+SENSITIVE_TEXT_LEAKS = (SENSITIVE_TEXT_ANSWER, "Profissional Ficticia Ômega", "duas profissionais")
+
+
+def mock_marked_agent(respx_mock, blocos, marker=True, resposta=SENSITIVE_TEXT_ANSWER):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "conversa_id": "ext-1",
+                "resposta": resposta,
+                "blocos": blocos,
+                "resposta_sensivel": marker,
+            },
+        )
+    )
+
+
+def assert_only_the_fixed_text(api, conversation, response, leaks=SENSITIVE_TEXT_LEAKS):
+    """POST response, history and database carry the fixed text and nothing of the answer."""
+    assert response.status_code == 201
+    assert response.json()["assistant_message"]["content"] == PATIENT_REPORTS_RESTRICTED_MESSAGE
+    history = api.get(messages_url(conversation))
+    assert history.json()["results"][1]["content"] == PATIENT_REPORTS_RESTRICTED_MESSAGE
+    stored = Message.objects.get(conversation=conversation, role="assistant")
+    assert stored.content == PATIENT_REPORTS_RESTRICTED_MESSAGE
+    text = stored_text(conversation)
+    for value in leaks:
+        assert value not in text
+        assert value not in response.content.decode()
+        assert value not in history.content.decode()
+
+
+def test_marker_without_blocks_replaces_the_text_for_users_without_group(
+    api, conversation, respx_mock
+):
+    """(a) + (g): text-only sensitive answer, as when no scenario is found."""
+    mock_marked_agent(respx_mock, [])
+
+    response = post_message(api, conversation, content="Quais turnos da Ômega dá para liberar?")
+
+    assert_only_the_fixed_text(api, conversation, response)
+    assert "blocos" not in response.json()["assistant_message"]
+    assert Message.objects.get(conversation=conversation, role="assistant").blocos == []
+
+
+def test_marker_without_the_blocos_key_replaces_the_text(api, conversation, respx_mock):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "conversa_id": "ext-1",
+                "resposta": SENSITIVE_TEXT_ANSWER,
+                "resposta_sensivel": True,
+            },
+        )
+    )
+
+    assert_only_the_fixed_text(api, conversation, post_message(api, conversation))
+
+
+def test_marker_with_a_sensitive_block_drops_it_and_replaces_the_text(
+    api, conversation, respx_mock
+):
+    """(b)"""
+    bloco = load_example(PANORAMA)
+    mock_marked_agent(respx_mock, [bloco], resposta=PANORAMA_ANSWER)
+
+    response = post_message(api, conversation)
+
+    leaks = (PANORAMA_ANSWER, "E-5EB1", bloco["titulo"], *sensitive_values(bloco))
+    assert_only_the_fixed_text(api, conversation, response, leaks)
+    assert "blocos" not in response.json()["assistant_message"]
+    assert Message.objects.get(conversation=conversation, role="assistant").blocos == []
+
+
+def test_marker_with_a_common_block_keeps_it_and_replaces_the_text(api, conversation, respx_mock):
+    """(f): no sensitive block, but the marker alone replaces the text; the common block stays."""
+    comum = load_example("disponibilidade_vagas")
+    mock_marked_agent(respx_mock, [comum])
+
+    response = post_message(api, conversation)
+
+    assert_only_the_fixed_text(api, conversation, response)
+    assert response.json()["assistant_message"]["blocos"] == [comum]
+    assert Message.objects.get(conversation=conversation, role="assistant").blocos == [comum]
+    assert history_blocos(api, conversation) == [comum]
+
+
+@pytest.mark.parametrize("member", ["coordinator", "superuser"])
+@pytest.mark.parametrize(
+    "blocos",
+    [[], [load_example(PANORAMA)], [load_example("disponibilidade_vagas")]],
+    ids=["no-block", "sensitive-block", "common-block"],
+)
+def test_marker_changes_nothing_for_members(request, api, conversation, respx_mock, member, blocos):
+    """(c)"""
+    request.getfixturevalue(member)
+    mock_marked_agent(respx_mock, blocos)
+
+    response = post_message(api, conversation)
+
+    answer = response.json()["assistant_message"]
+    assert answer["content"] == SENSITIVE_TEXT_ANSWER
+    assert answer.get("blocos", []) == blocos
+    stored = Message.objects.get(conversation=conversation, role="assistant")
+    assert (stored.content, stored.blocos) == (SENSITIVE_TEXT_ANSWER, blocos)
+    history = api.get(messages_url(conversation)).json()["results"][1]
+    assert history["content"] == SENSITIVE_TEXT_ANSWER
+
+
+NON_TRUE_MARKERS = [False, "true", "True", 1, 1.0, None, [], {}, [True], {"valor": True}]
+
+
+@pytest.mark.parametrize("marker", NON_TRUE_MARKERS)
+def test_marker_other_than_true_is_ignored(api, conversation, respx_mock, marker):
+    """(d): no replacement without a sensitive block..."""
+    comum = load_example("disponibilidade_vagas")
+    mock_marked_agent(respx_mock, [comum], marker=marker, resposta=ANSWER)
+
+    answer = post_message(api, conversation).json()["assistant_message"]
+
+    assert answer["content"] == ANSWER
+    assert answer["blocos"] == [comum]
+
+
+@pytest.mark.parametrize("marker", NON_TRUE_MARKERS)
+def test_marker_other_than_true_does_not_override_a_sensitive_block(
+    api, conversation, respx_mock, marker
+):
+    """(d): ...and the block rules still apply."""
+    mock_marked_agent(respx_mock, [load_example("agenda_paciente")], marker=marker)
+
+    response = post_message(api, conversation)
+
+    assert_only_the_fixed_text(api, conversation, response)
+    assert "blocos" not in response.json()["assistant_message"]
+
+
+def test_marker_inside_a_block_or_its_dados_is_ignored(api, conversation, respx_mock):
+    """(e)"""
+    comum = load_example("disponibilidade_vagas") | {"resposta_sensivel": True}
+    comum["dados"]["resposta_sensivel"] = True
+    respx_mock.post(REALOCAI_CHAT_URL).mock(
+        return_value=httpx.Response(
+            200, json={"conversa_id": "ext-1", "resposta": ANSWER, "blocos": [comum]}
+        )
+    )
+
+    answer = post_message(api, conversation).json()["assistant_message"]
+
+    assert answer["content"] == ANSWER
+    assert answer["blocos"] == [comum]
+
+
+def test_answer_without_the_marker_works_as_before(api, conversation, respx_mock, caplog):
+    """(i)"""
+    comum = load_example("disponibilidade_vagas")
+    mock_agent(respx_mock, [comum])
+
+    with capture_all_logs(caplog):
+        answer = post_message(api, conversation).json()["assistant_message"]
+
+    assert (answer["content"], answer["blocos"]) == (ANSWER, [comum])
+    assert "sensitive_" not in all_log_text(caplog)
+
+
+@pytest.mark.parametrize(
+    ("blocos", "expected"),
+    [
+        ([], ["sensitive_text_replaced=1"]),
+        ([load_example("disponibilidade_vagas")], ["sensitive_text_replaced=1"]),
+        (
+            [load_example(PANORAMA), load_example("agenda_paciente")],
+            ["sensitive_blocks_dropped=2", "sensitive_text_replaced=1"],
+        ),
+    ],
+    ids=["no-block", "common-block", "sensitive-blocks"],
+)
+def test_replacement_logs_only_counts(api, conversation, respx_mock, caplog, blocos, expected):
+    """(h)"""
+    mock_marked_agent(respx_mock, blocos)
+
+    with capture_all_logs(caplog):
+        assert post_message(api, conversation).status_code == 201
+
+    counted = [
+        r.getMessage().split(" ")[0] for r in caplog.records if "sensitive_" in r.getMessage()
+    ]
+    assert counted == expected
+    logged = all_log_text(caplog)
+    for value in (
+        *SENSITIVE_TEXT_LEAKS,
+        "resposta_sensivel",
+        "panorama_enxugamento",
+        "agenda_paciente",
+        *(b["titulo"] for b in blocos),
+        *(v for b in blocos for v in sensitive_values(b)),
+    ):
+        assert value not in logged
+
+
+@pytest.mark.parametrize("member", ["coordinator", "superuser"])
+def test_marker_logs_nothing_for_members(request, api, conversation, respx_mock, caplog, member):
+    request.getfixturevalue(member)
+    mock_marked_agent(respx_mock, [])
+
+    with capture_all_logs(caplog):
+        post_message(api, conversation)
+
+    assert "sensitive_" not in all_log_text(caplog)

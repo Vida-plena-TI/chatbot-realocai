@@ -21,6 +21,9 @@ MAX_CONVERSATION_ID_LENGTH = 64
 # Reading the answer uses settings.REALOCAI_TIMEOUT_SECONDS; connecting must be quick.
 CONNECT_TIMEOUT_SECONDS = 5
 MAX_BLOCOS = 10
+# Optional, response level (contract v1): sent only as `true` when the turn used a restricted
+# tool (patient names, plano_realocacao, panorama_enxugamento), with or without blocks.
+SENSITIVE_ANSWER_FIELD = "resposta_sensivel"
 
 
 class ChatErrorKind(StrEnum):
@@ -40,6 +43,9 @@ class ChatSuccess:
     # True when RealocAI sent blocks that failed validation and were dropped. The
     # turn still succeeds; the caller logs a warning.
     blocos_descartados: bool = False
+    # Optional response-level marker (`resposta_sensivel`, outside any block): the turn used
+    # a restricted tool, with or without a block. See read_sensitive_marker.
+    resposta_sensivel: bool = False
 
 
 @dataclass(frozen=True)
@@ -84,6 +90,13 @@ def validate_blocos(raw) -> tuple[list, bool]:
         and all(isinstance(b, dict) and "tipo" in b and "versao" in b for b in raw)
     )
     return (raw, False) if valid else ([], True)
+
+
+def read_sensitive_marker(data: dict) -> bool:
+    """True only when the response itself carries `resposta_sensivel` as the JSON boolean
+    `true`. Any other value ("true", 1, 1.0, null, lists, objects, false) counts as absent;
+    a field with this name inside a block or inside `dados` is never read."""
+    return data.get(SENSITIVE_ANSWER_FIELD) is True
 
 
 def _send_http(conversa_id, mensagem):
@@ -140,5 +153,9 @@ def _parse_success(response: httpx.Response) -> ChatResult:
 
     blocos, dropped = validate_blocos(data.get("blocos"))
     return ChatSuccess(
-        conversa_id=conversa_id, resposta=resposta, blocos=blocos, blocos_descartados=dropped
+        conversa_id=conversa_id,
+        resposta=resposta,
+        blocos=blocos,
+        blocos_descartados=dropped,
+        resposta_sensivel=read_sensitive_marker(data),
     )

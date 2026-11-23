@@ -220,10 +220,21 @@ Ordem: **DNS → Supabase → backend → frontend → testes pós-deploy**.
   O **panorama de enxugamento** (`panorama_enxugamento`) traz também nomes de
   **profissionais** e quantos turnos com presença paga podem ser liberados: é sensível de RH,
   além de ter nomes de pacientes. Quem entra no grupo passa a vê-lo também.
+- **Respostas marcadas `resposta_sensivel: true`**: campo opcional da resposta do
+  `POST /agenda/chat` (nível da resposta, fora dos blocos; só o booleano `true` vale, qualquer
+  outro valor ou o campo dentro de um bloco é ignorado). O agente o envia quando a rodada usou
+  uma tool restrita, com ou sem bloco. Para quem está **fora** do grupo, o texto do agente é
+  trocado pela mensagem fixa ("Este relatório contém dados sensíveis…") antes de gravar; os
+  blocos sensíveis são cortados e os comuns ficam. Nada do texto original é gravado nem
+  devolvido. Para o grupo e superusuários, nada muda. Pendência: com a permissão revogada, o
+  texto de respostas antigas gravadas para quem estava no grupo continua no histórico (exige
+  migração; ver AGENTS.md, "Marcador `resposta_sensivel`").
 - **Ordem com o agente**: relatório novo com dados de pacientes só pode ir para produção
   no RealocAI **depois** do deploy do backend que já o restringe (regra em
   `chat/services/sensitive.py`). No sentido inverso, o bloco chega a qualquer usuário
-  logado.
+  logado. O marcador `resposta_sensivel` não quebra em nenhuma ordem (backend antigo ignora
+  o campo; backend novo sem o campo funciona como antes), mas a proteção do texto só vale
+  com os dois no ar: prefira o backend primeiro.
 
 ### 2. App `chatbot-frontend`
 
@@ -291,7 +302,9 @@ Faça na ordem, com um usuário de teste e **dados fictícios**:
     `coordenacao`, peça a agenda de um paciente fictício → a resposta é "Este relatório
     contém dados sensíveis e está disponível apenas para a coordenação…", sem cartão.
     Inclua o usuário no grupo (admin), peça de novo → o cartão aparece. Nos logs, só
-    `sensitive_blocks_dropped=<n>` com o id da conversa.
+    `sensitive_blocks_dropped=<n>` e `sensitive_text_replaced=1` com o id da conversa.
+    Com o agente já enviando `resposta_sensivel`, fora do grupo peça o panorama de uma
+    profissional fictícia inexistente (resposta só de texto) → também vem o texto fixo.
 
 ## Traefik: versão e timeouts
 
