@@ -62,6 +62,12 @@ export function agruparLinhas(dados) {
   };
 }
 
+/** Coluna com ao menos um booleano JSON e nenhum outro tipo além de null/"" (vazio vira "—"). */
+const colunaBooleana = (linhas, chave) =>
+  Array.isArray(linhas) &&
+  linhas.some((l) => typeof l?.[chave] === 'boolean') &&
+  linhas.every((l) => l?.[chave] == null || l[chave] === '' || typeof l[chave] === 'boolean');
+
 /**
  * Dimensões, métricas e células de um conjunto de colunas (o mesmo nos dois modos). Colunas que
  * não existem em `total` são as dimensões (rótulo da linha); sem total, as colunas de texto e data.
@@ -72,6 +78,12 @@ function montarColunas(bloco, colunas) {
   const temTotal = total && typeof total === 'object' && Object.keys(total).length > 0;
   const dimensoes = colunas.filter((c) => (temTotal ? !(c.chave in total) : !NUMERICOS.has(c.formato)));
   const metricas = colunas.filter((c) => !dimensoes.includes(c));
+  // Cartão compacto (celular): coluna booleana (ex.: `recomendado`, booleano JSON em coluna "texto")
+  // não entra no rótulo do cartão, onde "Sim"/"Não" ficaria sem sentido; aparece como as métricas,
+  // com o rótulo da coluna ("Recomendado: Sim"). A tabela larga não muda.
+  const booleanas = colunas.filter((c) => colunaBooleana(bloco.dados.linhas, c.chave));
+  const rotulosCartao = dimensoes.filter((c) => !booleanas.includes(c));
+  const valoresCartao = colunas.filter((c) => metricas.includes(c) || booleanas.includes(c));
   const comBarra = meta != null && colunas.length <= MAX_COLUNAS_COM_BARRA;
 
   const celula = (linha, c) => {
@@ -96,7 +108,7 @@ function montarColunas(bloco, colunas) {
     return formatarValor(v, c.formato);
   };
   const alinhar = (c) => (NUMERICOS.has(c.formato) && !(c.formato === 'percentual' && comBarra) ? s.num : undefined);
-  const rotuloLinha = (l) => dimensoes.map((c) => formatarValor(l[c.chave], c.formato)).join(' · ') || '—';
+  const rotuloLinha = (l) => rotulosCartao.map((c) => formatarValor(l[c.chave], c.formato)).join(' · ') || '—';
   const linhaTabela = (l, key) => (
     <tr key={key}>
       {colunas.map((c, j) =>
@@ -139,7 +151,7 @@ function montarColunas(bloco, colunas) {
     <div key={key} className={`${s.dayCard}${extra}`}>
       <strong>{l === total ? 'Total' : rotuloLinha(l)}</strong>
       <dl className={s.kv}>
-        {metricas.map((c) => (
+        {(l === total ? metricas : valoresCartao).map((c) => (
           <div key={c.chave}>
             <dt>{c.rotulo}</dt>
             <dd>{celula(l, c)}</dd>
