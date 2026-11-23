@@ -56,6 +56,12 @@ também copia a **resposta completa** de exemplo do panorama (bloco json marcado
 `src/reports/contrato/respostas/panorama_enxugamento.js` (cópia no backend:
 `chat/tests/fixtures/resposta_panorama_enxugamento.json`, conferida pelo `check:fixtures`).
 
+- **Abas** (2 ou mais blocos na resposta; `tituloAba` em `format.js`): `tabela_generica` usa o
+  `titulo` do bloco (o mesmo do cabeçalho do cartão), sem espaços nas pontas; título ausente, vazio,
+  só espaços ou não textual cai em "Relatório". Os outros tipos não mudam (só o tipo; em
+  `agenda_paciente` nunca o nome do paciente). Título longo é cortado com reticências pelo CSS
+  (`.tab`: até `min(260px, 70vw)`, sem quebra de linha; a barra de abas rola na tela estreita) e fica
+  inteiro no atributo `title` do botão. Os nomes das abas do Excel não mudam.
 - **Tipo desconhecido é ignorado** (`blocoSuportado` em `ReportCard.jsx`): sem cartão, sem aba e
   fora do "Exportar todos". Um erro ao desenhar um bloco fica no próprio cartão.
 - **Comuns:** cartões do `resumo` mostram `exibicao`; aviso âmbar de parcial lista `dias_nao_lidos`;
@@ -64,6 +70,11 @@ também copia a **resposta completa** de exemplo do panorama (bloco json marcado
   booleano JSON `true`/`false` vira "Sim"/"Não" na tela (tabela e cartão do celular), no PDF, no
   Excel local (`gerarExcel`) e no Excel do backend (célula de texto). A string `"true"` fica como veio;
   `null` e `""` viram "—" na tela e célula vazia no Excel. Nunca "true", "false" nem vazio para um booleano.
+  No cartão compacto (celular), coluna booleana (ao menos um booleano e só booleanos, `null` ou `""`)
+  sai do rótulo do cartão e aparece como as métricas, com o rótulo da coluna ("Recomendado: Sim");
+  a tabela larga não muda. `abaixo_da_meta` já era métrica (está em `total`): com meta, selo; sem meta,
+  "Abaixo da meta: Sim/Não". `aguardando_autorizacao` não é tabela genérica (selo na agenda do
+  paciente, contagem no convênio) e não muda.
 - **`disponibilidade`:** resumo por dia (manhã/tarde) e faixas livres por dia, com profissional,
   sala e posto (a partir de 1). Com `minutos_por_janela` > 30, mostra quantos atendimentos cabem.
 - **`convenio`:** só contagens, barras de uma cor (sem meta) e a lista de aguardando autorização.
@@ -177,13 +188,8 @@ também copia a **resposta completa** de exemplo do panorama (bloco json marcado
 - ~~Título do grupo em dois níveis (panorama de enxugamento)~~: resolvido pelo agente (PR #20): os
   passos agrupam em um nível, com o título por cenário "… libera 3 turnos (4 passos)".
 - ~~Texto sem bloco do panorama~~: resolvido com o marcador `resposta_sensivel` (ver AGENTS.md).
-- **Abas com o mesmo rótulo:** os dois blocos do panorama são `tabela_generica`, então as duas abas
-  saem como "Relatório" (`tituloAba` usa só o tipo). Proposta (não aplicada; muda código de
-  produção): para `tabela_generica`, usar o `titulo` do bloco na aba, como já aparece no cabeçalho do
-  cartão (agenda_paciente continua só com o tipo).
-- **Recomendado no celular:** no cartão compacto, `recomendado` é coluna de texto e entra no rótulo
-  ("Cenário 1 · equilibrado · Sim"), sem a palavra "Recomendado". Proposta (não aplicada): tratar
-  colunas booleanas como métrica no cartão (rótulo + "Sim"/"Não").
+- ~~Abas com o mesmo rótulo~~ e ~~Recomendado sem rótulo no celular~~: resolvidos (branch
+  `fix/panorama-rotulos`; ver "Abas" e "Booleano em coluna de formato `"texto"`").
 - **Exportação do panorama:** o contrato do agente pede revisão de como o bloco sai no Excel e no
   PDF antes de liberar. Hoje sai como os outros blocos sensíveis (só coordenação/superusuários; o
   Excel completo com nomes de pacientes e de profissionais). Confirmar com o dono do produto.
