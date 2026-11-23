@@ -40,7 +40,9 @@ PATIENT_EXAMPLES = [
     "tabela_generica_pacientes_por_profissional_nomes",
     "tabela_generica_plano_realocacao",  # grouped by option (agent PR #16)
     "tabela_generica_plano_realocacao_pergunta",
-    "tabela_generica_panorama_enxugamento",  # two-level grouping (agent PR #18)
+    # Panorama answer (agent PR #20): steps grouped in one level and the scenario comparison.
+    "tabela_generica_panorama_enxugamento",
+    "tabela_generica_panorama_enxugamento_comparativo",
 ]
 FORBIDDEN_SHEET_CHARS = re.compile(r"[\\/?*\[\]:]")
 
@@ -86,7 +88,8 @@ def test_each_new_type_exports_one_sheet_per_table(api, name):
 @pytest.mark.parametrize("name", PATIENT_EXAMPLES)
 def test_patient_examples_export_rows_in_the_received_order(api, name):
     """The grouping hint changes nothing in the spreadsheet: every column (grouping ones
-    included) and every row of `tabelas`, in the order received, "—" kept as text."""
+    included) and every row of `tabelas`, in the order received, "—" kept as text. JSON
+    booleans (the panorama's `recomendado`) become "Sim"/"Não" and "" an empty cell."""
     bloco = load_example(name)
 
     workbook = open_xlsx(export(api, [bloco]))
@@ -94,7 +97,14 @@ def test_patient_examples_export_rows_in_the_received_order(api, name):
     for tabela in bloco["tabelas"]:
         body = rows(workbook[tabela["nome"]])[1:]
         chaves = [c["chave"] for c in tabela["colunas"]]
-        assert body == [[linha[k] for k in chaves] for linha in tabela["linhas"]]
+        assert body == [[as_shown(linha[k]) for k in chaves] for linha in tabela["linhas"]]
+
+
+def as_shown(value):
+    """What a cell holds for a received value (reports/excel.py)."""
+    if isinstance(value, bool):
+        return "Sim" if value else "Não"
+    return None if value == "" else value
 
 
 def test_all_new_types_together_get_unique_sheet_names(api):

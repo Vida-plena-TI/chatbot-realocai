@@ -171,6 +171,7 @@ PLANO_REALOCACAO_NEAR_MISSES = (
 
 
 PANORAMA = "tabela_generica_panorama_enxugamento"
+PANORAMA_COMPARATIVO = "tabela_generica_panorama_enxugamento_comparativo"
 
 
 def panorama_without_flag(relatorio="panorama_enxugamento"):
@@ -224,8 +225,10 @@ OFFICIAL_SENSITIVE_EXAMPLES = {
     # agent PR #16: the grouped plan and the ambiguous-name question share the same relatorio.
     "plano_realocacao": "tabela_generica_plano_realocacao",
     "plano_realocacao:pergunta": "tabela_generica_plano_realocacao_pergunta",
-    # agent PR #18: patient AND professional names (sensitive HR data), grouped in two levels.
+    # agent PR #20: two blocks with the same relatorio. The steps have patient AND professional
+    # names (sensitive HR data); the comparison only has numbers, but the same relatorio.
     "panorama_enxugamento": PANORAMA,
+    "panorama_enxugamento:comparativo": PANORAMA_COMPARATIVO,
 }
 
 SENSITIVE_EXAMPLES = {
@@ -444,15 +447,36 @@ def test_panorama_enxugamento_is_in_the_list_by_exact_relatorio():
     assert is_sensitive_block(bloco) is True
 
 
-def test_panorama_enxugamento_example_has_the_contract_shape():
-    """Block-level flag, null periodo/meta and the two-level grouping hint (agent PR #18)."""
-    bloco = load_example(PANORAMA)
+def test_panorama_enxugamento_examples_have_the_contract_shape():
+    """Two blocks (agent PR #20), both with the block-level flag, the same relatorio and null
+    periodo/meta: the steps grouped in one level and the scenario comparison, not grouped."""
+    passos = load_example(PANORAMA)
+    comparativo = load_example(PANORAMA_COMPARATIVO)
 
-    assert bloco[PATIENT_DATA_FLAG] is True
-    assert bloco["periodo"] is None and bloco["meta"] is None
-    assert bloco["dados"]["agrupar_por"] == ["cenario", "turno_liberado"]
-    assert bloco["dados"]["unidade_grupo"] == {"singular": "passo", "plural": "passos"}
-    assert [t["nome"] for t in bloco["tabelas"]] == ["Passos", "Resumo dos cenários"]
+    for bloco in (comparativo, passos):
+        assert bloco[PATIENT_DATA_FLAG] is True
+        assert bloco["dados"]["relatorio"] == "panorama_enxugamento"
+        assert bloco["periodo"] is None and bloco["meta"] is None
+    assert passos["dados"]["agrupar_por"] == ["cenario"]
+    assert passos["dados"]["unidade_grupo"] == {"singular": "passo", "plural": "passos"}
+    assert [t["nome"] for t in passos["tabelas"]] == ["Passos"]
+    chaves = [c["chave"] for c in passos["dados"]["colunas"]]
+    assert "tipo_de_movimento" in chaves and "alavanca" not in chaves
+    assert "agrupar_por" not in comparativo["dados"]
+    assert [t["nome"] for t in comparativo["tabelas"]] == ["Cenários"]
+    assert [linha["recomendado"] for linha in comparativo["dados"]["linhas"]] == [
+        True,
+        False,
+        False,
+    ]
+
+
+def test_panorama_full_answer_fixture_is_the_two_official_blocks_with_the_marker():
+    resposta = load_fixture("resposta_panorama_enxugamento")
+
+    assert resposta["resposta_sensivel"] is True
+    assert resposta["blocos"] == [load_example(PANORAMA_COMPARATIVO), load_example(PANORAMA)]
+    assert all(is_sensitive_block(b) for b in resposta["blocos"])
 
 
 @pytest.mark.parametrize("relatorio", PANORAMA_NEAR_MISSES)
@@ -1046,3 +1070,124 @@ def test_marker_logs_nothing_for_members(request, api, conversation, respx_mock,
         post_message(api, conversation)
 
     assert "sensitive_" not in all_log_text(caplog)
+
+
+# --- panorama answer: two blocks + resposta_sensivel (agent PR #20) ------------------------
+# The agent's own example of the whole answer (fictitious names), copied from its docs.
+
+
+def panorama_answer():
+    return load_fixture("resposta_panorama_enxugamento")
+
+
+def mock_panorama_agent(respx_mock, **changes):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(
+        return_value=httpx.Response(200, json=panorama_answer() | changes)
+    )
+
+
+def panorama_leaks(resposta):
+    blocos = resposta["blocos"]
+    return (
+        resposta["resposta"],
+        *(b["titulo"] for b in blocos),
+        *(v for b in blocos for v in sensitive_values(b)),
+    )
+
+
+def test_panorama_answer_cuts_both_blocks_and_replaces_the_text_without_group(
+    api, conversation, respx_mock, caplog
+):
+    mock_panorama_agent(respx_mock)
+
+    with capture_all_logs(caplog):
+        response = post_message(api, conversation, content="Quais turnos dá para liberar?")
+
+    assert "blocos" not in response.json()["assistant_message"]
+    assert_only_the_fixed_text(api, conversation, response, leaks=panorama_leaks(panorama_answer()))
+    assert Message.objects.get(conversation=conversation, role="assistant").blocos == []
+    assert "blocos" not in api.get(messages_url(conversation)).json()["results"][1]
+    counted = [
+        r.getMessage().split(" ")[0] for r in caplog.records if "sensitive_" in r.getMessage()
+    ]
+    assert counted == ["sensitive_blocks_dropped=2", "sensitive_text_replaced=1"]
+    logged = all_log_text(caplog)
+    for value in (*panorama_leaks(panorama_answer()), "panorama_enxugamento"):
+        assert value not in logged
+
+
+def test_panorama_marker_without_blocks_also_becomes_the_fixed_text(api, conversation, respx_mock):
+    """E.g. scenario not found: the agent answers with text only, still marked as sensitive."""
+    mock_panorama_agent(respx_mock, blocos=[])
+
+    response = post_message(api, conversation, content="Quero ver o Cenário 9.")
+
+    assert "blocos" not in response.json()["assistant_message"]
+    assert_only_the_fixed_text(
+        api, conversation, response, leaks=(panorama_answer()["resposta"], "Cenário 1")
+    )
+
+
+@pytest.mark.parametrize("member", ["coordinator", "superuser"])
+def test_panorama_answer_reaches_members_with_both_blocks_in_order(
+    request, api, conversation, respx_mock, member
+):
+    request.getfixturevalue(member)
+    resposta = panorama_answer()
+    mock_panorama_agent(respx_mock)
+
+    answer = post_message(api, conversation).json()["assistant_message"]
+
+    assert answer["content"] == resposta["resposta"]
+    assert answer["blocos"] == resposta["blocos"]
+    assert [b["titulo"] for b in answer["blocos"]] == [
+        "Comparativo de cenários",
+        "Passos do cenário recomendado",
+    ]
+    stored = Message.objects.get(conversation=conversation, role="assistant")
+    assert (stored.content, stored.blocos) == (resposta["resposta"], resposta["blocos"])
+    assert history_blocos(api, conversation) == resposta["blocos"]
+
+
+def test_panorama_history_hides_both_blocks_and_shows_them_again_to_the_group(
+    api, user, conversation
+):
+    blocos = panorama_answer()["blocos"]
+    common = load_example("disponibilidade_vagas")
+    record_exchange(
+        conversation, "Pergunta fictícia", ANSWER, blocos=[blocos[0], common, blocos[1]]
+    )
+
+    assert history_blocos(api, conversation) == [common]
+    user.groups.add(Group.objects.get_or_create(name=PATIENT_REPORTS_GROUP)[0])
+    assert history_blocos(api, conversation) == [blocos[0], common, blocos[1]]
+    user.groups.clear()
+    assert history_blocos(api, conversation) == [common]
+
+
+@pytest.mark.parametrize("index", [0, 1], ids=["comparativo", "passos"])
+def test_panorama_export_of_either_block_is_403_before_validating_the_body(api, caplog, index):
+    """An invalid envelope (no titulo, tabelas not a list) still gets the 403, with no echo:
+    the permission is checked before the body is validated."""
+    bloco = panorama_answer()["blocos"][index]
+    broken = {k: v for k, v in bloco.items() if k != "titulo"} | {"tabelas": "inválido"}
+
+    with capture_all_logs(caplog):
+        responses = [export(api, [bloco]), export(api, [broken])]
+
+    for response in responses:
+        assert response.status_code == 403
+        assert response.json() == {"detail": PATIENT_REPORTS_FORBIDDEN}
+        for value in sensitive_values(bloco):
+            assert value not in response.content.decode()
+            assert value not in all_log_text(caplog)
+
+
+@pytest.mark.parametrize("member", ["coordinator", "superuser"])
+def test_panorama_export_of_both_blocks_works_for_members(request, api, member):
+    request.getfixturevalue(member)
+    bloco = panorama_answer()["blocos"][0]
+    broken = {k: v for k, v in bloco.items() if k != "titulo"} | {"tabelas": "inválido"}
+
+    assert export(api, panorama_answer()["blocos"]).status_code == 200
+    assert export(api, [broken]).status_code == 400  # members do reach the validation
