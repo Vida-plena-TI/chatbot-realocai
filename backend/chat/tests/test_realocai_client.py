@@ -253,3 +253,45 @@ def test_fake_can_propose_a_reallocation(use_fake):
     result = send_chat_message(None, "Preciso realocar a Paciente A")
 
     assert "```proposta" in result.resposta
+
+
+# --- Response-level sensitive marker (`resposta_sensivel`) ------------------------------
+
+
+def test_sensitive_marker_true_is_read(respx_mock):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=answer_with(resposta_sensivel=True))
+
+    result = send_chat_message("abc", "Oi")
+
+    assert result == ChatSuccess("abc", "Segue.", [], False, resposta_sensivel=True)
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {},
+        *({"resposta_sensivel": value} for value in (False, "true", "True", 1, 1.0, None, [], {})),
+        {"resposta_sensivel": [True]},
+    ],
+)
+def test_sensitive_marker_is_strict_boolean_true(respx_mock, extra):
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=answer_with(**extra))
+
+    assert send_chat_message("abc", "Oi").resposta_sensivel is False
+
+
+def test_sensitive_marker_inside_a_block_or_its_dados_is_not_read(respx_mock):
+    bloco = load_fixture("ocupacao_agregada") | {"resposta_sensivel": True}
+    bloco["dados"] = {**bloco.get("dados", {}), "resposta_sensivel": True}
+    respx_mock.post(REALOCAI_CHAT_URL).mock(return_value=answer_with(blocos=[bloco]))
+
+    result = send_chat_message("abc", "Oi")
+
+    assert result.resposta_sensivel is False
+    assert result.blocos == [bloco]
+
+
+def test_fake_answers_are_never_marked_sensitive(settings):
+    settings.REALOCAI_USE_FAKE = True
+
+    assert send_chat_message(None, "Oi").resposta_sensivel is False
