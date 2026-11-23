@@ -6,12 +6,18 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as amostras from '../src/reports/sampleBlocks.js';
+import respostaPanorama from '../src/reports/contrato/respostas/panorama_enxugamento.js';
 
 const BACKEND = fileURLToPath(new URL('../../backend/', import.meta.url));
 // export de sampleBlocks.js → arquivo em backend/chat/tests/fixtures/
 const PARES = {
   tabelaGenericaPlanoSemanal: 'chat/tests/fixtures/tabela_generica_plano_semanal.json',
   tabelaGenericaPacientesNomesAgrupada: 'chat/tests/fixtures/tabela_generica_pacientes_por_profissional_nomes_agrupada.json',
+  tabelaGenericaPanoramaPassosDetalhe: 'chat/tests/fixtures/tabela_generica_panorama_passos_detalhe.json',
+};
+// Respostas completas do agente (contrato/respostas/, sincronizadas da documentação) → cópia no backend.
+const RESPOSTAS = {
+  'respostas/panorama_enxugamento': [respostaPanorama, 'chat/tests/fixtures/resposta_panorama_enxugamento.json'],
 };
 
 if (!existsSync(BACKEND)) {
@@ -20,7 +26,11 @@ if (!existsSync(BACKEND)) {
 }
 
 let falhas = 0;
-for (const [nome, rel] of Object.entries(PARES)) {
+const pares = [
+  ...Object.entries(PARES).map(([nome, rel]) => [nome, amostras[nome], rel]),
+  ...Object.entries(RESPOSTAS).map(([nome, [valor, rel]]) => [nome, valor, rel]),
+];
+for (const [nome, valor, rel] of pares) {
   const arquivo = `${BACKEND}${rel}`;
   if (!existsSync(arquivo)) {
     falhas++;
@@ -28,7 +38,7 @@ for (const [nome, rel] of Object.entries(PARES)) {
     continue;
   }
   // Compara só a igualdade; nunca imprime o conteúdo das fixtures.
-  if (JSON.stringify(JSON.parse(readFileSync(arquivo, 'utf8'))) === JSON.stringify(amostras[nome])) {
+  if (JSON.stringify(JSON.parse(readFileSync(arquivo, 'utf8'))) === JSON.stringify(valor)) {
     console.log(`✓ ${nome} igual a backend/${rel}`);
   } else {
     falhas++;

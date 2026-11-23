@@ -9,6 +9,8 @@ import qualidadeAgenda from './contrato/exemplos/qualidade_agenda.js';
 import tabelaGenericaRanking from './contrato/exemplos/tabela_generica_ranking.js';
 import tabelaGenericaCapacidade from './contrato/exemplos/tabela_generica_capacidade.js';
 import tabelaGenericaPersonalizado from './contrato/exemplos/tabela_generica_personalizado.js';
+import tabelaGenericaPanoramaComparativo from './contrato/exemplos/tabela_generica_panorama_enxugamento_comparativo.js';
+import tabelaGenericaPanoramaPassos from './contrato/exemplos/tabela_generica_panorama_enxugamento.js';
 
 const SEMANA = ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10'];
 const NOMES = ['segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
@@ -587,4 +589,39 @@ export const tabelaGenericaPacientesNomesAgrupada = {
 export const tabelaGenericaPacientesNomesAgruparInvalido = {
   ...tabelaGenericaPacientesNomesAgrupada,
   dados: { ...tabelaGenericaPacientesNomesAgrupada.dados, agrupar_por: ['especialidade', 'coluna_inexistente'] },
+};
+
+// --- Panorama de enxugamento: dois blocos na mesma resposta (exemplos reais, sem alteração) -----
+// 1) quadro comparativo (modo plano; `recomendado` é booleano JSON em coluna "texto");
+// 2) passos do cenário recomendado, agrupados em um nível (agrupar_por ["cenario"]).
+// Os dois têm o mesmo dados.relatorio e contem_dados_pacientes true (restritos à coordenação).
+export { tabelaGenericaPanoramaComparativo, tabelaGenericaPanoramaPassos };
+
+/**
+ * "Detalhe de outro cenário" (forma do exemplo oficial de passos, valores fictícios derivados
+ * dele): o agente mostra só o que difere do Cenário 1, então os números de passo têm saltos
+ * (1, 3, 4), `observacao` vem "" e há um aviso longo. Cópia em
+ * backend/chat/tests/fixtures/tabela_generica_panorama_passos_detalhe.json (check:fixtures).
+ */
+const CENARIO_2 = 'Cenário 2 · mais turnos · libera 3 turnos';
+const linhasDetalhe = [
+  [1, 0],
+  [3, 2],
+  [4, 3],
+].map(([passo, i]) => ({ ...tabelaGenericaPanoramaPassos.dados.linhas[i], cenario: CENARIO_2, passo, observacao: '' }));
+export const tabelaGenericaPanoramaPassosDetalhe = {
+  ...tabelaGenericaPanoramaPassos,
+  titulo: 'Passos do Cenário 2 (apenas o que difere do Cenário 1)',
+  avisos: [
+    ...tabelaGenericaPanoramaPassos.avisos,
+    'Mostra só o que difere do Cenário 1; 1 passo é igual aos dele.',
+    'Aviso longo de teste (fictício): este cenário libera o mesmo número de turnos que o Cenário 1, mas muda pacientes de profissional em dias diferentes; antes de qualquer mudança, confirme com cada família, confira se a sala de destino não está reservada para reunião ou supervisão e registre a alteração manualmente na planilha da grade semanal vigente.',
+  ],
+  resumo: [
+    { rotulo: 'Turnos liberados', valor: 3, formato: 'inteiro', exibicao: '3' },
+    { rotulo: 'Passos', valor: 4, formato: 'inteiro', exibicao: '4' },
+    { rotulo: 'Pacientes movidos', valor: 4, formato: 'inteiro', exibicao: '4' },
+  ],
+  dados: { ...tabelaGenericaPanoramaPassos.dados, linhas: linhasDetalhe },
+  tabelas: [{ ...tabelaGenericaPanoramaPassos.tabelas[0], linhas: linhasDetalhe }],
 };

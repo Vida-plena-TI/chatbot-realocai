@@ -14,6 +14,8 @@ import planoOficial from '../src/reports/contrato/exemplos/tabela_generica_plano
 import nomesOficial from '../src/reports/contrato/exemplos/tabela_generica_pacientes_por_profissional_nomes.js';
 import realocacaoOficial from '../src/reports/contrato/exemplos/tabela_generica_plano_realocacao.js';
 import panoramaOficial from '../src/reports/contrato/exemplos/tabela_generica_panorama_enxugamento.js';
+import comparativoOficial from '../src/reports/contrato/exemplos/tabela_generica_panorama_enxugamento_comparativo.js';
+import respostaPanorama from '../src/reports/contrato/respostas/panorama_enxugamento.js';
 
 const SCHEMA = JSON.parse(readFileSync(new URL('../src/reports/contrato/bloco_relatorio.schema.json', import.meta.url), 'utf8'));
 // ocupacao_profissional fica só com a conferência de forma: a fixture tem de propósito o dia
@@ -283,6 +285,7 @@ const forma = (b) =>
 const PARES_FORMA = [
   ['tabelaGenericaPlanoSemanal', planoOficial, 'tabela_generica_plano_semanal'],
   ['tabelaGenericaPacientesNomesAgrupada', nomesOficial, 'tabela_generica_pacientes_por_profissional_nomes'],
+  ['tabelaGenericaPanoramaPassosDetalhe', panoramaOficial, 'tabela_generica_panorama_enxugamento'],
 ];
 for (const [nome, oficial, arquivo] of PARES_FORMA) {
   const fixture = amostras[nome];
@@ -299,8 +302,9 @@ const AGRUPADOS = [
   ['tabelaGenericaPacientesNomesAgrupada', amostras.tabelaGenericaPacientesNomesAgrupada],
   ['oficial:tabela_generica_pacientes_por_profissional_nomes', nomesOficial],
   ['oficial:tabela_generica_plano_realocacao', realocacaoOficial],
-  // Dois níveis (cenario, turno_liberado): a combinação é que precisa ser contígua.
+  // Passos do panorama: um nível (cenario). O comparativo não agrupa.
   ['oficial:tabela_generica_panorama_enxugamento', panoramaOficial],
+  ['tabelaGenericaPanoramaPassosDetalhe', amostras.tabelaGenericaPanoramaPassosDetalhe],
 ];
 for (const [nome, bloco] of AGRUPADOS) {
   const { agrupar_por: por, linhas } = bloco.dados;
@@ -318,6 +322,22 @@ for (const [nome, bloco] of AGRUPADOS) {
   }
   if (repetidos) erros.push(`${repetidos} grupo(s) não contíguo(s)`);
   relatar(`${nome}`, `agrupamento: ${vistos.size} grupos contíguos, colunas de agrupamento com texto`, erros);
+}
+
+// Resposta completa do panorama (contrato/respostas/, tirada da documentação do agente): dois blocos
+// tabela_generica na ordem comparativo → passos, iguais aos exemplos versionados, ambos com o mesmo
+// relatorio e contem_dados_pacientes true, e resposta_sensivel true no nível da resposta.
+{
+  const r = respostaPanorama;
+  const erros = [];
+  const blocos = Array.isArray(r?.blocos) ? r.blocos : [];
+  blocos.forEach((b, i) => conferirBloco(`resposta panorama: bloco ${i + 1}`, b));
+  if (typeof r?.resposta !== 'string' || !r.resposta.trim()) erros.push('sem texto em resposta');
+  if (r?.resposta_sensivel !== true) erros.push('resposta_sensivel não é o booleano true');
+  if (JSON.stringify(blocos) !== JSON.stringify([comparativoOficial, panoramaOficial])) erros.push('blocos diferentes de [comparativo, passos] dos exemplos versionados (ou fora de ordem)');
+  if (!blocos.every((b) => b.dados?.relatorio === 'panorama_enxugamento' && b.contem_dados_pacientes === true)) erros.push('bloco sem relatorio "panorama_enxugamento" ou sem contem_dados_pacientes true');
+  if ('agrupar_por' in (comparativoOficial.dados ?? {}) || !Array.isArray(panoramaOficial.dados?.agrupar_por) || panoramaOficial.dados.agrupar_por.length !== 1) erros.push('esperado: comparativo sem agrupar_por e passos com um nível');
+  relatar('respostas/panorama_enxugamento', `${blocos.length} blocos`, erros);
 }
 
 if (falhas) {
