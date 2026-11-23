@@ -112,22 +112,34 @@ Rodar dentro de `frontend/`: `npm install && npm run dev` (Vite em `http://local
   exemplo oficial (`check:blocks` compara; especialidade ausente = `"—"`, como o agente manda);
   detalhes em `frontend/docs/relatorios.md`.
 - **Contrato sincronizado** (`src/reports/contrato/`, gerado por `npm run sync:contrato`; nunca
-  editar à mão) com `Vida-plena-TI/reallocaai-agente` @ `66157c2` (main, PR #18). `check:blocks`
-  valida fixtures e exemplos oficiais contra o schema completo.
+  editar à mão) com `Vida-plena-TI/reallocaai-agente` @ `eccc4c8` (main, PR #20). `check:blocks`
+  valida fixtures e exemplos oficiais contra o schema completo. O sync também copia a resposta
+  completa de exemplo do panorama (`contrato/respostas/panorama_enxugamento.js`, tirada do bloco
+  `<!-- exemplo-resposta-panorama -->` de `docs/api-relatorios.md` do agente; cópia no backend em
+  `chat/tests/fixtures/resposta_panorama_enxugamento.json`, conferida pelo `check:fixtures`).
 - **Plano de realocação** (`tabela_generica`, `dados.relatorio: "plano_realocacao"`, PR #16 do
   agente; **nomes de pacientes**, restrito à coordenação): plano agrupado por opção
   (`agrupar_por: ["opcao"]`, unidade passo/passos) e pergunta de nome ambíguo (modo plano), ambos
   com `periodo`/`meta` `null`. Usa o modo agrupado existente, sem código próprio: título
   "Opção 1 (3 passos)", o formato que a documentação do agente adotou (commit `08245ae`).
 - **Panorama de enxugamento** (`tabela_generica`, `dados.relatorio: "panorama_enxugamento"`, PR #18
-  do agente; **nomes de pacientes e de profissionais, sensível de RH**, restrito à coordenação):
-  cenários que liberam turnos, agrupados em dois níveis (`agrupar_por: ["cenario",
-  "turno_liberado"]`, unidade passo/passos), `periodo`/`meta` `null`; Excel "Passos" e "Resumo dos
-  cenários". Usa o modo agrupado existente: um grupo por par contíguo, título
-  "Cenário 1 (E-5EB1) · equilibrado · libera 3 turnos · Ter tarde · <profissional> · Terapia
-  Alimentar (1 passo)". **Pendente:** o contrato do agente exemplifica um título por cenário
-  ("… libera 3 turnos (4 passos)"); o formato não muda até decisão (detalhes em
-  `frontend/docs/relatorios.md`).
+  e PR #20 do agente; restrito à coordenação): a resposta traz **dois blocos `tabela_generica`**, nesta
+  ordem, ambos com o mesmo `relatorio`, `contem_dados_pacientes: true` e `periodo`/`meta` `null`, e
+  `resposta_sensivel: true`; um cartão por bloco (duas abas), cada um com o seu resumo. (1)
+  **Comparativo** ("Comparativo de cenários"): uma linha por cenário, só números, sem `agrupar_por`
+  (modo plano), `recomendado` booleano JSON em coluna `"texto"` ("Sim"/"Não"); Excel "Cenários". (2)
+  **Passos** ("Passos do cenário recomendado"; **nomes de pacientes e de profissionais, sensível de
+  RH**): agrupamento em **um nível** (`agrupar_por: ["cenario"]`, unidade passo/passos), título
+  "Cenário 1 · equilibrado · libera 3 turnos (4 passos)", coluna `tipo_de_movimento` (antes
+  `alavanca`), `observacao` `""` no caso padrão ("—" na tela, célula vazia no Excel); Excel "Passos".
+  No detalhe de outro cenário, o título pode vir "Passos do Cenário N (apenas o que difere do Cenário
+  1)" e os números de passo podem ter saltos (fixture `tabelaGenericaPanoramaPassosDetalhe`). A aba
+  "Resumo dos cenários" saiu. Usa o modo agrupado e o modo plano existentes, sem código próprio.
+  Pendências de UX (abas com o mesmo rótulo "Relatório"; "Recomendado" sem rótulo no celular) em
+  `frontend/docs/relatorios.md`.
+- **Booleano em coluna `"texto"`:** `true`/`false` do JSON vira "Sim"/"Não" na tela, no PDF, no Excel
+  local e no Excel do backend; a string `"true"` fica como veio (`formatarValor`/`simNao` em
+  `format.js`, `celula` em `localExport.js`, `_as_text` em `reports/excel.py`).
 - Os blocos (componentes, `src/reports/types.js` e fixtures) seguem os nomes de campo dos
   exemplos reais do RealocAI, sem camada de adaptação; `npm run check:blocks` valida as
   fixtures de `sampleBlocks.js` contra os campos obrigatórios do contrato real (só lê
@@ -345,8 +357,10 @@ Alguns blocos do RealocAI trazem nomes de pacientes. As regras ficam **num únic
 - `tipo == "tabela_generica"` com `dados.relatorio == "plano_realocacao"` (plano de realocação e a
   pergunta de nome ambíguo, ambos com nomes de pacientes e `periodo: null`; PR #16 do agente);
 - `tipo == "tabela_generica"` com `dados.relatorio == "panorama_enxugamento"` (cenários que liberam
-  turnos com presença paga, tool `planejar_enxugamento`, só pelo chat; PR #18 do agente). Além dos
-  nomes de pacientes, traz nomes de **profissionais** e é **sensível de RH**; `periodo`/`meta` `null`.
+  turnos com presença paga, tool `planejar_enxugamento`, só pelo chat; PR #18 e #20 do agente). São
+  **dois blocos** com esse mesmo `relatorio` (comparativo e passos), então a regra corta os dois. Os
+  passos trazem, além dos nomes de pacientes, nomes de **profissionais** e são **sensíveis de RH**;
+  `periodo`/`meta` `null`.
 
 A comparação é por **igualdade exata** de texto (nunca prefixo ou substring):
 `pacientes_por_profissional_nomes_x`, `plano_realocacao_x`, `"plano_realocacao "`,
